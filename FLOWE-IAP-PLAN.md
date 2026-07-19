@@ -6,7 +6,7 @@
 ## Revenue model
 One App Store subscription **group** (`flowe_instructor_visibility`), two levels, one active at a time:
 - **Flowe Visible** — `com.flowepilates.app.visible.monthly`, **$9.99/mo**, **1-month free trial** (intro offer) → listing appears in the student feed.
-- **Flowe Boost** — `com.flowepilates.app.boost.monthly`, **~$32.99/mo** (⚠️ $33.33 is not a real App Store price point — nearest tier is chosen in ASC) → includes Visible, ranked higher / featured. No intro offer.
+- **Flowe Boost** — `com.flowepilates.app.boost.monthly`, **$29.99/mo** → includes Visible, ranked higher / featured. No intro offer.
 
 Digital in-app service → **Apple IAP is mandatory** (Guideline 3.1.1); Stripe is prohibited here. Apple takes 15–30%.
 
@@ -24,4 +24,4 @@ Digital in-app service → **Apple IAP is mandatory** (Guideline 3.1.1); Stripe 
 
 ## AI builds vs you do
 - **AI:** all client code, the `.storekit` test config, PaywallView, gating, catalog sync code.
-- **You (App Store Connect):** create the subscription group + 2 products (matching the ids above), set $9.99 + nearest-to-$33.33 prices, add the 1-month free trial on Visible, complete Paid Apps agreement + tax/banking, create a sandbox tester, set CloudKit public-DB security roles.
+- **You (App Store Connect):** create the subscription group + 2 products (matching the ids above), set $9.99 + $29.99 prices, add the 1-month free trial on Visible, complete Paid Apps agreement + tax/banking, create a sandbox tester, set CloudKit public-DB security roles.

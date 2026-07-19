@@ -146,7 +146,7 @@
 		7F25A7337CFD62358334F757 /* User.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = User.swift; sourceTree = "<group>"; };
 		7F5C862793134F2194515695 /* FeaturedHeroCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeaturedHeroCard.swift; sourceTree = "<group>"; };
 		8834262674B21339DCB9CC33 /* FlowApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowApp.swift; sourceTree = "<group>"; };
-		8AD8385BD6E748B58CBA04BD /* Flowe.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = Flowe.storekit; sourceTree = "<group>"; };
+		8AD8385BD6E748B58CBA04BD /* Flowe.storekit */ = {isa = PBXFileReference; path = Flowe.storekit; sourceTree = "<group>"; };
 		8D324CCEA79663B5D1A47DE4 /* FilterChipsBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilterChipsBar.swift; sourceTree = "<group>"; };
 		914A7ECE05F8E495EF765D01 /* DMMono-Light.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "DMMono-Light.ttf"; sourceTree = "<group>"; };
 		91D1DD42C0E5A323D1D28FEB /* DisciplineTag.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisciplineTag.swift; sourceTree = "<group>"; };
@@ -174,14 +174,14 @@
 		D924C099B8699B291D7C43DA /* CalendarComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarComponents.swift; sourceTree = "<group>"; };
 		D9E71A63E8A8245F5C5FD06C /* DiscoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverView.swift; sourceTree = "<group>"; };
 		DA077844D989E093BABC8C4D /* Instructor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Instructor.swift; sourceTree = "<group>"; };
-		DC9ABB91B083120DA9223F30 /* Flowepilates.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Flowepilates.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		DC9ABB91B083120DA9223F30 /* Flowe.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Flowe.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DF88155B514DE388CAED43C6 /* AvailabilityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvailabilityView.swift; sourceTree = "<group>"; };
 		E055796162D11DF1E7B8D52D /* FlowLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowLayout.swift; sourceTree = "<group>"; };
-		E24A8794C056D4128BA7AA25 /* .gitkeep */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitkeep; sourceTree = "<group>"; };
+		E24A8794C056D4128BA7AA25 /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
 		E44A0A10890CCFF23B150A04 /* StudentTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudentTabView.swift; sourceTree = "<group>"; };
 		E7BA85F0573AA35B279EAE3F /* Fraunces-Light.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Fraunces-Light.ttf"; sourceTree = "<group>"; };
 		EBBF0D4617C61C89A66EFC81 /* Color+Flowe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Color+Flowe.swift"; sourceTree = "<group>"; };
-		ED2BC5AAEAE57BD8B4B05646 /* 0AD9894E-764F-47AF-AC95-56485A70A3C4.PNG */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "0AD9894E-764F-47AF-AC95-56485A70A3C4.PNG"; sourceTree = "<group>"; };
+		ED2BC5AAEAE57BD8B4B05646 /* 0AD9894E-764F-47AF-AC95-56485A70A3C4.PNG */ = {isa = PBXFileReference; path = "0AD9894E-764F-47AF-AC95-56485A70A3C4.PNG"; sourceTree = "<group>"; };
 		EDB60A412E456123013E75E4 /* IconButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IconButton.swift; sourceTree = "<group>"; };
 		F31A42A348DDC6B4F180F617 /* PrimaryButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrimaryButton.swift; sourceTree = "<group>"; };
 		F3E94289DCDBDDCA0A071CC8 /* SplashView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplashView.swift; sourceTree = "<group>"; };
@@ -302,7 +302,7 @@
 		4DD511629605BE9AC2F40F7B /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				DC9ABB91B083120DA9223F30 /* Flowepilates.app */,
+				DC9ABB91B083120DA9223F30 /* Flowe.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -541,7 +541,7 @@
 			packageProductDependencies = (
 			);
 			productName = Flowe;
-			productReference = DC9ABB91B083120DA9223F30 /* Flowepilates.app */;
+			productReference = DC9ABB91B083120DA9223F30 /* Flowe.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -774,7 +774,6 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_NAME = Flowepilates;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -858,7 +857,6 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_NAME = Flowepilates;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};

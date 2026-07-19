@@ -16,12 +16,13 @@ struct PaywallView: View {
             ScrollView {
                 VStack(spacing: FlowSpacing.xl) {
                     hero
+                    ForEach(SubscriptionTier.allCases) { tier in
+                        tierCard(tier)
+                    }
                     if subscription.products.isEmpty {
-                        unavailable
-                    } else {
-                        ForEach(SubscriptionTier.allCases) { tier in
-                            tierCard(tier)
-                        }
+                        Text("Fetching the latest prices…")
+                            .font(FloweFont.mono(10))
+                            .foregroundStyle(Color.floweMuted)
                     }
                     footer
                 }
@@ -74,7 +75,10 @@ struct PaywallView: View {
     private func tierCard(_ tier: SubscriptionTier) -> some View {
         let product = subscription.product(for: tier)
         let isCurrent = subscription.tier == tier
-        let showTrial = tier == .visible && trialEligible && !isCurrent
+        // Show the trial for new Visible subscribers; if a product is loaded, respect its eligibility.
+        let showTrial = tier == .visible && !isCurrent && (product == nil || trialEligible)
+        // Boost includes visibility — call it out so the value is clear.
+        let includesVisible = tier == .boost
 
         return VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -92,9 +96,15 @@ struct PaywallView: View {
             }
 
             if showTrial {
-                Label("1 month free, then \(product?.displayPrice ?? "")/month", systemImage: "gift")
+                Label(product.map { "1 month free, then \($0.displayPrice)/month" } ?? "1 month free",
+                      systemImage: "gift")
                     .font(FloweFont.sans(12, .medium))
                     .foregroundStyle(Color.flowePinkDeep)
+            }
+            if includesVisible {
+                Label("Everything in Visible, plus featured placement", systemImage: "checkmark.seal")
+                    .font(FloweFont.sans(12))
+                    .foregroundStyle(Color.floweMuted)
             }
 
             Button {

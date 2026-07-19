@@ -82,7 +82,7 @@ UI is complete across both role trees; several interactions are still *cosmetic*
 ## Revenue — Instructor IAP subscriptions (Phase A ✅)
 Flowe's first profit model. See `FLOWE-IAP-PLAN.md`.
 - [x] StoreKit 2 `SubscriptionService` (@MainActor @Observable) — products, entitlements, purchase/restore,
-      `Transaction.updates` listener; tiers **Visible** ($9.99, 1-mo free trial) + **Boost** ($33.33 → nearest ASC tier)
+      `Transaction.updates` listener; tiers **Visible** ($9.99, 1-mo free trial) + **Boost** ($29.99)
 - [x] `Flowe.storekit` local config wired into the scheme (simulator-testable, no ASC needed)
 - [x] `PaywallView` ("Get discovered") — tiers, trial, Restore, auto-renew disclosure + Terms/Privacy
 - [x] Feed gating: `Instructor.visibility` (none/visible/boosted) + `visibleInstructors`/`featuredInstructor`
