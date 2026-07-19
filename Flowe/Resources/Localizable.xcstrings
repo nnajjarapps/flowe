@@ -1,180 +1,781 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "Activity" : {
+    " practiced this week" : {
+
+    },
+    "·" : {
+
+    },
+    "(%@)" : {
+
+    },
+    "%.1f (%@)" : {
       "localizations" : {
-        "ar" : { "stringUnit" : { "state" : "translated", "value" : "النشاط" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Actividad" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Activité" } }
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$.1f (%2$@)"
+          }
+        }
       }
     },
-    "Booking requests" : {
+    "%@" : {
+
+    },
+    "%@ · %@" : {
       "localizations" : {
-        "ar" : { "stringUnit" : { "state" : "translated", "value" : "طلبات الحجز" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Solicitudes de reserva" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Demandes de réservation" } }
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@"
+          }
+        }
+      }
+    },
+    "%@ at %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ at %2$@"
+          }
+        }
+      }
+    },
+    "%@ day%@ open per week" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ day%2$@ open per week"
+          }
+        }
+      }
+    },
+    "%@/session" : {
+
+    },
+    "$" : {
+
+    },
+    "4.9 · 112 reviews" : {
+
+    },
+    "265 min" : {
+
+    },
+    "A quiet day to rest and restore." : {
+
+    },
+    "Accept" : {
+
+    },
+    "Active now" : {
+
+    },
+    "Activity" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "النشاط"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Actividad"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activité"
+          }
+        }
+      }
+    },
+    "Already have an account?" : {
+
+    },
+    "Available: %@" : {
+
+    },
+    "Book again" : {
+
+    },
+    "Bookable days" : {
+
+    },
+    "Booking requests" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "طلبات الحجز"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solicitudes de reserva"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Demandes de réservation"
+          }
+        }
       }
     },
     "Bookings" : {
+      "extractionState" : "stale",
       "localizations" : {
-        "ar" : { "stringUnit" : { "state" : "translated", "value" : "الحجوزات" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Reservas" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Réservations" } }
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الحجوزات"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reservas"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Réservations"
+          }
+        }
       }
     },
     "Calendar" : {
+      "extractionState" : "stale",
       "localizations" : {
-        "ar" : { "stringUnit" : { "state" : "translated", "value" : "التقويم" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Calendario" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Calendrier" } }
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "التقويم"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Calendario"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Calendrier"
+          }
+        }
       }
     },
     "Cancel" : {
       "localizations" : {
-        "ar" : { "stringUnit" : { "state" : "translated", "value" : "إلغاء" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Cancelar" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Annuler" } }
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إلغاء"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancelar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Annuler"
+          }
+        }
       }
+    },
+    "Choose a day" : {
+
+    },
+    "Choose your role. You can change this later." : {
+
     },
     "Community" : {
       "localizations" : {
-        "ar" : { "stringUnit" : { "state" : "translated", "value" : "المجتمع" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Comunidad" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Communauté" } }
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "المجتمع"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Comunidad"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Communauté"
+          }
+        }
       }
     },
     "Currency" : {
+      "extractionState" : "stale",
       "localizations" : {
-        "ar" : { "stringUnit" : { "state" : "translated", "value" : "العملة" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Moneda" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Devise" } }
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "العملة"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Moneda"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Devise"
+          }
+        }
       }
     },
     "Dashboard" : {
+      "extractionState" : "stale",
       "localizations" : {
-        "ar" : { "stringUnit" : { "state" : "translated", "value" : "لوحة التحكم" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Panel" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Tableau de bord" } }
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لوحة التحكم"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Panel"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tableau de bord"
+          }
+        }
       }
     },
+    "Decline" : {
+
+    },
     "Discover" : {
+      "extractionState" : "stale",
       "localizations" : {
-        "ar" : { "stringUnit" : { "state" : "translated", "value" : "اكتشف" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Descubrir" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Découvrir" } }
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اكتشف"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descubrir"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Découvrir"
+          }
+        }
       }
     },
     "Done" : {
+      "extractionState" : "stale",
       "localizations" : {
-        "ar" : { "stringUnit" : { "state" : "translated", "value" : "تم" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Hecho" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Terminé" } }
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تم"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hecho"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Terminé"
+          }
+        }
       }
+    },
+    "EARNED THIS YEAR" : {
+
     },
     "Edit profile" : {
+      "extractionState" : "stale",
       "localizations" : {
-        "ar" : { "stringUnit" : { "state" : "translated", "value" : "تعديل الملف الشخصي" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Editar perfil" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Modifier le profil" } }
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تعديل الملف الشخصي"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Editar perfil"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modifier le profil"
+          }
+        }
       }
     },
+    "Find your " : {
+
+    },
+    "flowe" : {
+
+    },
+    "GOOD MORNING" : {
+
+    },
+    "Instructor Tip" : {
+
+    },
+    "instructor." : {
+
+    },
+    "Join flowe" : {
+
+    },
+    "JUL 7 – JUL 13" : {
+
+    },
     "Language" : {
+      "extractionState" : "stale",
       "localizations" : {
-        "ar" : { "stringUnit" : { "state" : "translated", "value" : "اللغة" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Idioma" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Langue" } }
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اللغة"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Idioma"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Langue"
+          }
+        }
       }
+    },
+    "Log in to continue your journey" : {
+
     },
     "Log out" : {
       "localizations" : {
-        "ar" : { "stringUnit" : { "state" : "translated", "value" : "تسجيل الخروج" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Cerrar sesión" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Se déconnecter" } }
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تسجيل الخروج"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cerrar sesión"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se déconnecter"
+          }
+        }
       }
+    },
+    "Member since March 2026" : {
+
+    },
+    "Message…" : {
+
     },
     "Messages" : {
       "localizations" : {
-        "ar" : { "stringUnit" : { "state" : "translated", "value" : "الرسائل" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Mensajes" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Messages" } }
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الرسائل"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mensajes"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Messages"
+          }
+        }
       }
     },
+    "Mia Tanaka" : {
+
+    },
+    "My " : {
+
+    },
+    "Name or city…" : {
+
+    },
+    "New York · Mat · Reformer · Tower" : {
+
+    },
+    "No messages found" : {
+
+    },
+    "No reviews yet." : {
+
+    },
+    "No sessions" : {
+
+    },
+    "Not a member?" : {
+
+    },
     "Notification settings" : {
+      "extractionState" : "stale",
       "localizations" : {
-        "ar" : { "stringUnit" : { "state" : "translated", "value" : "إعدادات الإشعارات" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Ajustes de notificaciones" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Réglages des notifications" } }
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إعدادات الإشعارات"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajustes de notificaciones"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Réglages des notifications"
+          }
+        }
       }
     },
     "Notifications" : {
+      "extractionState" : "stale",
       "localizations" : {
-        "ar" : { "stringUnit" : { "state" : "translated", "value" : "الإشعارات" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Notificaciones" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Notifications" } }
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الإشعارات"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notificaciones"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notifications"
+          }
+        }
       }
+    },
+    "or" : {
+
     },
     "Payouts" : {
+      "extractionState" : "stale",
       "localizations" : {
-        "ar" : { "stringUnit" : { "state" : "translated", "value" : "المدفوعات" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Pagos" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Paiements" } }
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "المدفوعات"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pagos"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paiements"
+          }
+        }
       }
+    },
+    "PILATES · COMMUNITY · YOU" : {
+
     },
     "Preferences" : {
+      "extractionState" : "stale",
       "localizations" : {
-        "ar" : { "stringUnit" : { "state" : "translated", "value" : "التفضيلات" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Preferencias" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Préférences" } }
-      }
-    },
-    "Profile" : {
-      "localizations" : {
-        "ar" : { "stringUnit" : { "state" : "translated", "value" : "الملف الشخصي" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Perfil" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Profil" } }
-      }
-    },
-    "Reminders" : {
-      "localizations" : {
-        "ar" : { "stringUnit" : { "state" : "translated", "value" : "التذكيرات" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Recordatorios" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Rappels" } }
-      }
-    },
-    "Reviews" : {
-      "localizations" : {
-        "ar" : { "stringUnit" : { "state" : "translated", "value" : "التقييمات" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Reseñas" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Avis" } }
-      }
-    },
-    "Save" : {
-      "localizations" : {
-        "ar" : { "stringUnit" : { "state" : "translated", "value" : "حفظ" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Guardar" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Enregistrer" } }
-      }
-    },
-    "Session reminders" : {
-      "localizations" : {
-        "ar" : { "stringUnit" : { "state" : "translated", "value" : "تذكيرات الجلسات" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Recordatorios de sesión" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Rappels de séance" } }
-      }
-    },
-    "Settings" : {
-      "localizations" : {
-        "ar" : { "stringUnit" : { "state" : "translated", "value" : "الإعدادات" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Ajustes" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Réglages" } }
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "التفضيلات"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preferencias"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Préférences"
+          }
+        }
       }
     },
     "Product news & offers" : {
+      "extractionState" : "stale",
       "localizations" : {
-        "ar" : { "stringUnit" : { "state" : "translated", "value" : "أخبار المنتج والعروض" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Novedades y ofertas" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Actualités et offres" } }
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "أخبار المنتج والعروض"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Novedades y ofertas"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Actualités et offres"
+          }
+        }
       }
+    },
+    "Profile" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الملف الشخصي"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Perfil"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profil"
+          }
+        }
+      }
+    },
+    "Reminders" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "التذكيرات"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recordatorios"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rappels"
+          }
+        }
+      }
+    },
+    "Reviews" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "التقييمات"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reseñas"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Avis"
+          }
+        }
+      }
+    },
+    "Save" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "حفظ"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enregistrer"
+          }
+        }
+      }
+    },
+    "Search messages…" : {
+
+    },
+    "Session reminders" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تذكيرات الجلسات"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recordatorios de sesión"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rappels de séance"
+          }
+        }
+      }
+    },
+    "SESSION TYPE" : {
+
+    },
+    "Sessions" : {
+
+    },
+    "Settings" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الإعدادات"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajustes"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Réglages"
+          }
+        }
+      }
+    },
+    "Sofia Marchetti" : {
+
+    },
+    "Start your Pilates journey today" : {
+
+    },
+    "Students can only request sessions on the days you turn on." : {
+
+    },
+    "studio." : {
+
+    },
+    "Time & type" : {
+
+    },
+    "TODAY" : {
+
+    },
+    "Try a different name or keyword." : {
+
+    },
+    "Turn off anything you'd rather not hear about. Session and payment alerts are recommended." : {
+
+    },
+    "week." : {
+
+    },
+    "Welcome back" : {
+
+    },
+    "Who are you\njoining as?" : {
+
+    },
+    "You're booked!" : {
+
+    },
+    "Your " : {
+
     }
   },
   "version" : "1.0"

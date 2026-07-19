@@ -7,13 +7,12 @@ options:
   createIntermediateGroups: true
   groupSortPosition: top
 
-# Debug/Release build on the free team (no CloudKit). CloudKit is a Release-based config that
-# turns on the iCloud entitlements + the CLOUDKIT_ENABLED flag — build it once a paid account
-# + the iCloud.com.flowepilates.app container exist (Phase B).
+# CloudKit is LIVE: every build syncs SwiftData's UserData store to the CloudKit private DB.
+# Requires the paid Apple Developer account + the iCloud.com.flowepilates.app container
+# (Xcode auto-creates it on first signed build).
 configs:
   Debug: debug
   Release: release
-  CloudKit: release
 
 settings:
   base:
@@ -30,10 +29,10 @@ settings:
   configs:
     Debug:
       DEBUG_INFORMATION_FORMAT: dwarf
+      SWIFT_ACTIVE_COMPILATION_CONDITIONS: "DEBUG CLOUDKIT_ENABLED"
     Release:
       DEBUG_INFORMATION_FORMAT: "dwarf-with-dsym"
-    CloudKit:
-      DEBUG_INFORMATION_FORMAT: "dwarf-with-dsym"
+      SWIFT_ACTIVE_COMPILATION_CONDITIONS: CLOUDKIT_ENABLED
 
 targets:
   Flowe:
@@ -53,6 +52,11 @@ targets:
       properties:
         com.apple.developer.applesignin:
           - Default
+        com.apple.developer.icloud-services:
+          - CloudKit
+        com.apple.developer.icloud-container-identifiers:
+          - iCloud.com.flowepilates.app
+        aps-environment: development
     info:
       path: Flowe/Info.plist
       properties:
@@ -98,11 +102,6 @@ targets:
       base:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
-      configs:
-        # CloudKit build only: swap in the iCloud entitlements + enable the sync code path.
-        CloudKit:
-          CODE_SIGN_ENTITLEMENTS: Flowe/Flowe-CloudKit.entitlements
-          SWIFT_ACTIVE_COMPILATION_CONDITIONS: CLOUDKIT_ENABLED
 
 schemes:
   Flowe:
