@@ -34,6 +34,7 @@ struct CommunityView: View {
         .safeAreaInset(edge: .top, spacing: 0) {
             header
         }
+        .task { await data.syncCatalog() }
     }
 
     private var header: some View {

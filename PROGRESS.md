@@ -89,8 +89,14 @@ Flowe's first profit model. See `FLOWE-IAP-PLAN.md`.
       ranking (7-day TTL); non-subscribed instructors are hidden; `FlowApp` stamps visibility on tier change
 - [x] Entry points: dashboard "Get discovered" banner (when hidden) + instructor profile menu
 - [x] Verified in simulator: boosted → featured hero, visible → feed, non-subscribed → hidden; banner + paywall render
-- [ ] **Phase B — public instructor catalog** (CloudKit public DB via CKSyncEngine/CKDatabase) so listings appear
-      cross-device (needs real devices + iCloud)
+- [x] **Phase B — public instructor catalog** (built): `CatalogService` over CloudKit `publicCloudDatabase`
+      (record type `InstructorListing`, recordName == ownerID). Instructors publish their listing +
+      visibility on edit/subscription change; students `syncCatalog()` on Discover/Community (pull-to-refresh
+      too) → cached into the local store the feed reads; lapsed/unsubscribed listings auto-hide. Degrades
+      gracefully offline. **Full cross-device sync needs real devices + iCloud + the deployed schema.**
+      ⚠️ You must, in the **CloudKit Dashboard**: add the `InstructorListing` record type, make
+      `visibility`/`updatedAt` **queryable** + `visibility` **sortable**, set security = `_world` read /
+      `_creator` write, then **Deploy schema to Production**.
 - [ ] **Phase C — App Store Connect**: create the subscription group + products/prices/trial, banking/tax,
       sandbox tester, CloudKit public-DB security roles (user-side)
 

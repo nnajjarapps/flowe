@@ -22,6 +22,7 @@
 		2D2F92EF6E999F39ABDCB722 /* DMSans-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 7C215EA6CA9B6C406E13E338 /* DMSans-Regular.ttf */; };
 		2E323E24A128AF50FA6C98D0 /* FlowSpacing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7577F6212A80C9C837232B63 /* FlowSpacing.swift */; };
 		2FA2F742CE16CE6A3912BDF0 /* instructors.json in Resources */ = {isa = PBXBuildFile; fileRef = AAFA6AE90A7A57AEF5C1D9A2 /* instructors.json */; };
+		3385A6C63E0E653F076E9ECE /* CatalogService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10A50AB15C47E4490CEB456C /* CatalogService.swift */; };
 		34260702FC71C0FE6545333B /* WeeklyBarChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EED8908487E5CCD626B5506 /* WeeklyBarChart.swift */; };
 		3463BAC1A6EF2B14D0622CDD /* FlowApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8834262674B21339DCB9CC33 /* FlowApp.swift */; };
 		3569E85932969520E8E9FC32 /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FA653CE87EE4098EAB086D5 /* ProfileView.swift */; };
@@ -105,6 +106,7 @@
 		08B690A006F7E8352F3A828D /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		0D7CAF2291282ED6FAC4D459 /* bookings.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = bookings.json; sourceTree = "<group>"; };
 		0F28297BD9C654202E87114A /* DMSans-Light.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "DMSans-Light.ttf"; sourceTree = "<group>"; };
+		10A50AB15C47E4490CEB456C /* CatalogService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatalogService.swift; sourceTree = "<group>"; };
 		143E9E63DDABC0E3547106A5 /* Fraunces-LightItalic.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Fraunces-LightItalic.ttf"; sourceTree = "<group>"; };
 		15B1DE12827C5A88561BD697 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		185D1CBA0B81BE9EA96AC524 /* RoleSelectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoleSelectionView.swift; sourceTree = "<group>"; };
@@ -237,6 +239,7 @@
 			isa = PBXGroup;
 			children = (
 				F71DDCF02E488698B7C62351 /* AppSettings.swift */,
+				10A50AB15C47E4490CEB456C /* CatalogService.swift */,
 				06D1617BBCF38F203A11C316 /* FloweConstants.swift */,
 				72C3E59E33D98698F840ADCF /* FloweModelContainer.swift */,
 				5C9867A521AD55E8C878C940 /* KeychainStore.swift */,
@@ -622,6 +625,7 @@
 				40D6611F9D19149DD4E25E1A /* BookingsView.swift in Sources */,
 				04DF42D3F8F09485B0167B07 /* CalendarComponents.swift in Sources */,
 				8B7232D19B5F6A1CE1E7F245 /* CalendarModels.swift in Sources */,
+				3385A6C63E0E653F076E9ECE /* CatalogService.swift in Sources */,
 				F360CCFF8BACA3777ED050BB /* Color+Flowe.swift in Sources */,
 				1C47F28F1536D627C6E96E25 /* CommunityView.swift in Sources */,
 				45DB3B4C623193D3DCE3E722 /* ConversationView.swift in Sources */,

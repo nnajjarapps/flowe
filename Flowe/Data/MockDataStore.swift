@@ -15,10 +15,14 @@ final class MockDataStore {
     private(set) var posts: [FeedPost] = []
     private(set) var bookings: [Booking] = []
 
+    private let catalog = CatalogService()
+    private let isPreview: Bool
+
     /// The shipping app starts EMPTY — no mock data is seeded into the (CloudKit-synced) store.
     /// Sample data is only loaded for SwiftUI previews (`seed: true`, in-memory).
     init(_ context: ModelContext, seed: Bool = false) {
         self.context = context
+        self.isPreview = seed
         if seed { SeedLoader.seedIfNeeded(context) }
         refresh()
     }
@@ -70,12 +74,14 @@ final class MockDataStore {
         return true
     }
 
-    /// Stamp the signed-in instructor's listing with their subscription-derived visibility.
+    /// Stamp the signed-in instructor's listing with their subscription-derived visibility,
+    /// and push the change to the public catalog so students see (or stop seeing) them.
     func applyVisibility(_ level: InstructorVisibility, for ownerID: String) {
         guard let listing = instructors.first(where: { $0.ownerID == ownerID }) else { return }
         listing.visibility = level
         listing.visibilityVerifiedAt = Date()
         save()
+        if !isPreview { Task { await catalog.publish(listing) } }
     }
 
     // MARK: - Bookings
@@ -139,8 +145,54 @@ final class MockDataStore {
     /// Owner id of the signed-in user (set from AppSession); scopes "my" instructor listing.
     var currentUserID: String?
 
-    /// Persist edits made directly to a managed `Instructor` (bio, price, specialties, availability).
-    func commit() { save() }
+    /// Persist edits made directly to a managed `Instructor` (bio, price, specialties, availability),
+    /// and publish the owner's listing to the public catalog.
+    func commit() {
+        save()
+        publishMyListing()
+    }
+
+    private func publishMyListing() {
+        guard !isPreview, let me = currentInstructor else { return }
+        Task { await catalog.publish(me) }
+    }
+
+    // MARK: - Public catalog sync (cross-device instructor discovery)
+
+    /// Fetch visible listings from the public catalog and cache them into the local store the feed reads.
+    func syncCatalog() async {
+        guard !isPreview else { return }
+        let listings = await catalog.fetchVisibleListings()
+        var nextId = instructors.map(\.legacyId).max() ?? 0
+        var nextOrder = instructors.map(\.order).max() ?? 0
+        let owners = Set(listings.map(\.ownerID))
+
+        for listing in listings {
+            if let existing = instructors.first(where: { $0.ownerID == listing.ownerID }) {
+                apply(listing, to: existing)
+            } else {
+                nextId += 1; nextOrder += 1
+                let ins = Instructor(ownerID: listing.ownerID)
+                ins.legacyId = nextId
+                ins.order = nextOrder
+                apply(listing, to: ins)
+                context.insert(ins)
+            }
+        }
+        // Hide cached listings (not mine) that are no longer visible.
+        for ins in instructors where ins.ownerID != nil && ins.ownerID != currentUserID {
+            if !owners.contains(ins.ownerID!) { ins.visibilityRaw = 0 }
+        }
+        save()
+    }
+
+    private func apply(_ l: CatalogListing, to ins: Instructor) {
+        ins.name = l.name; ins.city = l.city; ins.bio = l.bio; ins.price = l.price
+        ins.specialties = l.specialties; ins.sessionTypes = l.sessionTypes; ins.available = l.available
+        ins.rating = l.rating; ins.reviews = l.reviews; ins.img = l.img; ins.cert = l.cert
+        ins.visibilityRaw = l.visibility
+        ins.visibilityVerifiedAt = Date()
+    }
 
     /// The signed-in instructor's own listing (resolved by owner), if it exists.
     var currentInstructor: Instructor? {

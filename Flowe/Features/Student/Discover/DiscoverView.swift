@@ -76,6 +76,8 @@ struct DiscoverView: View {
         .sheet(item: $selected) { ins in
             BookingSheet(instructor: ins) { selected = nil }
         }
+        .task { await data.syncCatalog() }
+        .refreshable { await data.syncCatalog() }
     }
 
     // MARK: - Header
