@@ -8,6 +8,7 @@ struct FlowApp: App {
     @State private var session = AppSession()
     @State private var data: MockDataStore
     @State private var settings = AppSettings()
+    @State private var subscription = SubscriptionService()
 
     init() {
         let container = FloweModelContainer.make()
@@ -23,6 +24,7 @@ struct FlowApp: App {
                 .environment(session)
                 .environment(data)
                 .environment(settings)
+                .environment(subscription)
                 .modelContainer(container)
                 .environment(\.locale, settings.locale)
                 .environment(\.layoutDirection, settings.layoutDirection)
@@ -35,6 +37,10 @@ struct FlowApp: App {
                             name: session.currentUser?.fullName ?? "Instructor"
                         )
                     }
+                }
+                // Reflect the instructor's subscription onto their feed listing.
+                .onChange(of: subscription.tier) {
+                    data.applyVisibility(subscription.tier?.mapsToVisibility ?? .none, for: session.ownerID)
                 }
         }
     }

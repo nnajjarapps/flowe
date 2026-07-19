@@ -7,9 +7,11 @@ struct InstructorDashboardView: View {
     @Environment(AppSession.self) private var session
     @Environment(InstructorRouter.self) private var router
     @Environment(AppSettings.self) private var settings
+    @Environment(SubscriptionService.self) private var subscription
 
     @State private var showAvailability = false
     @State private var showEditProfile = false
+    @State private var showPaywall = false
 
     /// Real bookings for the signed-in instructor's own listing. Empty until students book.
     private var todaysSessions: [Booking] {
@@ -40,6 +42,10 @@ struct InstructorDashboardView: View {
                 header
                 kpiRow
 
+                if !subscription.isVisible {
+                    visibilityBanner
+                }
+
                 VStack(alignment: .leading, spacing: FlowSpacing.md) {
                     SectionHeader(text: "TODAY'S SCHEDULE")
                     if todaysSessions.isEmpty {
@@ -67,6 +73,32 @@ struct InstructorDashboardView: View {
         .background(Color.flowWhite.ignoresSafeArea())
         .sheet(isPresented: $showAvailability) { AvailabilityView() }
         .sheet(isPresented: $showEditProfile) { EditProfileView() }
+        .sheet(isPresented: $showPaywall) { PaywallView() }
+    }
+
+    /// Promo shown until the instructor subscribes — they're hidden from the feed until they do.
+    private var visibilityBanner: some View {
+        Button { showPaywall = true } label: {
+            HStack(spacing: FlowSpacing.md) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 22))
+                    .foregroundStyle(.white)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Get discovered")
+                        .font(FloweFont.serif(17))
+                        .foregroundStyle(.white)
+                    Text("You're hidden from students. Start your free month.")
+                        .font(FloweFont.sans(12))
+                        .foregroundStyle(.white.opacity(0.9))
+                }
+                Spacer()
+                Image(systemName: "chevron.right").foregroundStyle(.white.opacity(0.9))
+            }
+            .padding(FlowSpacing.lg)
+            .background(FlowGradients.gradDark)
+            .clipShape(RoundedRectangle(cornerRadius: 20))
+        }
+        .buttonStyle(.plain)
     }
 
     private func handle(_ action: QuickAction) {
@@ -116,6 +148,7 @@ struct InstructorDashboardView: View {
 #Preview {
     InstructorDashboardView()
         .environment(MockDataStore.preview)
+        .environment(SubscriptionService())
         .environment(AppSettings())
         .environment(AppSession())
         .environment(InstructorRouter())

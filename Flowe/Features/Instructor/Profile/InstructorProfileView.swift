@@ -20,6 +20,7 @@ struct InstructorProfileView: View {
     @State private var showEditProfile = false
     @State private var showNotifications = false
     @State private var showAppSettings = false
+    @State private var showPaywall = false
 
     /// The signed-in instructor's own (possibly-empty) listing.
     private var me: Instructor? { data.currentInstructor }
@@ -77,6 +78,7 @@ struct InstructorProfileView: View {
         }
         .background(Color.flowWhite.ignoresSafeArea())
         .confirmationDialog("Account", isPresented: $showSettings, titleVisibility: .visible) {
+            Button("Get discovered") { showPaywall = true }
             Button("Edit profile") { showEditProfile = true }
             Button("Settings") { showAppSettings = true }
             Button("Notifications") { showNotifications = true }
@@ -86,6 +88,7 @@ struct InstructorProfileView: View {
         .sheet(isPresented: $showEditProfile) { EditProfileView() }
         .sheet(isPresented: $showNotifications) { NotificationSettingsView() }
         .sheet(isPresented: $showAppSettings) { SettingsView() }
+        .sheet(isPresented: $showPaywall) { PaywallView() }
     }
 
     // MARK: - Header
@@ -270,6 +273,7 @@ private struct FlowChipRow: View {
 #Preview {
     InstructorProfileView()
         .environment(MockDataStore.preview)
+        .environment(SubscriptionService())
         .environment(AppSettings())
         .environment(AppSession())
         .environment(InstructorRouter())

@@ -1,0 +1,77 @@
+{
+  "identifier" : "FLOWE-STOREKIT-CONFIG",
+  "nonRenewingSubscriptions" : [],
+  "products" : [],
+  "settings" : {
+    "_applicationInternalID" : "flowe",
+    "_developerTeamID" : "UYY2KBNZYQ",
+    "_lastSynchronizedDate" : 0
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "FLOWE-VISIBILITY-GROUP",
+      "localizations" : [
+        {
+          "description" : "Get discovered by students on Flowe.",
+          "displayName" : "Flowe Instructor Visibility",
+          "locale" : "en_US"
+        }
+      ],
+      "name" : "flowe_instructor_visibility",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [],
+          "codeOffers" : [],
+          "displayPrice" : "9.99",
+          "familyShareable" : false,
+          "groupNumber" : 2,
+          "internalID" : "FLOWE-VISIBLE",
+          "introductoryOffer" : {
+            "internalID" : "FLOWE-VISIBLE-TRIAL",
+            "paymentMode" : "free",
+            "subscriptionPeriod" : "P1M"
+          },
+          "localizations" : [
+            {
+              "description" : "Your profile appears in the student feed.",
+              "displayName" : "Flowe Visible",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.flowepilates.app.visible.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Flowe Visible",
+          "subscriptionGroupID" : "FLOWE-VISIBILITY-GROUP",
+          "type" : "RecurringSubscription",
+          "winbackOffers" : []
+        },
+        {
+          "adHocOffers" : [],
+          "codeOffers" : [],
+          "displayPrice" : "33.33",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "FLOWE-BOOST",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Featured placement — appear higher and reach more students.",
+              "displayName" : "Flowe Boost",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.flowepilates.app.boost.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Flowe Boost",
+          "subscriptionGroupID" : "FLOWE-VISIBILITY-GROUP",
+          "type" : "RecurringSubscription",
+          "winbackOffers" : []
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 3,
+    "minor" : 0
+  }
+}

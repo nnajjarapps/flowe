@@ -9,12 +9,16 @@ enum SeedLoader {
     @MainActor
     static func seedIfNeeded(_ context: ModelContext) {
         seed(context, InstructorSeed.self, file: "instructors.json", isEmpty: Instructor.self) { seed, i in
-            Instructor(
+            let instructor = Instructor(
                 legacyId: seed.id, name: seed.name, city: seed.city, rating: seed.rating,
                 reviews: seed.reviews, price: seed.price, yearsExp: seed.yearsExp, students: seed.students,
                 specialties: seed.specialties, sessionTypes: seed.sessionTypes, cert: seed.cert,
                 img: seed.img, available: seed.available, bio: seed.bio, order: i
             )
+            // Sample data (previews only): first is Boosted/featured, the rest Visible.
+            instructor.visibility = i == 0 ? .boosted : .visible
+            instructor.visibilityVerifiedAt = Date()
+            return instructor
         }
 
         seed(context, PostSeed.self, file: "posts.json", isEmpty: FeedPost.self) { seed, i in

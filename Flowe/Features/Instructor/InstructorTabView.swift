@@ -29,5 +29,6 @@ struct InstructorTabView: View {
     InstructorTabView()
         .environment(AppSession())
         .environment(MockDataStore.preview)
+        .environment(SubscriptionService())
         .environment(AppSettings())
 }

@@ -110,6 +110,7 @@ schemes:
         Flowe: all
     run:
       config: Debug
+      storeKitConfiguration: Flowe/Flowe.storekit
     test:
       config: Debug
     profile:

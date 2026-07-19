@@ -1,6 +1,13 @@
 import Foundation
 import SwiftData
 
+/// Instructor feed visibility, driven by their IAP subscription tier.
+enum InstructorVisibility: Int {
+    case none = 0     // not subscribed → hidden from the student feed
+    case visible = 1  // Flowe Visible → appears in the feed
+    case boosted = 2  // Flowe Boost → appears higher / featured
+}
+
 /// Reference catalog entry. Stored in the local (non-synced) `Reference` configuration.
 /// CloudKit-legal: class, every stored property defaulted, no `@Attribute(.unique)`.
 @Model
@@ -21,6 +28,13 @@ final class Instructor {
     var bio: String?
     var order: Int = 0              // stable display order
     var ownerID: String?           // the signed-in instructor who owns/edits this listing
+    var visibilityRaw: Int = 0     // InstructorVisibility — driven by the owner's subscription
+    var visibilityVerifiedAt: Date? // last time the owner's device confirmed the subscription
+
+    var visibility: InstructorVisibility {
+        get { InstructorVisibility(rawValue: visibilityRaw) ?? .none }
+        set { visibilityRaw = newValue.rawValue }
+    }
 
     init(
         legacyId: Int = 0,

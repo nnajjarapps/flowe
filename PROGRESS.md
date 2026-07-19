@@ -79,6 +79,21 @@ UI is complete across both role trees; several interactions are still *cosmetic*
 - Note: instructors are still **local** (SwiftData Reference store), so they don't yet appear across
   devices — needs the shared/public-catalog path (public CloudKit DB / CKSyncEngine or backend).
 
+## Revenue — Instructor IAP subscriptions (Phase A ✅)
+Flowe's first profit model. See `FLOWE-IAP-PLAN.md`.
+- [x] StoreKit 2 `SubscriptionService` (@MainActor @Observable) — products, entitlements, purchase/restore,
+      `Transaction.updates` listener; tiers **Visible** ($9.99, 1-mo free trial) + **Boost** ($33.33 → nearest ASC tier)
+- [x] `Flowe.storekit` local config wired into the scheme (simulator-testable, no ASC needed)
+- [x] `PaywallView` ("Get discovered") — tiers, trial, Restore, auto-renew disclosure + Terms/Privacy
+- [x] Feed gating: `Instructor.visibility` (none/visible/boosted) + `visibleInstructors`/`featuredInstructor`
+      ranking (7-day TTL); non-subscribed instructors are hidden; `FlowApp` stamps visibility on tier change
+- [x] Entry points: dashboard "Get discovered" banner (when hidden) + instructor profile menu
+- [x] Verified in simulator: boosted → featured hero, visible → feed, non-subscribed → hidden; banner + paywall render
+- [ ] **Phase B — public instructor catalog** (CloudKit public DB via CKSyncEngine/CKDatabase) so listings appear
+      cross-device (needs real devices + iCloud)
+- [ ] **Phase C — App Store Connect**: create the subscription group + products/prices/trial, banking/tax,
+      sandbox tester, CloudKit public-DB security roles (user-side)
+
 ## Phase 8 — Polish & Verification  ◑
 - [x] Verified all 9 screens running in the simulator (student + instructor trees)
 - [x] AppIcon fixed → single 1024×1024, no-alpha icon (was 3 invalid `.PNG` slots)

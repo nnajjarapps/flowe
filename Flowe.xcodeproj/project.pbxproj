@@ -12,6 +12,7 @@
 		073E425562DDD8F043790E0E /* InstructorBarChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65268B66DE3AFF92DA3C484D /* InstructorBarChart.swift */; };
 		0F346C6CD319E875C3D3EAF4 /* MockDataStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7363600B48D9D0491D076A9 /* MockDataStore.swift */; };
 		11CDDA2ABFDB2E6D4700B209 /* FloweConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06D1617BBCF38F203A11C316 /* FloweConstants.swift */; };
+		14250FA88FC8450E613B0377 /* PaywallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8DB231BCFA389ECC8C1D762 /* PaywallView.swift */; };
 		17940F585D865F455EC5E145 /* Fraunces-Light.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E7BA85F0573AA35B279EAE3F /* Fraunces-Light.ttf */; };
 		1AD5555D04999A8995C8D686 /* User.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F25A7337CFD62358334F757 /* User.swift */; };
 		1C47F28F1536D627C6E96E25 /* CommunityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 408E4D45449A4FF76E315B97 /* CommunityView.swift */; };
@@ -24,6 +25,7 @@
 		34260702FC71C0FE6545333B /* WeeklyBarChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EED8908487E5CCD626B5506 /* WeeklyBarChart.swift */; };
 		3463BAC1A6EF2B14D0622CDD /* FlowApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8834262674B21339DCB9CC33 /* FlowApp.swift */; };
 		3569E85932969520E8E9FC32 /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FA653CE87EE4098EAB086D5 /* ProfileView.swift */; };
+		383675FF172DEFC6809E7DC0 /* Flowe.storekit in Resources */ = {isa = PBXBuildFile; fileRef = 8AD8385BD6E748B58CBA04BD /* Flowe.storekit */; };
 		3B5ACC010BC814AAD54EF6E8 /* InstructorTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A15B6F9D171C9756B65D7423 /* InstructorTabView.swift */; };
 		3C21FE2BC3DA2E3AA770048F /* InstructorProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 540B00E56D89BF2B030B5185 /* InstructorProfileView.swift */; };
 		3EDD960F8F65E3919A6AD717 /* CreateAccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02CDF14067779CC6520621BC /* CreateAccountView.swift */; };
@@ -56,6 +58,7 @@
 		9A44D9B9B707452DFE04029F /* QuickActionsGrid.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CE171D2ABA3957094B2DD59 /* QuickActionsGrid.swift */; };
 		A23AD802E43F2485CF6D38E3 /* UnsplashImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 077B3B4C3600ECE4CE0E1861 /* UnsplashImage.swift */; };
 		A272AB954AC5935F65F0578E /* IconButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDB60A412E456123013E75E4 /* IconButton.swift */; };
+		A6D68D101065C7820B5BB267 /* SubscriptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB5F301524BA50E4D3032BEA /* SubscriptionService.swift */; };
 		AAE895D3AA0E84243D96DC8A /* FlowLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = E055796162D11DF1E7B8D52D /* FlowLayout.swift */; };
 		B029AD2888183B7786C5B22F /* Fraunces-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 9AC3550079CA887E6CF28838 /* Fraunces-Regular.ttf */; };
 		B1588F941847D026226D4A2A /* InstructorDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06C30D7FCF06A724C45BDF53 /* InstructorDashboardView.swift */; };
@@ -141,6 +144,7 @@
 		7F25A7337CFD62358334F757 /* User.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = User.swift; sourceTree = "<group>"; };
 		7F5C862793134F2194515695 /* FeaturedHeroCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeaturedHeroCard.swift; sourceTree = "<group>"; };
 		8834262674B21339DCB9CC33 /* FlowApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowApp.swift; sourceTree = "<group>"; };
+		8AD8385BD6E748B58CBA04BD /* Flowe.storekit */ = {isa = PBXFileReference; path = Flowe.storekit; sourceTree = "<group>"; };
 		8D324CCEA79663B5D1A47DE4 /* FilterChipsBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilterChipsBar.swift; sourceTree = "<group>"; };
 		914A7ECE05F8E495EF765D01 /* DMMono-Light.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "DMMono-Light.ttf"; sourceTree = "<group>"; };
 		91D1DD42C0E5A323D1D28FEB /* DisciplineTag.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisciplineTag.swift; sourceTree = "<group>"; };
@@ -149,12 +153,14 @@
 		A15B6F9D171C9756B65D7423 /* InstructorTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstructorTabView.swift; sourceTree = "<group>"; };
 		A6408CF78769237EA0E93AC0 /* Fraunces-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Fraunces-Medium.ttf"; sourceTree = "<group>"; };
 		A7363600B48D9D0491D076A9 /* MockDataStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockDataStore.swift; sourceTree = "<group>"; };
+		A8DB231BCFA389ECC8C1D762 /* PaywallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaywallView.swift; sourceTree = "<group>"; };
 		A9B8DD81B48D4AD3BC2545FF /* Booking.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Booking.swift; sourceTree = "<group>"; };
 		AA71C391F77D126869A764CB /* BookingStatus+Badge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "BookingStatus+Badge.swift"; sourceTree = "<group>"; };
 		AAFA6AE90A7A57AEF5C1D9A2 /* instructors.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = instructors.json; sourceTree = "<group>"; };
 		B12BC58F995114991F32175F /* InstructorCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstructorCard.swift; sourceTree = "<group>"; };
 		B264A9BA6AB860A28BAC86B9 /* RemoteImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteImage.swift; sourceTree = "<group>"; };
 		B5A1882EB901E61B7AF2A487 /* FloatingLabelField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingLabelField.swift; sourceTree = "<group>"; };
+		BB5F301524BA50E4D3032BEA /* SubscriptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionService.swift; sourceTree = "<group>"; };
 		C0F3A0FB151C0F688534ACEF /* EmptyStateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyStateView.swift; sourceTree = "<group>"; };
 		C15E26BF2DDDBD1EECABB0EC /* DMMono-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "DMMono-Regular.ttf"; sourceTree = "<group>"; };
 		C6FD9EE5DA26FD915263821D /* EditProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditProfileView.swift; sourceTree = "<group>"; };
@@ -196,6 +202,14 @@
 				E44A0A10890CCFF23B150A04 /* StudentTabView.swift */,
 			);
 			path = Student;
+			sourceTree = "<group>";
+		};
+		209BFAC6ED1097206FB99496 /* Subscription */ = {
+			isa = PBXGroup;
+			children = (
+				BB5F301524BA50E4D3032BEA /* SubscriptionService.swift */,
+			);
+			path = Subscription;
 			sourceTree = "<group>";
 		};
 		3779197F51A746108EF022E6 /* Models */ = {
@@ -265,8 +279,10 @@
 			children = (
 				DA8DD826B16F248729A5F8FC /* Instructor */,
 				630F02E465222C19CD23B616 /* Onboarding */,
+				ECE8F53621C5EE779432F74D /* Paywall */,
 				463F6C3EECA1AAF036F50232 /* Shared */,
 				08C89D877B597B5A0573AD7A /* Student */,
+				209BFAC6ED1097206FB99496 /* Subscription */,
 			);
 			path = Features;
 			sourceTree = "<group>";
@@ -376,6 +392,7 @@
 				D095FAA6B074F1AF2221AE6A /* AppSession.swift */,
 				8834262674B21339DCB9CC33 /* FlowApp.swift */,
 				2900A4121599897991E4CAC5 /* Flowe.entitlements */,
+				8AD8385BD6E748B58CBA04BD /* Flowe.storekit */,
 				F99415EA7AD89182BC95C311 /* Info.plist */,
 			);
 			path = Flowe;
@@ -473,6 +490,14 @@
 			path = Dashboard;
 			sourceTree = "<group>";
 		};
+		ECE8F53621C5EE779432F74D /* Paywall */ = {
+			isa = PBXGroup;
+			children = (
+				A8DB231BCFA389ECC8C1D762 /* PaywallView.swift */,
+			);
+			path = Paywall;
+			sourceTree = "<group>";
+		};
 		F541719C9952DDDE722AE78D /* MockData */ = {
 			isa = PBXGroup;
 			children = (
@@ -566,6 +591,7 @@
 				0090B8F0D20E644F666A5511 /* DMSans-LightItalic.ttf in Resources */,
 				E35B39FB1D1599098DC6CADF /* DMSans-Medium.ttf in Resources */,
 				2D2F92EF6E999F39ABDCB722 /* DMSans-Regular.ttf in Resources */,
+				383675FF172DEFC6809E7DC0 /* Flowe.storekit in Resources */,
 				DBC8D79713AF1D0E87E2B82E /* Fraunces-Italic.ttf in Resources */,
 				17940F585D865F455EC5E145 /* Fraunces-Light.ttf in Resources */,
 				56077DC95736DA622C1DF012 /* Fraunces-LightItalic.ttf in Resources */,
@@ -635,6 +661,7 @@
 				24A9D9345D589AA3843DF653 /* NewMessageSheet.swift in Sources */,
 				8F005CECFE7C6E453C28CD31 /* NotificationSettingsView.swift in Sources */,
 				59337B263035088E6520BD42 /* OnboardingFlowView.swift in Sources */,
+				14250FA88FC8450E613B0377 /* PaywallView.swift in Sources */,
 				BA845ED7BB33CB99331BC16A /* PostRowView.swift in Sources */,
 				73C750F9D9D807EAD4A2DD6F /* PrimaryButton.swift in Sources */,
 				3569E85932969520E8E9FC32 /* ProfileView.swift in Sources */,
@@ -648,6 +675,7 @@
 				CF622EEBD2BC486D9A84998C /* SettingsView.swift in Sources */,
 				527829EADB9BDA6A843964F6 /* SplashView.swift in Sources */,
 				540376ADAA3BFBF4E858CF43 /* StudentTabView.swift in Sources */,
+				A6D68D101065C7820B5BB267 /* SubscriptionService.swift in Sources */,
 				A23AD802E43F2485CF6D38E3 /* UnsplashImage.swift in Sources */,
 				1AD5555D04999A8995C8D686 /* User.swift in Sources */,
 				E9550CCFABED3F34246C166E /* View+Flowe.swift in Sources */,

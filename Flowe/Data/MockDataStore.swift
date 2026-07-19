@@ -43,10 +43,39 @@ final class MockDataStore {
         instructors.first { $0.legacyId == id }
     }
 
-    /// Instructors visible to students — only those who've published a listing (set a rate).
-    /// A freshly-signed-up instructor with an empty listing stays hidden until they set it up.
-    var publishedInstructors: [Instructor] {
-        instructors.filter { $0.price > 0 && !$0.name.isEmpty }
+    /// Instructors students can see: an active subscription (Visible/Boost), a set-up listing,
+    /// and a fresh subscription check. Boosted first, then by rating, then order.
+    var visibleInstructors: [Instructor] {
+        instructors.filter(Self.isEligible).sorted {
+            if $0.visibilityRaw != $1.visibilityRaw { return $0.visibilityRaw > $1.visibilityRaw }
+            if $0.rating != $1.rating { return $0.rating > $1.rating }
+            return $0.order < $1.order
+        }
+    }
+
+    /// The featured slot — the top boosted instructor (falls back to the first visible one).
+    var featuredInstructor: Instructor? {
+        visibleInstructors.first { $0.visibility == .boosted } ?? visibleInstructors.first
+    }
+
+    /// Back-compat alias for the student feed.
+    var publishedInstructors: [Instructor] { visibleInstructors }
+
+    private static func isEligible(_ ins: Instructor) -> Bool {
+        guard ins.visibility != .none, ins.price > 0, !ins.name.isEmpty else { return false }
+        // 7-day TTL backstop: a lapsed subscription on a device that never reopened stays hidden.
+        if let verified = ins.visibilityVerifiedAt {
+            return Date().timeIntervalSince(verified) < 7 * 24 * 3600
+        }
+        return true
+    }
+
+    /// Stamp the signed-in instructor's listing with their subscription-derived visibility.
+    func applyVisibility(_ level: InstructorVisibility, for ownerID: String) {
+        guard let listing = instructors.first(where: { $0.ownerID == ownerID }) else { return }
+        listing.visibility = level
+        listing.visibilityVerifiedAt = Date()
+        save()
     }
 
     // MARK: - Bookings

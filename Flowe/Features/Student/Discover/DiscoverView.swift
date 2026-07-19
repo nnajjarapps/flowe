@@ -9,7 +9,8 @@ struct DiscoverView: View {
     @State private var selected: Instructor?
 
     private var filteredInstructors: [Instructor] {
-        data.publishedInstructors.filter { ins in
+        data.visibleInstructors.filter { ins in
+            ins.legacyId != featuredInstructor?.legacyId &&
             (filter == "All" || ins.specialties.contains(filter)) &&
             (search.isEmpty
              || ins.name.lowercased().contains(search.lowercased())
@@ -20,7 +21,7 @@ struct DiscoverView: View {
     /// The instructor to feature: only when browsing the full, unfiltered list and one exists.
     private var featuredInstructor: Instructor? {
         guard filter == "All", search.isEmpty else { return nil }
-        return data.publishedInstructors.first
+        return data.featuredInstructor
     }
 
     private var listLabel: String {
