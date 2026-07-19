@@ -14,7 +14,7 @@ struct FloatingLabelField: View {
         ZStack(alignment: .leading) {
             Text(title)
                 .flowFont(isFloating ? .label : .bodyLarge)
-                .foregroundStyle(isFloating ? Color.flowDustyRose : Color.flowTaupeGray)
+                .foregroundStyle(isFloating ? Color.flowePinkDeep : Color.floweMuted)
                 .offset(y: isFloating ? -22 : 0)
                 .animation(.spring(duration: 0.2), value: isFloating)
 
@@ -26,7 +26,7 @@ struct FloatingLabelField: View {
                 }
             }
             .flowFont(.bodyLarge)
-            .foregroundStyle(Color.flowDarkBrown)
+            .foregroundStyle(Color.floweInk)
             .focused($isFocused)
             .padding(.top, 8)
 
@@ -37,7 +37,7 @@ struct FloatingLabelField: View {
                         isRevealed.toggle()
                     } label: {
                         Image(systemName: isRevealed ? "eye.slash" : "eye")
-                            .foregroundStyle(Color.flowTaupeGray)
+                            .foregroundStyle(Color.floweMuted)
                     }
                 }
             }
@@ -49,7 +49,7 @@ struct FloatingLabelField: View {
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(isFocused ? Color.flowDustyRose : Color.flowWarmGray, lineWidth: 1)
+                .stroke(isFocused ? Color.flowePinkDeep : Color.floweBorder, lineWidth: 1)
         )
     }
 }
@@ -62,5 +62,5 @@ struct FloatingLabelField: View {
         FloatingLabelField(title: "Password", text: $password, isSecure: true)
     }
     .padding()
-    .background(Color.flowWarmCream)
+    .background(Color.floweCardBg)
 }

@@ -12,11 +12,11 @@ struct RoleSelectionView: View {
             VStack(alignment: .leading, spacing: FlowSpacing.sm) {
                 Text("Who are you\njoining as?")
                     .flowFont(.displayMedium)
-                    .foregroundStyle(Color.flowDarkBrown)
+                    .foregroundStyle(Color.floweInk)
 
                 Text("Choose your role. You can change this later.")
                     .flowFont(.bodyMedium)
-                    .foregroundStyle(Color.flowTaupeGray)
+                    .foregroundStyle(Color.floweMuted)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, FlowSpacing.xl)
@@ -27,10 +27,10 @@ struct RoleSelectionView: View {
             VStack(spacing: FlowSpacing.lg) {
                 RoleCard(
                     tag: "Find & Book Classes",
-                    title: "I'm here to learn",
+                    title: "I'm here to train",
                     subtitle: "Discover certified instructors, book sessions, join classes and grow your Pilates practice.",
                     imageName: "figure.pilates",
-                    tint: Color.flowBlushPink,
+                    tint: Color.flowePinkSoft,
                     isSelected: selectedRole == .student
                 ) {
                     withAnimation(.spring(duration: 0.2)) { selectedRole = .student }
@@ -41,7 +41,7 @@ struct RoleSelectionView: View {
                     title: "I'm here to teach",
                     subtitle: "List your services, manage bookings, create events and build your community on flowe.",
                     imageName: "figure.yoga",
-                    tint: Color(hex: 0x3D6B5A),
+                    tint: Color.flowePinkDeep,
                     isSelected: selectedRole == .instructor
                 ) {
                     withAnimation(.spring(duration: 0.2)) { selectedRole = .instructor }
@@ -63,7 +63,7 @@ struct RoleSelectionView: View {
                     navigateToLogin = true
                 }
                 .flowFont(.bodyMedium)
-                .foregroundStyle(Color.flowDustyRose)
+                .foregroundStyle(Color.flowePinkDeep)
             }
             .padding(.horizontal, FlowSpacing.xl)
             .padding(.bottom, FlowSpacing.xxxl)
@@ -98,7 +98,7 @@ private struct RoleCard: View {
 
                 if isSelected {
                     RoundedRectangle(cornerRadius: 20)
-                        .stroke(Color.flowEspressoBrown, lineWidth: 2)
+                        .stroke(Color.flowePinkDeep, lineWidth: 2)
                         .frame(height: 160)
                 }
 
@@ -108,7 +108,7 @@ private struct RoleCard: View {
                         .foregroundStyle(Color.flowWhite.opacity(0.85))
                         .padding(.horizontal, FlowSpacing.sm)
                         .padding(.vertical, 3)
-                        .background(Color.flowEspressoBrown.opacity(0.3))
+                        .background(Color.floweInk.opacity(0.3))
                         .clipShape(Capsule())
 
                     Text(title)

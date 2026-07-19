@@ -1,5 +1,6 @@
 import SwiftUI
 import Observation
+import AuthenticationServices
 
 enum AuthState {
     case unauthenticated
@@ -12,15 +13,37 @@ final class AppSession {
     var authState: AuthState = .unauthenticated
     var currentUser: User?
 
+    /// Stable Apple user identifier (the only id Apple returns on every sign-in). Kept in the
+    /// Keychain so it survives reinstalls; becomes the owner id for the user's CloudKit records.
+    private(set) var appleUserID: String?
+
     private let roleKey = "flowe.userRole"
     private let loggedInKey = "flowe.isLoggedIn"
+    private let appleUserKey = "flowe.appleUserID"
 
     init() {
+        appleUserID = KeychainStore.get(appleUserKey)
         let defaults = UserDefaults.standard
         if defaults.bool(forKey: loggedInKey),
            let rawRole = defaults.string(forKey: roleKey),
            let role = UserRole(rawValue: rawRole) {
             authState = role == .student ? .student : .instructor
+        }
+    }
+
+    /// Records the Apple credential's stable user id (persisted to the Keychain).
+    func setAppleUserID(_ id: String) {
+        appleUserID = id
+        KeychainStore.set(id, for: appleUserKey)
+    }
+
+    /// On launch, drop the session if Apple has revoked the credential.
+    func validateAppleCredential() async {
+        guard let appleUserID else { return }
+        let state = try? await ASAuthorizationAppleIDProvider()
+            .credentialState(forUserID: appleUserID)
+        if state == .revoked || state == .notFound {
+            await MainActor.run { logout() }
         }
     }
 
@@ -48,9 +71,11 @@ final class AppSession {
 
     func logout() {
         currentUser = nil
+        appleUserID = nil
         authState = .unauthenticated
         UserDefaults.standard.removeObject(forKey: roleKey)
         UserDefaults.standard.set(false, forKey: loggedInKey)
+        KeychainStore.set(nil, for: appleUserKey)
     }
 
     private func persist(role: UserRole) {

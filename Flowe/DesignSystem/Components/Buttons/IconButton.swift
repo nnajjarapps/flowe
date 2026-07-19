@@ -4,7 +4,7 @@ struct IconButton: View {
     let systemName: String
     let action: () -> Void
     var size: CGFloat = 44
-    var foregroundColor: Color = .flowEspressoBrown
+    var foregroundColor: Color = .floweInk
     var backgroundColor: Color = .flowSoftBeige
 
     var body: some View {

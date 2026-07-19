@@ -1,0 +1,7 @@
+[
+  { "id": 1, "instructorId": 1, "date": "Thu, Jul 10", "time": "9:00 AM",  "type": "Private", "duration": "55 min", "status": "confirmed" },
+  { "id": 2, "instructorId": 3, "date": "Sat, Jul 12", "time": "11:00 AM", "type": "Duet",    "duration": "50 min", "status": "pending" },
+  { "id": 3, "instructorId": 2, "date": "Thu, Jul 3",  "time": "10:00 AM", "type": "Online",  "duration": "50 min", "status": "completed" },
+  { "id": 4, "instructorId": 1, "date": "Mon, Jun 28", "time": "9:00 AM",  "type": "Private", "duration": "55 min", "status": "completed" },
+  { "id": 5, "instructorId": 5, "date": "Fri, Jun 20", "time": "8:00 AM",  "type": "Private", "duration": "55 min", "status": "cancelled" }
+]

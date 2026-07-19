@@ -1,0 +1,181 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "Activity" : {
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "النشاط" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Actividad" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Activité" } }
+      }
+    },
+    "Booking requests" : {
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "طلبات الحجز" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Solicitudes de reserva" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Demandes de réservation" } }
+      }
+    },
+    "Bookings" : {
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "الحجوزات" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Reservas" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Réservations" } }
+      }
+    },
+    "Calendar" : {
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "التقويم" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Calendario" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Calendrier" } }
+      }
+    },
+    "Cancel" : {
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "إلغاء" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Cancelar" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Annuler" } }
+      }
+    },
+    "Community" : {
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "المجتمع" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Comunidad" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Communauté" } }
+      }
+    },
+    "Currency" : {
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "العملة" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Moneda" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Devise" } }
+      }
+    },
+    "Dashboard" : {
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "لوحة التحكم" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Panel" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Tableau de bord" } }
+      }
+    },
+    "Discover" : {
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "اكتشف" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Descubrir" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Découvrir" } }
+      }
+    },
+    "Done" : {
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "تم" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Hecho" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Terminé" } }
+      }
+    },
+    "Edit profile" : {
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "تعديل الملف الشخصي" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Editar perfil" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Modifier le profil" } }
+      }
+    },
+    "Language" : {
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "اللغة" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Idioma" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Langue" } }
+      }
+    },
+    "Log out" : {
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "تسجيل الخروج" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Cerrar sesión" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Se déconnecter" } }
+      }
+    },
+    "Messages" : {
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "الرسائل" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Mensajes" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Messages" } }
+      }
+    },
+    "Notification settings" : {
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "إعدادات الإشعارات" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Ajustes de notificaciones" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Réglages des notifications" } }
+      }
+    },
+    "Notifications" : {
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "الإشعارات" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Notificaciones" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Notifications" } }
+      }
+    },
+    "Payouts" : {
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "المدفوعات" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Pagos" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Paiements" } }
+      }
+    },
+    "Preferences" : {
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "التفضيلات" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Preferencias" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Préférences" } }
+      }
+    },
+    "Profile" : {
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "الملف الشخصي" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Perfil" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Profil" } }
+      }
+    },
+    "Reminders" : {
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "التذكيرات" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Recordatorios" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Rappels" } }
+      }
+    },
+    "Reviews" : {
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "التقييمات" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Reseñas" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Avis" } }
+      }
+    },
+    "Save" : {
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "حفظ" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Guardar" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Enregistrer" } }
+      }
+    },
+    "Session reminders" : {
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "تذكيرات الجلسات" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Recordatorios de sesión" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Rappels de séance" } }
+      }
+    },
+    "Settings" : {
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "الإعدادات" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Ajustes" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Réglages" } }
+      }
+    },
+    "Product news & offers" : {
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "أخبار المنتج والعروض" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Novedades y ofertas" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Actualités et offres" } }
+      }
+    }
+  },
+  "version" : "1.0"
+}

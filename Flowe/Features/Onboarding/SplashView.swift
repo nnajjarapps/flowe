@@ -13,24 +13,20 @@ struct SplashView: View {
 
             VStack(spacing: FlowSpacing.xl) {
                 // Logo mark
-                ZStack {
-                    Circle()
-                        .fill(Color.flowWhite.opacity(0.2))
-                        .frame(width: 120, height: 120)
-
-                    Text("F")
-                        .font(.system(size: 60, weight: .bold, design: .serif))
-                        .foregroundStyle(Color.flowEspressoBrown)
-                }
+                Image("Logo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 140, height: 140)
+                    .clipShape(Circle())
 
                 VStack(spacing: FlowSpacing.sm) {
                     Text("flowe")
-                        .font(.system(size: 36, weight: .light, design: .serif))
-                        .foregroundStyle(Color.flowEspressoBrown)
+                        .font(FloweFont.serif(36, .light))
+                        .foregroundStyle(Color.floweInk)
 
                     Text("PILATES · COMMUNITY · YOU")
                         .flowFont(.label)
-                        .foregroundStyle(Color.flowTaupeGray)
+                        .foregroundStyle(Color.floweMuted)
                         .tracking(2)
                 }
             }

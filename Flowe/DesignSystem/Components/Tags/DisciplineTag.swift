@@ -8,10 +8,10 @@ enum Discipline: String, CaseIterable, Codable {
 
     var backgroundColor: Color {
         switch self {
-        case .mat:      return .flowBlushPink
-        case .reformer: return .flowDustyRose.opacity(0.25)
-        case .barre:    return .flowWarmGray
-        case .prenatal: return .flowLightBeige
+        case .mat:      return .flowePinkSoft.opacity(0.30)
+        case .reformer: return .flowePink.opacity(0.18)
+        case .barre:    return .flowePinkPale.opacity(0.35)
+        case .prenatal: return .floweCardBg
         }
     }
 }
@@ -22,7 +22,7 @@ struct DisciplineTag: View {
     var body: some View {
         Text(discipline.rawValue)
             .flowFont(.label)
-            .foregroundStyle(Color.flowEspressoBrown)
+            .foregroundStyle(Color.flowePinkDeep)
             .padding(.horizontal, FlowSpacing.sm)
             .padding(.vertical, FlowSpacing.xs)
             .background(discipline.backgroundColor)

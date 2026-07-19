@@ -2,40 +2,32 @@ import SwiftUI
 
 struct InstructorTabView: View {
     @Environment(AppSession.self) private var session
+    @State private var router = InstructorRouter()
 
     var body: some View {
-        TabView {
-            Text("Dashboard")
-                .tabItem {
-                    Label("Dashboard", systemImage: "chart.bar")
-                }
+        @Bindable var router = router
+        TabView(selection: $router.selectedTab) {
+            InstructorDashboardView()
+                .tabItem { Label("Dashboard", systemImage: "chart.bar") }.tag(0)
 
-            Text("Calendar")
-                .tabItem {
-                    Label("Calendar", systemImage: "calendar")
-                }
+            InstructorCalendarView()
+                .tabItem { Label("Calendar", systemImage: "calendar") }.tag(1)
 
-            Text("Community")
-                .tabItem {
-                    Label("Community", systemImage: "person.3")
-                }
+            MessageListView()
+                .tabItem { Label("Messages", systemImage: "message") }.tag(2)
 
-            Text("Messages")
-                .tabItem {
-                    Label("Messages", systemImage: "message")
-                }
-
-            Text("Profile")
-                .tabItem {
-                    Label("Profile", systemImage: "person.circle")
-                }
+            InstructorProfileView()
+                .tabItem { Label("Profile", systemImage: "person.circle") }.tag(3)
         }
-        .tint(Color.flowEspressoBrown)
+        .tint(Color.flowePinkDeep)
         .toolbarBackground(.ultraThinMaterial, for: .tabBar)
+        .environment(router)
     }
 }
 
 #Preview {
     InstructorTabView()
         .environment(AppSession())
+        .environment(MockDataStore.preview)
+        .environment(AppSettings())
 }

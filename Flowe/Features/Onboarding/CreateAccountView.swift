@@ -17,12 +17,12 @@ struct CreateAccountView: View {
                 VStack(alignment: .leading, spacing: FlowSpacing.xs) {
                     Text("Join flowe")
                         .flowFont(.displayMedium)
-                        .foregroundStyle(Color.flowDarkBrown)
+                        .foregroundStyle(Color.floweInk)
                         .italic()
 
                     Text("Start your Pilates journey today")
                         .flowFont(.bodyMedium)
-                        .foregroundStyle(Color.flowTaupeGray)
+                        .foregroundStyle(Color.floweMuted)
                 }
 
                 VStack(spacing: FlowSpacing.md) {
@@ -43,34 +43,29 @@ struct CreateAccountView: View {
                 }
 
                 HStack {
-                    Rectangle().fill(Color.flowWarmGray).frame(height: 1)
-                    Text("or").flowFont(.caption).foregroundStyle(Color.flowTaupeGray)
-                    Rectangle().fill(Color.flowWarmGray).frame(height: 1)
+                    Rectangle().fill(Color.floweBorder).frame(height: 1)
+                    Text("or").flowFont(.caption).foregroundStyle(Color.floweMuted)
+                    Rectangle().fill(Color.floweBorder).frame(height: 1)
                 }
 
                 SignInWithAppleButton(.signUp) { request in
                     request.requestedScopes = [.fullName, .email]
                 } onCompletion: { result in
-                    switch result {
-                    case .success:
-                        session.signUp(name: "Apple User", email: "apple@privaterelay.com", role: role)
-                    case .failure:
-                        errorMessage = "Apple Sign-In failed. Please try again."
-                    }
+                    handleApple(result)
                 }
                 .signInWithAppleButtonStyle(.black)
-                .frame(height: 56)
+                .frame(maxWidth: .infinity, minHeight: 56)
                 .clipShape(RoundedRectangle(cornerRadius: 14))
 
                 HStack(spacing: FlowSpacing.xs) {
                     Text("Already have an account?")
                         .flowFont(.bodyMedium)
-                        .foregroundStyle(Color.flowTaupeGray)
+                        .foregroundStyle(Color.floweMuted)
                     NavigationLink("Log in") {
                         LoginView(role: role)
                     }
                     .flowFont(.bodyMedium)
-                    .foregroundStyle(Color.flowDustyRose)
+                    .foregroundStyle(Color.flowePinkDeep)
                 }
                 .frame(maxWidth: .infinity)
             }
@@ -92,6 +87,25 @@ struct CreateAccountView: View {
             return
         }
         session.signUp(name: fullName, email: email, role: role)
+    }
+
+    private func handleApple(_ result: Result<ASAuthorization, Error>) {
+        switch result {
+        case .success(let auth):
+            let cred = auth.credential as? ASAuthorizationAppleIDCredential
+            if let userID = cred?.user { session.setAppleUserID(userID) }
+            // Apple only returns name/email on the first authorization; fall back otherwise.
+            let name = [cred?.fullName?.givenName, cred?.fullName?.familyName]
+                .compactMap { $0 }.joined(separator: " ")
+            session.signUp(
+                name: name.isEmpty ? "Flowe Member" : name,
+                email: cred?.email ?? "member@flowe.app",
+                role: role
+            )
+        case .failure(let error):
+            if (error as NSError).code == ASAuthorizationError.canceled.rawValue { return }
+            errorMessage = "Apple Sign-In failed: \(error.localizedDescription)"
+        }
     }
 }
 

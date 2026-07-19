@@ -15,11 +15,11 @@ struct LoginView: View {
                 VStack(alignment: .leading, spacing: FlowSpacing.xs) {
                     Text("Welcome back")
                         .flowFont(.displayMedium)
-                        .foregroundStyle(Color.flowDarkBrown)
+                        .foregroundStyle(Color.floweInk)
 
                     Text("Log in to continue your journey")
                         .flowFont(.bodyMedium)
-                        .foregroundStyle(Color.flowTaupeGray)
+                        .foregroundStyle(Color.floweMuted)
                 }
 
                 VStack(spacing: FlowSpacing.md) {
@@ -31,7 +31,7 @@ struct LoginView: View {
                     Spacer()
                     Button("Forgot Password?") {}
                         .flowFont(.bodyMedium)
-                        .foregroundStyle(Color.flowDustyRose)
+                        .foregroundStyle(Color.flowePinkDeep)
                 }
 
                 if let error = errorMessage {
@@ -45,34 +45,29 @@ struct LoginView: View {
                 }
 
                 HStack {
-                    Rectangle().fill(Color.flowWarmGray).frame(height: 1)
-                    Text("or").flowFont(.caption).foregroundStyle(Color.flowTaupeGray)
-                    Rectangle().fill(Color.flowWarmGray).frame(height: 1)
+                    Rectangle().fill(Color.floweBorder).frame(height: 1)
+                    Text("or").flowFont(.caption).foregroundStyle(Color.floweMuted)
+                    Rectangle().fill(Color.floweBorder).frame(height: 1)
                 }
 
                 SignInWithAppleButton(.signIn) { request in
                     request.requestedScopes = [.fullName, .email]
                 } onCompletion: { result in
-                    switch result {
-                    case .success:
-                        session.login(email: "apple@privaterelay.com", role: role)
-                    case .failure:
-                        errorMessage = "Apple Sign-In failed. Please try again."
-                    }
+                    handleApple(result)
                 }
                 .signInWithAppleButtonStyle(.black)
-                .frame(height: 56)
+                .frame(maxWidth: .infinity, minHeight: 56)
                 .clipShape(RoundedRectangle(cornerRadius: 14))
 
                 HStack(spacing: FlowSpacing.xs) {
                     Text("Not a member?")
                         .flowFont(.bodyMedium)
-                        .foregroundStyle(Color.flowTaupeGray)
+                        .foregroundStyle(Color.floweMuted)
                     NavigationLink("Join now") {
                         CreateAccountView(role: role)
                     }
                     .flowFont(.bodyMedium)
-                    .foregroundStyle(Color.flowDustyRose)
+                    .foregroundStyle(Color.flowePinkDeep)
                 }
                 .frame(maxWidth: .infinity)
             }
@@ -90,6 +85,18 @@ struct LoginView: View {
             return
         }
         session.login(email: email, role: role)
+    }
+
+    private func handleApple(_ result: Result<ASAuthorization, Error>) {
+        switch result {
+        case .success(let auth):
+            let cred = auth.credential as? ASAuthorizationAppleIDCredential
+            if let userID = cred?.user { session.setAppleUserID(userID) }
+            session.login(email: cred?.email ?? "member@flowe.app", role: role)
+        case .failure(let error):
+            if (error as NSError).code == ASAuthorizationError.canceled.rawValue { return }
+            errorMessage = "Apple Sign-In failed: \(error.localizedDescription)"
+        }
     }
 }
 

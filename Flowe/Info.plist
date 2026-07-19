@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
-	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<string>en</string>
 	<key>CFBundleDisplayName</key>
 	<string>Flowe</string>
 	<key>CFBundleExecutable</key>
@@ -12,6 +12,13 @@
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>es</string>
+		<string>fr</string>
+		<string>ar</string>
+	</array>
 	<key>CFBundleName</key>
 	<string>Flowe</string>
 	<key>CFBundlePackageType</key>
@@ -24,6 +31,36 @@
 	<string>Flowe uses your location to show nearby instructors.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Flowe uses your photo library so you can share images in posts.</string>
+	<key>NSUbiquitousContainers</key>
+	<dict>
+		<key>iCloud.com.flowepilates.app</key>
+		<dict>
+			<key>NSUbiquitousContainerIsDocumentScopePublic</key>
+			<false/>
+			<key>NSUbiquitousContainerName</key>
+			<string>Flowe</string>
+			<key>NSUbiquitousContainerSupportedFolderLevels</key>
+			<string>None</string>
+		</dict>
+	</dict>
+	<key>UIAppFonts</key>
+	<array>
+		<string>Fraunces-Light.ttf</string>
+		<string>Fraunces-Regular.ttf</string>
+		<string>Fraunces-Medium.ttf</string>
+		<string>Fraunces-Italic.ttf</string>
+		<string>Fraunces-LightItalic.ttf</string>
+		<string>DMSans-Light.ttf</string>
+		<string>DMSans-Regular.ttf</string>
+		<string>DMSans-Medium.ttf</string>
+		<string>DMSans-LightItalic.ttf</string>
+		<string>DMMono-Light.ttf</string>
+		<string>DMMono-Regular.ttf</string>
+	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>

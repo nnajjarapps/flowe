@@ -14,4 +14,18 @@ extension Color {
     static let flowDarkBrown     = Color(hex: 0x3B2F2A)
     static let flowLightBeige    = Color(hex: 0xF7F2ED)
     static let flowWhite         = Color(hex: 0xFFFFFF)
+
+    // MARK: - Figma pink palette (app source of truth)
+    static let flowePink     = Color(hex: 0xE8789A)
+    static let flowePinkDeep = Color(hex: 0xD45880)
+    static let flowePinkSoft = Color(hex: 0xF4A8C0)
+    static let flowePinkPale = Color(hex: 0xFFC2D4)
+    static let floweCardBg   = Color(hex: 0xFFF0F4)
+    static let floweInk      = Color(hex: 0x2D1520)
+    static let floweMuted    = Color(hex: 0xB08090)
+    static let floweBorder   = Color(hex: 0xE8789A).opacity(0.18)
+
+    // Status badges (bookings)
+    static let floweSuccess  = Color(hex: 0x4CAF50)
+    static let floweCancel   = Color(hex: 0xE05070)
 }

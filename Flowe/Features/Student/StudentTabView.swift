@@ -5,27 +5,19 @@ struct StudentTabView: View {
 
     var body: some View {
         TabView {
-            Text("Home")
-                .tabItem {
-                    Label("Home", systemImage: "house")
-                }
+            DiscoverView()
+                .tabItem { Label("Discover", systemImage: "safari") }
 
-            Text("Search")
-                .tabItem {
-                    Label("Search", systemImage: "magnifyingglass")
-                }
+            CommunityView()
+                .tabItem { Label("Community", systemImage: "person.3") }
 
-            Text("Community")
-                .tabItem {
-                    Label("Community", systemImage: "person.3")
-                }
+            BookingsView()
+                .tabItem { Label("Bookings", systemImage: "calendar") }
 
-            Text("Profile")
-                .tabItem {
-                    Label("Profile", systemImage: "person.circle")
-                }
+            ProfileView()
+                .tabItem { Label("Profile", systemImage: "person.circle") }
         }
-        .tint(Color.flowEspressoBrown)
+        .tint(Color.flowePinkDeep)
         .toolbarBackground(.ultraThinMaterial, for: .tabBar)
     }
 }
@@ -33,4 +25,6 @@ struct StudentTabView: View {
 #Preview {
     StudentTabView()
         .environment(AppSession())
+        .environment(MockDataStore.preview)
+        .environment(AppSettings())
 }

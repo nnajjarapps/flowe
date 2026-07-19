@@ -13,7 +13,7 @@ struct PrimaryButton: View {
                 .foregroundStyle(Color.flowWhite)
                 .frame(maxWidth: .infinity)
                 .frame(height: 56)
-                .background(Color.flowEspressoBrown)
+                .background(FlowGradients.gradDark)
                 .clipShape(RoundedRectangle(cornerRadius: 14))
                 .scaleEffect(isPressed ? 0.96 : 1)
                 .animation(.spring(duration: 0.15), value: isPressed)
