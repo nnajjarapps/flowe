@@ -15,15 +15,17 @@ final class MockDataStore {
     private(set) var posts: [FeedPost] = []
     private(set) var bookings: [Booking] = []
 
-    init(_ context: ModelContext) {
+    /// The shipping app starts EMPTY — no mock data is seeded into the (CloudKit-synced) store.
+    /// Sample data is only loaded for SwiftUI previews (`seed: true`, in-memory).
+    init(_ context: ModelContext, seed: Bool = false) {
         self.context = context
-        SeedLoader.seedIfNeeded(context)
+        if seed { SeedLoader.seedIfNeeded(context) }
         refresh()
     }
 
-    /// Fresh in-memory store for SwiftUI previews.
+    /// Fresh in-memory store seeded with sample data — for SwiftUI previews only.
     static var preview: MockDataStore {
-        MockDataStore(FloweModelContainer.make(inMemory: true).mainContext)
+        MockDataStore(FloweModelContainer.make(inMemory: true).mainContext, seed: true)
     }
 
     func refresh() {
