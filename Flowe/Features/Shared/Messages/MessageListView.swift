@@ -19,17 +19,11 @@ struct MessageListView: View {
     @State private var search = ""
     @State private var showCompose = false
 
-    /// Local mock inbox — maps to the first instructors in the store.
-    private static let mockConversations: [Conversation] = [
-        Conversation(id: 1, instructorId: 1, preview: "Perfect, we'll add some gentle mobility work at the start.", time: "9:20 AM", unread: true),
-        Conversation(id: 2, instructorId: 2, preview: "You: See you at the tower session on Friday 💗", time: "Yesterday", unread: false),
-        Conversation(id: 3, instructorId: 3, preview: "Loved your progress this month — really strong core work!", time: "Yesterday", unread: true),
-        Conversation(id: 4, instructorId: 4, preview: "You: Thank you! That mat flow was exactly what I needed.", time: "Tue", unread: false),
-        Conversation(id: 5, instructorId: 5, preview: "Here's the prenatal sequence we talked about 🌸", time: "Mon", unread: false),
-    ]
+    /// Real inbox — empty until conversations are exchanged.
+    @State private var inbox: [Conversation] = []
 
     private var conversations: [(convo: Conversation, instructor: Instructor)] {
-        Self.mockConversations.compactMap { convo in
+        inbox.compactMap { convo in
             guard let ins = data.instructor(id: convo.instructorId) else { return nil }
             return (convo, ins)
         }
@@ -63,8 +57,15 @@ struct MessageListView: View {
                         Divider().overlay(Color.floweBorder).padding(.leading, 78)
                     }
 
-                    if filtered.isEmpty {
-                        emptyState
+                    if conversations.isEmpty {
+                        EmptyStateView(
+                            icon: "bubble.left.and.bubble.right",
+                            title: "No messages yet",
+                            message: "Conversations with your instructors and students will appear here."
+                        )
+                        .padding(.top, 60)
+                    } else if filtered.isEmpty {
+                        searchEmptyState
                     }
                 }
             }
@@ -164,7 +165,7 @@ struct MessageListView: View {
         .contentShape(Rectangle())
     }
 
-    private var emptyState: some View {
+    private var searchEmptyState: some View {
         VStack(spacing: 12) {
             Image(systemName: "bubble.left.and.bubble.right")
                 .font(.system(size: 34))

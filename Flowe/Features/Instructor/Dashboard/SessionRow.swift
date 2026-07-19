@@ -1,49 +1,42 @@
 import SwiftUI
 
-/// A single row in "Today's Schedule" — start time on the left, student
-/// (avatar + name from `data.instructors`), session type, and a subtle status.
+/// A single row in "Today's Schedule" — session time + duration on the left,
+/// the session type, and a subtle status badge. Driven by a real `Booking`.
 struct SessionRow: View {
-    @Environment(MockDataStore.self) private var data
-
-    let session: DashboardSession
-
-    private var student: Instructor? { data.instructor(id: session.studentId) }
+    let booking: Booking
 
     var body: some View {
         HStack(spacing: FlowSpacing.md) {
             // Time column
             VStack(alignment: .leading, spacing: 1) {
-                Text(session.startTime)
+                Text(booking.time)
                     .font(FloweFont.mono(13))
                     .foregroundStyle(Color.flowePinkDeep)
-                Text(session.duration)
+                Text(booking.duration.uppercased())
                     .font(FloweFont.mono(9))
                     .foregroundStyle(Color.floweMuted)
             }
-            .frame(width: 54, alignment: .leading)
+            .frame(width: 64, alignment: .leading)
 
             // Hairline divider
             Rectangle()
                 .fill(Color.floweBorder)
                 .frame(width: 1, height: 40)
 
-            // Student avatar
-            AvatarView(id: student?.img ?? "", size: 42)
-
-            // Student name + session type
+            // Session type + date
             VStack(alignment: .leading, spacing: 3) {
-                Text(student?.name ?? "Student")
+                Text(booking.type.isEmpty ? "Session" : "\(booking.type) Session")
                     .font(FloweFont.serif(16, .medium))
                     .foregroundStyle(Color.floweInk)
                     .lineLimit(1)
-                Text(session.type.uppercased())
+                Text(booking.date.uppercased())
                     .font(FloweFont.mono(10))
                     .foregroundStyle(Color.floweMuted)
             }
 
             Spacer(minLength: FlowSpacing.sm)
 
-            StatusBadge(status: session.status)
+            StatusBadge(status: booking.status)
         }
         .padding(FlowSpacing.md)
         .floweCard()
@@ -51,12 +44,14 @@ struct SessionRow: View {
 }
 
 #Preview {
-    VStack(spacing: 12) {
-        SessionRow(session: DashboardSession.sample[0])
-        SessionRow(session: DashboardSession.sample[1])
+    let data = MockDataStore.preview
+    return VStack(spacing: 12) {
+        ForEach(data.bookings.prefix(2)) { booking in
+            SessionRow(booking: booking)
+        }
     }
     .padding()
     .background(Color.flowWhite)
-    .environment(MockDataStore.preview)
-        .environment(AppSettings())
+    .environment(data)
+    .environment(AppSettings())
 }

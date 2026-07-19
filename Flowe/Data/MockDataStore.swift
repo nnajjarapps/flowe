@@ -43,6 +43,12 @@ final class MockDataStore {
         instructors.first { $0.legacyId == id }
     }
 
+    /// Instructors visible to students — only those who've published a listing (set a rate).
+    /// A freshly-signed-up instructor with an empty listing stays hidden until they set it up.
+    var publishedInstructors: [Instructor] {
+        instructors.filter { $0.price > 0 && !$0.name.isEmpty }
+    }
+
     // MARK: - Bookings
 
     var upcomingBookings: [Booking] { bookings.filter { $0.status.isUpcoming } }
@@ -99,13 +105,34 @@ final class MockDataStore {
         save()
     }
 
-    // MARK: - Instructor editing (instructor-side profile / availability)
+    // MARK: - Instructor identity & editing
+
+    /// Owner id of the signed-in user (set from AppSession); scopes "my" instructor listing.
+    var currentUserID: String?
 
     /// Persist edits made directly to a managed `Instructor` (bio, price, specialties, availability).
     func commit() { save() }
 
-    /// The signed-in instructor (mock: the first catalog entry).
-    var currentInstructor: Instructor? { instructors.first }
+    /// The signed-in instructor's own listing (resolved by owner), if it exists.
+    var currentInstructor: Instructor? {
+        guard let currentUserID else { return nil }
+        return instructors.first { $0.ownerID == currentUserID }
+    }
+
+    /// Ensures the signed-in instructor has an (empty, editable) listing. Called on instructor login.
+    @discardableResult
+    func ensureInstructorProfile(ownerID: String, name: String, city: String = "") -> Instructor {
+        if let existing = instructors.first(where: { $0.ownerID == ownerID }) { return existing }
+        let nextId = (instructors.map(\.legacyId).max() ?? 0) + 1
+        let nextOrder = (instructors.map(\.order).max() ?? 0) + 1
+        let instructor = Instructor(
+            legacyId: nextId, name: name, city: city, sessionTypes: ["Private"],
+            order: nextOrder, ownerID: ownerID
+        )
+        context.insert(instructor)
+        save()
+        return instructor
+    }
 
     // MARK: - Persistence
 

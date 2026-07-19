@@ -7,7 +7,8 @@ struct InstructorCalendarView: View {
     @Environment(MockDataStore.self) private var data
 
     @State private var selectedDay = 0
-    @State private var requests = BookingRequest.sample
+    // No real booking requests yet — students' requests will populate this.
+    @State private var requests: [BookingRequest] = []
 
     private var daySessions: [CalendarSession] {
         CalendarSession.sessions(on: selectedDay)
@@ -52,7 +53,7 @@ struct InstructorCalendarView: View {
 
             Spacer()
 
-            AvatarView(id: data.instructors.first?.img ?? "", size: 46, ring: true)
+            AvatarView(id: data.currentInstructor?.img ?? "", size: 46, ring: true)
         }
     }
 
@@ -119,8 +120,16 @@ struct InstructorCalendarView: View {
                 Spacer()
             }
 
-            ForEach($requests) { $request in
-                BookingRequestCard(request: $request)
+            if requests.isEmpty {
+                EmptyStateView(
+                    icon: "tray",
+                    title: "No booking requests",
+                    message: "New requests from students will appear here."
+                )
+            } else {
+                ForEach($requests) { $request in
+                    BookingRequestCard(request: $request)
+                }
             }
         }
     }

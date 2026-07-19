@@ -67,6 +67,7 @@
 		B9E765D524BEBFAE495D618D /* 0AD9894E-764F-47AF-AC95-56485A70A3C4.PNG in Resources */ = {isa = PBXBuildFile; fileRef = ED2BC5AAEAE57BD8B4B05646 /* 0AD9894E-764F-47AF-AC95-56485A70A3C4.PNG */; };
 		BA845ED7BB33CB99331BC16A /* PostRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72D6B8E3948B89E8B171AF07 /* PostRowView.swift */; };
 		BD00F0125CDD9AEFD8EB42C6 /* Date+Flowe.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34F13E4C3B93F2B1A8D4706A /* Date+Flowe.swift */; };
+		C0CE885E52944562F46100D6 /* EmptyStateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0F3A0FB151C0F688534ACEF /* EmptyStateView.swift */; };
 		C153033035FA8E7A3BB94A43 /* BookingSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 737B91E7269C6447C335D02B /* BookingSheet.swift */; };
 		C42DB4FDEF5E04C3E9F9FA6D /* FilterChipsBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D324CCEA79663B5D1A47DE4 /* FilterChipsBar.swift */; };
 		C4AD3CD466AEE186EDBD677A /* FloweModelContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72C3E59E33D98698F840ADCF /* FloweModelContainer.swift */; };
@@ -154,6 +155,7 @@
 		B12BC58F995114991F32175F /* InstructorCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstructorCard.swift; sourceTree = "<group>"; };
 		B264A9BA6AB860A28BAC86B9 /* RemoteImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteImage.swift; sourceTree = "<group>"; };
 		B5A1882EB901E61B7AF2A487 /* FloatingLabelField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingLabelField.swift; sourceTree = "<group>"; };
+		C0F3A0FB151C0F688534ACEF /* EmptyStateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyStateView.swift; sourceTree = "<group>"; };
 		C15E26BF2DDDBD1EECABB0EC /* DMMono-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "DMMono-Regular.ttf"; sourceTree = "<group>"; };
 		C6FD9EE5DA26FD915263821D /* EditProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditProfileView.swift; sourceTree = "<group>"; };
 		D02BBF683FC16C7795428F78 /* InstructorCalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstructorCalendarView.swift; sourceTree = "<group>"; };
@@ -308,6 +310,7 @@
 			children = (
 				A4DB6980B686B9EFF31D1BCA /* Buttons */,
 				BB1BFB581B06FA8D1B5704BF /* Tags */,
+				C0F3A0FB151C0F688534ACEF /* EmptyStateView.swift */,
 				8D324CCEA79663B5D1A47DE4 /* FilterChipsBar.swift */,
 				B5A1882EB901E61B7AF2A487 /* FloatingLabelField.swift */,
 				7381734E749647CBCF81D5DC /* FloweCommon.swift */,
@@ -601,6 +604,7 @@
 				E926C630D96C838A67495894 /* DisciplineTag.swift in Sources */,
 				D9BB2A3E7220EBE6FC21C87D /* DiscoverView.swift in Sources */,
 				5A2EE1DF006C8C9F6D546BEC /* EditProfileView.swift in Sources */,
+				C0CE885E52944562F46100D6 /* EmptyStateView.swift in Sources */,
 				6E4EBF835A2231B680429E5E /* FeaturedHeroCard.swift in Sources */,
 				D366C3A2F61CAD85483EF88D /* FeedPost.swift in Sources */,
 				C42DB4FDEF5E04C3E9F9FA6D /* FilterChipsBar.swift in Sources */,

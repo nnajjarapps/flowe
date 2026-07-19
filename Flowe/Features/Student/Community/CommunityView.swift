@@ -8,14 +8,25 @@ struct CommunityView: View {
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 0) {
-                // Stories strip
-                storiesStrip
-                Divider().overlay(Color.floweBorder)
+                // Stories strip — only when there are instructors to show
+                if !data.publishedInstructors.isEmpty {
+                    storiesStrip
+                    Divider().overlay(Color.floweBorder)
+                }
 
                 // Feed
-                ForEach(data.posts) { post in
-                    PostRowView(post: post)
-                    Divider().overlay(Color.floweBorder)
+                if data.posts.isEmpty {
+                    EmptyStateView(
+                        icon: "bubble.left.and.bubble.right",
+                        title: "Nothing here yet",
+                        message: "Reviews, tips and check-ins from the community will show up here."
+                    )
+                    .padding(.top, 80)
+                } else {
+                    ForEach(data.posts) { post in
+                        PostRowView(post: post)
+                        Divider().overlay(Color.floweBorder)
+                    }
                 }
             }
         }
@@ -57,7 +68,7 @@ struct CommunityView: View {
     private var storiesStrip: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 12) {
-                ForEach(data.instructors.prefix(5)) { ins in
+                ForEach(data.publishedInstructors.prefix(5)) { ins in
                     VStack(spacing: 4) {
                         AvatarView(id: ins.img, size: 52, ring: true)
                         Text(ins.firstName)

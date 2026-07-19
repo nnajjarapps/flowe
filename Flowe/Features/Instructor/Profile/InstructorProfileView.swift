@@ -4,8 +4,9 @@ import SwiftUI
 /// with four tabs — Overview, Analytics, Reviews, Earnings. Not present in the
 /// Figma mockup; designed here in the shared pink design system.
 ///
-/// Reads `data.instructors[0]` for a name/photo/rating and `data.posts` for
-/// review content. All other numbers are local mock data.
+/// Reads the signed-in instructor's own listing (`data.currentInstructor`),
+/// whose fields start empty until they set up their profile, and `data.posts`
+/// for review content. Empty tabs fall back to tasteful empty states.
 struct InstructorProfileView: View {
 
     typealias Tab = InstructorRouter.ProfileTab
@@ -20,8 +21,26 @@ struct InstructorProfileView: View {
     @State private var showNotifications = false
     @State private var showAppSettings = false
 
-    /// The signed-in instructor is represented by the first mock instructor.
-    private var me: Instructor? { data.instructors.first }
+    /// The signed-in instructor's own (possibly-empty) listing.
+    private var me: Instructor? { data.currentInstructor }
+
+    /// Whether this instructor has any reviews to show yet.
+    private var hasRating: Bool { (me?.reviews ?? 0) > 0 }
+
+    /// Whether a city has been entered yet.
+    private var hasCity: Bool { !(me?.city ?? "").isEmpty }
+
+    /// Display name from signup, with a gentle fallback if somehow blank.
+    private var displayName: String {
+        let name = me?.name ?? ""
+        return name.isEmpty ? "Your Profile" : name
+    }
+
+    /// Certification line, defaulting to a neutral label when not set.
+    private var certLine: String {
+        let cert = me?.cert ?? ""
+        return cert.isEmpty ? "CERTIFIED INSTRUCTOR" : cert.uppercased()
+    }
 
     /// Up to three student reviews drawn from the community feed.
     private var reviews: [FeedPost] {
@@ -91,29 +110,37 @@ struct InstructorProfileView: View {
             AvatarView(id: me?.img ?? "", size: 88, ring: true)
 
             VStack(spacing: 6) {
-                Text(me?.name ?? "Elena Rossi")
+                Text(displayName)
                     .font(FloweFont.serif(24))
                     .foregroundStyle(Color.floweInk)
 
-                Text(me?.cert.uppercased() ?? "CERTIFIED INSTRUCTOR")
+                Text(certLine)
                     .font(FloweFont.mono(10))
                     .foregroundStyle(Color.floweMuted)
 
-                HStack(spacing: 6) {
-                    Image(systemName: "mappin.and.ellipse")
-                        .font(.system(size: 11))
-                        .foregroundStyle(Color.floweMuted)
-                    Text(me?.city ?? "Brooklyn, NY")
-                        .font(FloweFont.sans(12))
-                        .foregroundStyle(Color.floweMuted)
+                if hasCity || hasRating {
+                    HStack(spacing: 6) {
+                        if hasCity {
+                            Image(systemName: "mappin.and.ellipse")
+                                .font(.system(size: 11))
+                                .foregroundStyle(Color.floweMuted)
+                            Text(me?.city ?? "")
+                                .font(FloweFont.sans(12))
+                                .foregroundStyle(Color.floweMuted)
+                        }
 
-                    Text("·")
-                        .foregroundStyle(Color.floweMuted)
+                        if hasCity && hasRating {
+                            Text("·")
+                                .foregroundStyle(Color.floweMuted)
+                        }
 
-                    StarRatingView(rating: me?.rating ?? 4.9, size: 11)
-                    Text("(\(me?.reviews ?? 0))")
-                        .font(FloweFont.mono(10))
-                        .foregroundStyle(Color.floweMuted)
+                        if hasRating {
+                            StarRatingView(rating: me?.rating ?? 0, size: 11)
+                            Text("(\(me?.reviews ?? 0))")
+                                .font(FloweFont.mono(10))
+                                .foregroundStyle(Color.floweMuted)
+                        }
+                    }
                 }
             }
 
@@ -135,22 +162,46 @@ struct InstructorProfileView: View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 10) {
                 SectionHeader(text: "ABOUT")
-                Text(me?.bio ?? InstructorProfileMock.fallbackBio)
-                    .font(FloweFont.sans(14))
-                    .foregroundStyle(Color.floweInk.opacity(0.85))
-                    .lineSpacing(4)
-                    .fixedSize(horizontal: false, vertical: true)
+                if let bio = me?.bio, !bio.isEmpty {
+                    Text(bio)
+                        .font(FloweFont.sans(14))
+                        .foregroundStyle(Color.floweInk.opacity(0.85))
+                        .lineSpacing(4)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    Text("Add a bio in Edit Profile so students can get to know you.")
+                        .font(FloweFont.sans(14))
+                        .foregroundStyle(Color.floweMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
 
             HStack(spacing: 12) {
-                StatTile(value: "\(me?.students ?? 128)", label: "STUDENTS")
-                StatTile(value: "\(me?.yearsExp ?? 7)", label: "YEARS", accent: .flowePink)
-                StatTile(value: "\(InstructorProfileMock.totalSessions)", label: "SESSIONS", accent: .floweSuccess)
+                StatTile(value: "\(me?.students ?? 0)", label: "STUDENTS")
+                StatTile(value: "\(me?.yearsExp ?? 0)", label: "YEARS", accent: .flowePink)
+                StatTile(value: "\(data.completedCount)", label: "SESSIONS", accent: .floweSuccess)
+            }
+
+            VStack(alignment: .leading, spacing: 10) {
+                SectionHeader(text: "SPECIALTIES")
+                if let specialties = me?.specialties, !specialties.isEmpty {
+                    FlowChipRow(items: specialties)
+                } else {
+                    Text("Add your specialties in Edit Profile.")
+                        .font(FloweFont.sans(13))
+                        .foregroundStyle(Color.floweMuted)
+                }
             }
 
             VStack(alignment: .leading, spacing: 10) {
                 SectionHeader(text: "OFFERS")
-                FlowChipRow(items: me?.sessionTypes ?? ["Private", "Duet", "Online"])
+                if let types = me?.sessionTypes, !types.isEmpty {
+                    FlowChipRow(items: types)
+                } else {
+                    Text("Add the session types you offer in Edit Profile.")
+                        .font(FloweFont.sans(13))
+                        .foregroundStyle(Color.floweMuted)
+                }
             }
         }
     }
@@ -158,49 +209,33 @@ struct InstructorProfileView: View {
     // MARK: - Analytics
 
     private var analyticsTab: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            SectionHeader(text: "SESSIONS PER MONTH")
-
-            VStack(alignment: .leading, spacing: 14) {
-                InstructorBarChart(bars: InstructorProfileMock.sessionBars, showValues: true)
-
-                Divider().overlay(Color.floweBorder)
-
-                HStack {
-                    metric(value: "\(InstructorProfileMock.totalSessions)", label: "Total this year")
-                    Spacer()
-                    metric(value: "+18%", label: "vs. last quarter", accent: .floweSuccess)
-                }
-            }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .floweCard(cornerRadius: 16)
-
-            HStack(spacing: 12) {
-                StatTile(value: "92%", label: "REBOOK", accent: .flowePinkDeep)
-                StatTile(value: "4.9", label: "AVG RATING", accent: .flowePink)
-                StatTile(value: "12", label: "THIS WEEK", accent: .floweSuccess)
-            }
-        }
+        EmptyStateView(
+            icon: "chart.bar",
+            title: "No analytics yet",
+            message: "Your session trends and rebooking stats will appear here once you start teaching on Flowe."
+        )
     }
 
     // MARK: - Reviews
 
+    @ViewBuilder
     private var reviewsTab: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                SectionHeader(text: "STUDENT REVIEWS")
-                Spacer()
-                StarRatingView(rating: me?.rating ?? 4.9, size: 12)
-            }
+        if reviews.isEmpty {
+            EmptyStateView(
+                icon: "star",
+                title: "No reviews yet",
+                message: "Reviews from your students will show up here after your sessions."
+            )
+        } else {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack {
+                    SectionHeader(text: "STUDENT REVIEWS")
+                    Spacer()
+                    if hasRating {
+                        StarRatingView(rating: me?.rating ?? 0, size: 12)
+                    }
+                }
 
-            if reviews.isEmpty {
-                Text("No reviews yet.")
-                    .font(FloweFont.sans(13))
-                    .foregroundStyle(Color.floweMuted)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, 24)
-            } else {
                 ForEach(reviews) { post in
                     ReviewRow(post: post)
                 }
@@ -211,87 +246,11 @@ struct InstructorProfileView: View {
     // MARK: - Earnings
 
     private var earningsTab: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            SectionHeader(text: "EARNINGS PER MONTH")
-
-            VStack(alignment: .leading, spacing: 14) {
-                InstructorBarChart(
-                    bars: InstructorProfileMock.earningBars,
-                    showValues: true,
-                    valueFormat: { settings.money($0) }
-                )
-
-                Divider().overlay(Color.floweBorder)
-
-                HStack(alignment: .firstTextBaseline) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(settings.money(InstructorProfileMock.totalEarnings))
-                            .font(FloweFont.serif(28, .medium))
-                            .foregroundStyle(Color.floweSuccess)
-                        Text("EARNED THIS YEAR")
-                            .font(FloweFont.mono(10))
-                            .foregroundStyle(Color.floweMuted)
-                    }
-                    Spacer()
-                    metric(value: settings.money(540), label: "Pending payout")
-                }
-            }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .floweCard(cornerRadius: 16)
-
-            VStack(alignment: .leading, spacing: 10) {
-                SectionHeader(text: "RECENT PAYOUTS")
-                payoutList
-            }
-        }
-    }
-
-    private var payoutList: some View {
-        VStack(spacing: 0) {
-            ForEach(Array(InstructorProfileMock.payouts.enumerated()), id: \.offset) { index, payout in
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(payout.date)
-                            .font(FloweFont.sans(14, .medium))
-                            .foregroundStyle(Color.floweInk)
-                        Text(payout.method.uppercased())
-                            .font(FloweFont.mono(9))
-                            .foregroundStyle(Color.floweMuted)
-                    }
-                    Spacer()
-                    Text(settings.money(payout.amount))
-                        .font(FloweFont.serif(16, .medium))
-                        .foregroundStyle(Color.floweSuccess)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 14)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.flowWhite)
-                .overlay(alignment: .top) {
-                    if index > 0 {
-                        Rectangle().fill(Color.floweBorder).frame(height: 1)
-                    }
-                }
-            }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16).stroke(Color.floweBorder, lineWidth: 1)
+        EmptyStateView(
+            icon: "banknote",
+            title: "No earnings yet",
+            message: "Your monthly earnings and recent payouts will appear here after your first paid session."
         )
-    }
-
-    // MARK: - Helpers
-
-    private func metric(value: String, label: String, accent: Color = .floweInk) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(value)
-                .font(FloweFont.serif(18, .medium))
-                .foregroundStyle(accent)
-            Text(label)
-                .font(FloweFont.sans(11))
-                .foregroundStyle(Color.floweMuted)
-        }
     }
 }
 
@@ -306,46 +265,6 @@ private struct FlowChipRow: View {
             ForEach(items, id: \.self) { SpecialtyTag(text: $0) }
         }
     }
-}
-
-// MARK: - Local mock data (profile-only)
-
-private enum InstructorProfileMock {
-    struct Payout {
-        let date: String
-        let method: String
-        let amount: Int
-    }
-
-    static let totalSessions = 486
-    static let totalEarnings = 24_180
-
-    static let fallbackBio =
-        "I teach classical and contemporary Pilates with a focus on breath, alignment, and slow, deliberate control. Every session is tailored — whether you're rehabbing, building strength, or just craving forty-five minutes that feel like your own."
-
-    static let sessionBars: [InstructorBarChart.Bar] = [
-        .init(label: "FEB", value: 34),
-        .init(label: "MAR", value: 41),
-        .init(label: "APR", value: 38),
-        .init(label: "MAY", value: 52),
-        .init(label: "JUN", value: 47),
-        .init(label: "JUL", value: 44)
-    ]
-
-    static let earningBars: [InstructorBarChart.Bar] = [
-        .init(label: "FEB", value: 2720),
-        .init(label: "MAR", value: 3280),
-        .init(label: "APR", value: 3040),
-        .init(label: "MAY", value: 4160),
-        .init(label: "JUN", value: 3760),
-        .init(label: "JUL", value: 3520)
-    ]
-
-    static let payouts: [Payout] = [
-        Payout(date: "Jul 15, 2026", method: "Direct deposit", amount: 1_840),
-        Payout(date: "Jul 1, 2026",  method: "Direct deposit", amount: 1_680),
-        Payout(date: "Jun 15, 2026", method: "Direct deposit", amount: 2_040)
-    ]
 }
 
 #Preview {

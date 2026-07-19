@@ -4,6 +4,7 @@ import SwiftUI
 /// chart, and an account settings list. Ported from `ProfileScreen` in App.tsx.
 struct ProfileView: View {
     @Environment(AppSession.self) private var session
+    @Environment(MockDataStore.self) private var data
 
     @State private var showSettings = false
     @State private var showNotifications = false
@@ -12,6 +13,51 @@ struct ProfileView: View {
     private let achievementTints: [Color] = [.flowePinkDeep, .flowePink, .flowePinkSoft]
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 3)
+
+    // MARK: - Derived from real data
+
+    /// "Member since <Month Year>" from the signed-in user's join date.
+    private var memberSinceText: String? {
+        guard let date = session.currentUser?.memberSince else { return nil }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMMM yyyy"
+        return "Member since \(formatter.string(from: date))"
+    }
+
+    /// The user's role, shown as a single pill (no hardcoded disciplines).
+    private var roleLabel: String {
+        (session.currentUser?.role ?? .student).rawValue.capitalized
+    }
+
+    /// Distinct instructors this user has booked with.
+    private var distinctInstructorCount: Int {
+        Set(data.bookings.map(\.instructorId)).count
+    }
+
+    /// Progress tiles computed entirely from real bookings.
+    private var achievements: [Achievement] {
+        [
+            Achievement(systemIcon: "checkmark.seal.fill", label: "\(data.completedCount) sessions",          sub: "Completed"),
+            Achievement(systemIcon: "person.2.fill",       label: "\(distinctInstructorCount) instructors",   sub: "Worked with"),
+            Achievement(systemIcon: "clock.fill",          label: "\(data.hoursDisplay) hrs",                 sub: "Practiced"),
+        ]
+    }
+
+    /// Minutes practiced per weekday, summed from real bookings' durations.
+    private var weekBars: [WeeklyBar] {
+        let weekdays: [(prefix: String, letter: String)] = [
+            ("Mon", "M"), ("Tue", "T"), ("Wed", "W"), ("Thu", "T"),
+            ("Fri", "F"), ("Sat", "S"), ("Sun", "S"),
+        ]
+        return weekdays.map { day in
+            let minutes = data.bookings
+                .filter { $0.date.hasPrefix(day.prefix) }
+                .reduce(0) { $0 + (Int($1.duration.filter(\.isNumber)) ?? 0) }
+            return WeeklyBar(day: day.letter, minutes: minutes)
+        }
+    }
+
+    private var weekMinutes: Int { weekBars.reduce(0) { $0 + $1.minutes } }
 
     var body: some View {
         ScrollView {
@@ -22,14 +68,23 @@ struct ProfileView: View {
                     SectionHeader(text: "YOUR PROGRESS")
                         .padding(.bottom, 12)
 
-                    achievementsGrid
+                    if data.bookings.isEmpty {
+                        EmptyStateView(
+                            icon: "sparkles",
+                            title: "No sessions yet",
+                            message: "Book your first class and your progress will show up here."
+                        )
                         .padding(.bottom, 20)
+                    } else {
+                        achievementsGrid
+                            .padding(.bottom, 20)
 
-                    SectionHeader(text: "THIS WEEK")
-                        .padding(.bottom, 10)
+                        SectionHeader(text: "THIS WEEK")
+                            .padding(.bottom, 10)
 
-                    weekCard
-                        .padding(.bottom, 20)
+                        weekCard
+                            .padding(.bottom, 20)
+                    }
 
                     SectionHeader(text: "ACCOUNT")
                         .padding(.bottom, 10)
@@ -50,18 +105,20 @@ struct ProfileView: View {
 
     private var header: some View {
         HStack(spacing: 16) {
-            AvatarView(id: "1531746020798-e6953c6e8e04", size: 64)
+            // No photo on file yet → empty id renders the gradient placeholder.
+            AvatarView(id: "", size: 64)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("Mia Tanaka")
+                Text(session.currentUser?.fullName ?? "Your Profile")
                     .font(FloweFont.serif(19))
                     .foregroundStyle(Color.floweInk)
-                Text("Member since March 2026")
-                    .font(FloweFont.sans(12))
-                    .foregroundStyle(Color.floweMuted)
+                if let memberSinceText {
+                    Text(memberSinceText)
+                        .font(FloweFont.sans(12))
+                        .foregroundStyle(Color.floweMuted)
+                }
                 HStack(spacing: 4) {
-                    disciplinePill("Reformer", background: Color.flowePink.opacity(0.09))
-                    disciplinePill("Mat", background: Color.flowePinkSoft.opacity(0.19))
+                    disciplinePill(roleLabel, background: Color.flowePink.opacity(0.09))
                 }
                 .padding(.top, 4)
             }
@@ -103,7 +160,7 @@ struct ProfileView: View {
 
     private var achievementsGrid: some View {
         LazyVGrid(columns: columns, spacing: 8) {
-            ForEach(Array(ProfileMock.achievements.enumerated()), id: \.element.id) { index, achievement in
+            ForEach(Array(achievements.enumerated()), id: \.element.id) { index, achievement in
                 VStack(spacing: 6) {
                     Image(systemName: achievement.systemIcon)
                         .font(.system(size: 16))
@@ -129,12 +186,18 @@ struct ProfileView: View {
 
     private var weekCard: some View {
         VStack(alignment: .leading, spacing: 8) {
-            WeeklyBarChart()
+            if weekMinutes > 0 {
+                WeeklyBarChart(bars: weekBars)
 
-            (
-                Text("265 min").font(FloweFont.sans(11, .medium)).foregroundColor(Color.floweInk)
-                + Text(" practiced this week").font(FloweFont.sans(11)).foregroundColor(Color.floweMuted)
-            )
+                (
+                    Text("\(weekMinutes) min").font(FloweFont.sans(11, .medium)).foregroundColor(Color.floweInk)
+                    + Text(" practiced this week").font(FloweFont.sans(11)).foregroundColor(Color.floweMuted)
+                )
+            } else {
+                Text("No practice logged this week")
+                    .font(FloweFont.sans(12))
+                    .foregroundStyle(Color.floweMuted)
+            }
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)

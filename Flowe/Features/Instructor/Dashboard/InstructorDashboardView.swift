@@ -1,24 +1,5 @@
 import SwiftUI
 
-// MARK: - Local mock model (dashboard-only; students are drawn from data.instructors)
-
-/// A scheduled teaching slot for the instructor's day.
-/// `studentId` indexes into `data.instructors` for a name + avatar.
-struct DashboardSession: Identifiable {
-    let id: Int
-    let studentId: Int
-    let startTime: String
-    let duration: String
-    let type: String
-    let status: BookingStatus
-
-    static let sample: [DashboardSession] = [
-        DashboardSession(id: 1, studentId: 2, startTime: "9:00",  duration: "55 MIN", type: "Private",  status: .confirmed),
-        DashboardSession(id: 2, studentId: 3, startTime: "11:30", duration: "55 MIN", type: "Duet",     status: .confirmed),
-        DashboardSession(id: 3, studentId: 6, startTime: "4:00",  duration: "45 MIN", type: "Online",   status: .pending)
-    ]
-}
-
 // MARK: - Dashboard
 
 struct InstructorDashboardView: View {
@@ -30,12 +11,27 @@ struct InstructorDashboardView: View {
     @State private var showAvailability = false
     @State private var showEditProfile = false
 
-    private let sessions = DashboardSession.sample
+    /// Real bookings for the signed-in instructor's own listing. Empty until students book.
+    private var todaysSessions: [Booking] {
+        guard let id = data.currentInstructor?.legacyId else { return [] }
+        return data.bookings.filter { $0.instructorId == id }
+    }
 
     private var instructorName: String {
-        session.currentUser?.fullName.split(separator: " ").first.map(String.init)
-            ?? data.instructors.first?.firstName
+        data.currentInstructor?.firstName
+            ?? session.currentUser?.fullName.split(separator: " ").first.map(String.init)
             ?? "there"
+    }
+
+    /// This week's earnings from real sessions, priced at the instructor's rate.
+    private var weekEarnings: Int {
+        let price = data.currentInstructor?.price ?? 0
+        return todaysSessions.count * price
+    }
+
+    private var ratingDisplay: String {
+        guard let rating = data.currentInstructor?.rating, rating > 0 else { return "—" }
+        return String(format: "%.1f", rating)
     }
 
     var body: some View {
@@ -46,8 +42,16 @@ struct InstructorDashboardView: View {
 
                 VStack(alignment: .leading, spacing: FlowSpacing.md) {
                     SectionHeader(text: "TODAY'S SCHEDULE")
-                    ForEach(sessions) { item in
-                        SessionRow(session: item)
+                    if todaysSessions.isEmpty {
+                        EmptyStateView(
+                            icon: "calendar",
+                            title: "No sessions today",
+                            message: "When students book you, their sessions will show up here."
+                        )
+                    } else {
+                        ForEach(todaysSessions) { booking in
+                            SessionRow(booking: booking)
+                        }
                     }
                 }
 
@@ -94,7 +98,7 @@ struct InstructorDashboardView: View {
 
             Spacer()
 
-            AvatarView(id: data.instructors.first?.img ?? "", size: 46, ring: true)
+            AvatarView(id: data.currentInstructor?.img ?? "", size: 46, ring: true)
         }
     }
 
@@ -102,9 +106,9 @@ struct InstructorDashboardView: View {
 
     private var kpiRow: some View {
         HStack(spacing: FlowSpacing.md) {
-            StatTile(value: "\(sessions.count)", label: "TODAY")
-            StatTile(value: settings.money(840), label: "THIS WEEK", accent: .floweSuccess)
-            StatTile(value: "4.9", label: "RATING", accent: .flowePink)
+            StatTile(value: "\(todaysSessions.count)", label: "TODAY")
+            StatTile(value: settings.money(weekEarnings), label: "THIS WEEK", accent: .floweSuccess)
+            StatTile(value: ratingDisplay, label: "RATING", accent: .flowePink)
         }
     }
 }

@@ -14,7 +14,7 @@ struct QuickAction: Identifiable {
 
     static let all: [QuickAction] = [
         QuickAction(kind: .availability, systemIcon: "calendar.badge.plus", title: "Add availability", subtitle: "Open new slots"),
-        QuickAction(kind: .messages, systemIcon: "bubble.left.and.bubble.right.fill", title: "Message students", subtitle: "3 unread"),
+        QuickAction(kind: .messages, systemIcon: "bubble.left.and.bubble.right.fill", title: "Message students", subtitle: "Chat with students"),
         QuickAction(kind: .earnings, systemIcon: "chart.line.uptrend.xyaxis", title: "View earnings", subtitle: "This month"),
         QuickAction(kind: .editProfile, systemIcon: "person.crop.circle.badge.checkmark", title: "Edit profile", subtitle: "Bio & rates")
     ]

@@ -67,6 +67,18 @@ UI is complete across both role trees; several interactions are still *cosmetic*
 - Note: content strings (bios, posts, section headers) stay source-language — extend by adding keys
   to `Localizable.xcstrings`.
 
+## Pilot readiness — mock-data removal & empty states  ✅
+- [x] App ships **empty** — seeding gated to SwiftUI previews only; nothing pushed to CloudKit
+- [x] Real user identity — `AppSession` persists the signed-in `User`; owner id scopes records
+- [x] Instructor gets a real **own listing** on login (`ensureInstructorProfile`), editable via Edit Profile
+- [x] Removed all hardcoded/sample data (Mia Tanaka, Sofia, DashboardSession/Calendar/InstructorProfile
+      mocks, message threads); `FeaturedHeroCard` is data-driven
+- [x] **Empty states** across Discover / Community / Bookings / Profile / Dashboard / Calendar /
+      Messages / instructor Profile (verified in simulator, both roles)
+- [x] `publishedInstructors` — incomplete listings (no rate) stay hidden from students
+- Note: instructors are still **local** (SwiftData Reference store), so they don't yet appear across
+  devices — needs the shared/public-catalog path (public CloudKit DB / CKSyncEngine or backend).
+
 ## Phase 8 — Polish & Verification  ◑
 - [x] Verified all 9 screens running in the simulator (student + instructor trees)
 - [x] AppIcon fixed → single 1024×1024, no-alpha icon (was 3 invalid `.PNG` slots)

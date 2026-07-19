@@ -27,13 +27,19 @@ struct BookingsView: View {
                 segmented
                     .padding(.top, 20)
 
-                VStack(spacing: 12) {
-                    ForEach(list) { booking in
-                        BookingCard(booking: booking)
+                if list.isEmpty {
+                    emptyState
+                        .padding(.top, 20)
+                        .padding(.bottom, 24)
+                } else {
+                    VStack(spacing: 12) {
+                        ForEach(list) { booking in
+                            BookingCard(booking: booking)
+                        }
                     }
+                    .padding(.top, 20)
+                    .padding(.bottom, 24)
                 }
-                .padding(.top, 20)
-                .padding(.bottom, 24)
             }
             .padding(.horizontal, 20)
             .padding(.top, 12)
@@ -60,6 +66,26 @@ struct BookingsView: View {
             StatTile(value: "\(data.upcomingCount)", label: "Upcoming", accent: .flowePinkDeep)
             StatTile(value: "\(data.completedCount)", label: "Completed", accent: .floweSuccess)
             StatTile(value: data.hoursDisplay, label: "Hours", accent: .flowePinkSoft)
+        }
+    }
+
+    // MARK: Empty state
+
+    @ViewBuilder
+    private var emptyState: some View {
+        switch tab {
+        case .upcoming:
+            EmptyStateView(
+                icon: "calendar.badge.plus",
+                title: "No sessions yet",
+                message: "Book a class from Discover to see your upcoming sessions here."
+            )
+        case .past:
+            EmptyStateView(
+                icon: "clock.arrow.circlepath",
+                title: "No past sessions",
+                message: "Once you complete a class, it'll show up here."
+            )
         }
     }
 

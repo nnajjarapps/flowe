@@ -14,31 +14,10 @@ struct CalendarSession: Identifiable {
     let type: String
     let status: BookingStatus
 
-    /// One week of teaching slots. Times use `FloweConstants.times`.
-    static let week: [CalendarSession] = [
-        // Monday
-        CalendarSession(id: 1, dayIndex: 0, studentId: 1, time: FloweConstants.times[1], duration: "55 MIN", type: "Private", status: .confirmed),
-        CalendarSession(id: 2, dayIndex: 0, studentId: 5, time: FloweConstants.times[3], duration: "55 MIN", type: "Duet",    status: .confirmed),
-        CalendarSession(id: 3, dayIndex: 0, studentId: 3, time: FloweConstants.times[6], duration: "45 MIN", type: "Online",  status: .pending),
-        // Tuesday
-        CalendarSession(id: 4, dayIndex: 1, studentId: 2, time: FloweConstants.times[0], duration: "55 MIN", type: "Private", status: .confirmed),
-        CalendarSession(id: 5, dayIndex: 1, studentId: 4, time: FloweConstants.times[4], duration: "50 MIN", type: "Group",   status: .confirmed),
-        // Wednesday
-        CalendarSession(id: 6, dayIndex: 2, studentId: 6, time: FloweConstants.times[2], duration: "55 MIN", type: "Private", status: .confirmed),
-        CalendarSession(id: 7, dayIndex: 2, studentId: 1, time: FloweConstants.times[5], duration: "45 MIN", type: "Online",  status: .completed),
-        // Thursday
-        CalendarSession(id: 8, dayIndex: 3, studentId: 3, time: FloweConstants.times[1], duration: "55 MIN", type: "Duet",    status: .confirmed),
-        // Friday
-        CalendarSession(id: 9,  dayIndex: 4, studentId: 5, time: FloweConstants.times[0], duration: "55 MIN", type: "Private", status: .confirmed),
-        CalendarSession(id: 10, dayIndex: 4, studentId: 2, time: FloweConstants.times[3], duration: "50 MIN", type: "Duet",    status: .confirmed),
-        CalendarSession(id: 11, dayIndex: 4, studentId: 4, time: FloweConstants.times[7], duration: "45 MIN", type: "Online",  status: .pending),
-        // Saturday
-        CalendarSession(id: 12, dayIndex: 5, studentId: 6, time: FloweConstants.times[2], duration: "55 MIN", type: "Group",   status: .confirmed)
-        // Sunday — rest day, no sessions
-    ]
-
+    /// The instructor's booked slots for a given weekday. There is no real
+    /// booking data yet, so every day is empty until students book sessions.
     static func sessions(on dayIndex: Int) -> [CalendarSession] {
-        week.filter { $0.dayIndex == dayIndex }
+        []
     }
 }
 
@@ -54,11 +33,6 @@ struct BookingRequest: Identifiable {
     let type: String
     let duration: String
     var state: Decision = .pending
-
-    static let sample: [BookingRequest] = [
-        BookingRequest(id: 1, studentId: 4, day: "Thu Jul 10", time: FloweConstants.times[4], type: "Private", duration: "55 min"),
-        BookingRequest(id: 2, studentId: 6, day: "Sat Jul 12", time: FloweConstants.times[6], type: "Duet",    duration: "50 min")
-    ]
 }
 
 // MARK: - Week-strip day helper

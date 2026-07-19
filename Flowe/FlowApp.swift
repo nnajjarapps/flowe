@@ -27,6 +27,15 @@ struct FlowApp: App {
                 .environment(\.locale, settings.locale)
                 .environment(\.layoutDirection, settings.layoutDirection)
                 .task { await session.validateAppleCredential() }
+                .task(id: session.authState) {
+                    data.currentUserID = session.ownerID
+                    if session.authState == .instructor {
+                        data.ensureInstructorProfile(
+                            ownerID: session.ownerID,
+                            name: session.currentUser?.fullName ?? "Instructor"
+                        )
+                    }
+                }
         }
     }
 }

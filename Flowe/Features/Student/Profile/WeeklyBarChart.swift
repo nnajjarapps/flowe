@@ -4,7 +4,7 @@ import SwiftUI
 /// Bar height ∝ minutes (max ~60 → ~44pt). Active days use the deep pink
 /// gradient; rest days (0 min) show a short hairline stub. Mono day letter below.
 struct WeeklyBarChart: View {
-    var bars: [WeeklyBar] = ProfileMock.weeklyBars
+    var bars: [WeeklyBar] = []
 
     private let maxMinutes: CGFloat = 60
     private let maxHeight: CGFloat = 44
@@ -36,7 +36,15 @@ struct WeeklyBarChart: View {
 }
 
 #Preview {
-    WeeklyBarChart()
-        .padding()
-        .background(Color.flowWhite)
+    WeeklyBarChart(bars: [
+        WeeklyBar(day: "M", minutes: 55),
+        WeeklyBar(day: "T", minutes: 0),
+        WeeklyBar(day: "W", minutes: 60),
+        WeeklyBar(day: "T", minutes: 55),
+        WeeklyBar(day: "F", minutes: 45),
+        WeeklyBar(day: "S", minutes: 50),
+        WeeklyBar(day: "S", minutes: 0),
+    ])
+    .padding()
+    .background(Color.flowWhite)
 }

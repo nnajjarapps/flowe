@@ -20,6 +20,7 @@ final class Instructor {
     var available: [String] = []
     var bio: String?
     var order: Int = 0              // stable display order
+    var ownerID: String?           // the signed-in instructor who owns/edits this listing
 
     init(
         legacyId: Int = 0,
@@ -36,7 +37,8 @@ final class Instructor {
         img: String = "",
         available: [String] = [],
         bio: String? = nil,
-        order: Int = 0
+        order: Int = 0,
+        ownerID: String? = nil
     ) {
         self.legacyId = legacyId
         self.name = name
@@ -53,6 +55,7 @@ final class Instructor {
         self.available = available
         self.bio = bio
         self.order = order
+        self.ownerID = ownerID
     }
 
     var firstName: String { name.split(separator: " ").first.map(String.init) ?? name }

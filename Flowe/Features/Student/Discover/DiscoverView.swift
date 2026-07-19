@@ -9,7 +9,7 @@ struct DiscoverView: View {
     @State private var selected: Instructor?
 
     private var filteredInstructors: [Instructor] {
-        data.instructors.filter { ins in
+        data.publishedInstructors.filter { ins in
             (filter == "All" || ins.specialties.contains(filter)) &&
             (search.isEmpty
              || ins.name.lowercased().contains(search.lowercased())
@@ -17,7 +17,11 @@ struct DiscoverView: View {
         }
     }
 
-    private var showFeatured: Bool { filter == "All" && search.isEmpty }
+    /// The instructor to feature: only when browsing the full, unfiltered list and one exists.
+    private var featuredInstructor: Instructor? {
+        guard filter == "All", search.isEmpty else { return nil }
+        return data.publishedInstructors.first
+    }
 
     private var listLabel: String {
         let prefix = filter == "All" ? "NEAR YOU" : filter.uppercased()
@@ -35,27 +39,36 @@ struct DiscoverView: View {
                 FilterChipsBar(items: FloweConstants.discoverCategories, selection: $filter)
                     .padding(.bottom, 16)
 
-                if showFeatured {
+                if let featured = featuredInstructor {
                     VStack(alignment: .leading, spacing: 10) {
                         SectionHeader(text: "FEATURED")
-                        FeaturedHeroCard {
-                            if let first = data.instructors.first { selected = first }
-                        }
+                        FeaturedHeroCard(instructor: featured) { selected = featured }
                     }
                     .padding(.horizontal, 20)
                     .padding(.bottom, 20)
                 }
 
-                VStack(alignment: .leading, spacing: 10) {
-                    SectionHeader(text: listLabel)
-                    VStack(spacing: 12) {
-                        ForEach(filteredInstructors) { ins in
-                            InstructorCard(instructor: ins) { selected = ins }
+                if filteredInstructors.isEmpty {
+                    EmptyStateView(
+                        icon: "person.2.slash",
+                        title: "No instructors yet",
+                        message: "Instructors near you will appear here once they join Flowe."
+                    )
+                    .padding(.horizontal, 20)
+                    .padding(.top, 40)
+                    .padding(.bottom, 24)
+                } else {
+                    VStack(alignment: .leading, spacing: 10) {
+                        SectionHeader(text: listLabel)
+                        VStack(spacing: 12) {
+                            ForEach(filteredInstructors) { ins in
+                                InstructorCard(instructor: ins) { selected = ins }
+                            }
                         }
                     }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 24)
                 }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 24)
             }
         }
         .background(Color.flowWhite)

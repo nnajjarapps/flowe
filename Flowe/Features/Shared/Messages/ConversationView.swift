@@ -14,18 +14,22 @@ struct ConversationView: View {
     let instructor: Instructor
 
     @State private var draft = ""
-    @State private var messages: [ChatMessage] = ConversationView.mockThread
+    @State private var messages: [ChatMessage] = []
 
     var body: some View {
         VStack(spacing: 0) {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 14) {
-                        dateStamp
+                        if messages.isEmpty {
+                            emptyHint
+                        } else {
+                            dateStamp
 
-                        ForEach(messages) { msg in
-                            MessageBubble(isOutgoing: msg.isOutgoing, text: msg.text, time: msg.time)
-                                .id(msg.id)
+                            ForEach(messages) { msg in
+                                MessageBubble(isOutgoing: msg.isOutgoing, text: msg.text, time: msg.time)
+                                    .id(msg.id)
+                            }
                         }
                     }
                     .padding(.horizontal, 16)
@@ -61,6 +65,23 @@ struct ConversationView: View {
     }
 
     // MARK: - Pieces
+
+    private var emptyHint: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "bubble.left.and.bubble.right")
+                .font(.system(size: 30))
+                .foregroundStyle(Color.flowePinkSoft)
+            Text("Say hello to \(instructor.firstName)")
+                .font(FloweFont.serif(15))
+                .foregroundStyle(Color.floweInk)
+            Text("Send a message to start the conversation.")
+                .font(FloweFont.sans(13))
+                .foregroundStyle(Color.floweMuted)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 80)
+    }
 
     private var dateStamp: some View {
         Text("TODAY")
@@ -116,17 +137,6 @@ struct ConversationView: View {
         messages.append(ChatMessage(id: nextId, isOutgoing: true, text: text, time: "Now"))
         draft = ""
     }
-
-    // MARK: - Local mock thread
-
-    static let mockThread: [ChatMessage] = [
-        ChatMessage(id: 1, isOutgoing: false, text: "Hi! So glad you booked in for this week. 🌸", time: "9:12 AM"),
-        ChatMessage(id: 2, isOutgoing: true,  text: "Me too! It's been a while since my last reformer class.", time: "9:14 AM"),
-        ChatMessage(id: 3, isOutgoing: false, text: "No worries at all — we'll ease back in. How's your lower back feeling lately?", time: "9:15 AM"),
-        ChatMessage(id: 4, isOutgoing: true,  text: "Much better after the stretches you sent. Still a little tight in the mornings.", time: "9:18 AM"),
-        ChatMessage(id: 5, isOutgoing: false, text: "Perfect, we'll add some gentle mobility work at the start. Bring grip socks and water!", time: "9:20 AM"),
-        ChatMessage(id: 6, isOutgoing: true,  text: "Will do. See you at 10 tomorrow 💗", time: "9:21 AM"),
-    ]
 }
 
 #Preview {

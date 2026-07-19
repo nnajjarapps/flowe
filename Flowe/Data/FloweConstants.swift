@@ -27,23 +27,6 @@ struct WeeklyBar: Identifiable {
 }
 
 enum ProfileMock {
-    static let achievements = [
-        Achievement(systemIcon: "flame.fill", label: "9-day streak",  sub: "Best: 18"),
-        Achievement(systemIcon: "rosette",    label: "14 sessions",   sub: "This month"),
-        Achievement(systemIcon: "star.fill",  label: "5 instructors", sub: "Worked with"),
-    ]
-
-    static let weeklyBars = [
-        WeeklyBar(day: "M", minutes: 55),
-        WeeklyBar(day: "T", minutes: 0),
-        WeeklyBar(day: "W", minutes: 60),
-        WeeklyBar(day: "T", minutes: 55),
-        WeeklyBar(day: "F", minutes: 45),
-        WeeklyBar(day: "S", minutes: 50),
-        WeeklyBar(day: "S", minutes: 0),
-    ]
-
-    static let weeklyTotalMinutes = 265
-
+    /// Real account menu rows (not mock content) — kept for the ACCOUNT list.
     static let accountRows = ["Notifications", "Payment methods", "Privacy", "Help & Support", "Log out"]
 }
