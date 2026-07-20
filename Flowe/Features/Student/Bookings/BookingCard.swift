@@ -42,7 +42,7 @@ struct BookingCard: View {
                 .opacity(0.5)
 
             if let instructor {
-                RemoteImage(id: instructor.img, width: 600, height: 136)
+                RemoteImage(id: instructor.img, photo: instructor.photo, width: 600, height: 136)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .clipped()
                     .blendMode(.multiply)
@@ -51,7 +51,7 @@ struct BookingCard: View {
 
             HStack(spacing: 12) {
                 if let instructor {
-                    AvatarView(id: instructor.img, size: 40)
+                    AvatarView(id: instructor.img, photo: instructor.photo, size: 40)
                         .overlay(Circle().stroke(Color.white.opacity(0.5), lineWidth: 2))
                 }
 

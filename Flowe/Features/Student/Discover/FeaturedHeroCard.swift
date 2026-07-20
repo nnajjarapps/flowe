@@ -17,7 +17,7 @@ struct FeaturedHeroCard: View {
     var body: some View {
         Button(action: action) {
             ZStack(alignment: .bottomLeading) {
-                RemoteImage(id: instructor.img, width: 700, height: 400)
+                RemoteImage(id: instructor.img, photo: instructor.photo, width: 700, height: 400)
                     .frame(maxWidth: .infinity)
                     .frame(height: 200)
                     .clipped()

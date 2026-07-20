@@ -10,7 +10,7 @@ struct InstructorCard: View {
         Button(action: action) {
             HStack(spacing: 0) {
                 // Left image with gradient overlay
-                RemoteImage(id: instructor.img, width: 160, height: 160)
+                RemoteImage(id: instructor.img, photo: instructor.photo, width: 160, height: 160)
                     .frame(width: 88)
                     .frame(maxHeight: .infinity)
                     .background(Color.flowePinkPale)

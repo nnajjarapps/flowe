@@ -66,7 +66,7 @@ struct BookingSheet: View {
 
     private var hero: some View {
         ZStack {
-            RemoteImage(id: instructor.img, width: 600, height: 280)
+            RemoteImage(id: instructor.img, photo: instructor.photo, width: 600, height: 280)
                 .frame(height: 144)
                 .clipped()
             FlowGradients.grad.opacity(0.7)

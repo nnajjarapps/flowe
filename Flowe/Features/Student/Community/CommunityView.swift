@@ -71,7 +71,7 @@ struct CommunityView: View {
             HStack(spacing: 12) {
                 ForEach(data.publishedInstructors.prefix(5)) { ins in
                     VStack(spacing: 4) {
-                        AvatarView(id: ins.img, size: 52, ring: true)
+                        AvatarView(id: ins.img, photo: ins.photo, size: 52, ring: true)
                         Text(ins.firstName)
                             .font(FloweFont.sans(9))
                             .foregroundStyle(Color.floweInk)
