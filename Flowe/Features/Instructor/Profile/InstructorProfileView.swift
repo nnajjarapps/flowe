@@ -22,8 +22,16 @@ struct InstructorProfileView: View {
     /// The signed-in instructor's own (possibly-empty) listing.
     private var me: Instructor? { data.currentInstructor }
 
-    /// Whether this instructor has any reviews to show yet.
-    private var hasRating: Bool { (me?.reviews ?? 0) > 0 }
+    /// Real reviews of this instructor, newest first — earned from completed bookings, not seeded.
+    private var reviews: [Review] { data.myReviews }
+
+    /// Average rating and count, derived from those reviews. Nil until the first one lands, because
+    /// "no reviews yet" is a different thing from a 0.0 rating.
+    private var ratingSummary: (average: Double, count: Int)? {
+        data.currentUserID.flatMap { data.rating(for: $0) }
+    }
+
+    private var hasRating: Bool { ratingSummary != nil }
 
     /// Whether a city has been entered yet.
     private var hasCity: Bool { !(me?.city ?? "").isEmpty }
@@ -38,11 +46,6 @@ struct InstructorProfileView: View {
     private var certLine: String {
         let cert = me?.cert ?? ""
         return cert.isEmpty ? "CERTIFIED INSTRUCTOR" : cert.uppercased()
-    }
-
-    /// Up to three student reviews drawn from the community feed.
-    private var reviews: [FeedPost] {
-        Array(data.posts.filter { $0.type == .review }.prefix(3))
     }
 
     var body: some View {
@@ -74,6 +77,8 @@ struct InstructorProfileView: View {
             }
         }
         .background(Color.flowWhite.ignoresSafeArea())
+        .task { await data.syncReviews(asInstructor: true) }
+        .refreshable { await data.syncReviews(asInstructor: true) }
         .sheet(isPresented: $showSettings) { InstructorSettingsView() }
         .sheet(isPresented: $showEditProfile) { EditProfileView() }
     }
@@ -139,9 +144,9 @@ struct InstructorProfileView: View {
                                 .foregroundStyle(Color.floweMuted)
                         }
 
-                        if hasRating {
-                            StarRatingView(rating: me?.rating ?? 0, size: 11)
-                            Text("(\(me?.reviews ?? 0))")
+                        if let summary = ratingSummary {
+                            StarRatingView(rating: summary.average, size: 11)
+                            Text("(\(summary.count))")
                                 .font(FloweFont.mono(10))
                                 .foregroundStyle(Color.floweMuted)
                         }
@@ -331,22 +336,27 @@ struct InstructorProfileView: View {
             EmptyStateView(
                 icon: "star",
                 title: "No reviews yet",
-                message: "Reviews from your students will show up here after your sessions."
+                message: "After a session, students can review it from their Bookings tab. "
+                       + "Their reviews will show up here."
             )
         } else {
             VStack(alignment: .leading, spacing: 14) {
                 HStack {
                     SectionHeader(text: "STUDENT REVIEWS")
                     Spacer()
-                    if hasRating {
-                        StarRatingView(rating: me?.rating ?? 0, size: 12)
+                    if let summary = ratingSummary {
+                        StarRatingView(rating: summary.average, size: 12)
+                        Text("(\(summary.count))")
+                            .font(FloweFont.mono(10))
+                            .foregroundStyle(Color.floweMuted)
                     }
                 }
 
-                ForEach(reviews) { post in
-                    ReviewRow(post: post)
+                ForEach(reviews) { review in
+                    ReviewRow(review: review)
                 }
             }
+            .accessibilityIdentifier("instructor.reviewsList")
         }
     }
 

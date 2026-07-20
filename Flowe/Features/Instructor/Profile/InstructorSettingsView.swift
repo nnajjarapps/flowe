@@ -16,6 +16,7 @@ struct InstructorSettingsView: View {
     @State private var showManageSubscriptions = false
     @State private var confirmLogout = false
     @State private var showDeleteAccount = false
+    @State private var showBlocked = false
 
     private var planLabel: String {
         switch subscription.tier {
@@ -89,6 +90,12 @@ struct InstructorSettingsView: View {
                     button("Notifications", icon: "bell") { showNotifications = true }
                 }
 
+                // MARK: Safety
+                Section("Safety") {
+                    button("Blocked users", icon: "hand.raised") { showBlocked = true }
+                        .accessibilityIdentifier("settings.blockedUsers")
+                }
+
                 // MARK: Support
                 Section("Support") {
                     Link(destination: URL(string: "https://flowepilates.com/support")!) {
@@ -137,6 +144,7 @@ struct InstructorSettingsView: View {
             .sheet(isPresented: $showPaywall) { PaywallView() }
             .sheet(isPresented: $showNotifications) { NotificationSettingsView() }
             .sheet(isPresented: $showDeleteAccount) { DeleteAccountView() }
+            .sheet(isPresented: $showBlocked) { BlockedUsersView() }
             .manageSubscriptionsSheet(isPresented: $showManageSubscriptions)
             .confirmationDialog("Log out of Flowe?", isPresented: $confirmLogout, titleVisibility: .visible) {
                 Button("Log Out", role: .destructive) {

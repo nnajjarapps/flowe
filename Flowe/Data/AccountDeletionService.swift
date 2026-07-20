@@ -56,6 +56,14 @@ final class AccountDeletionService {
         ) else { return false }
         ids += addressedToMe.map { CKRecord.ID(recordName: "decision-\($0.recordName)") }
 
+        // Reviews I wrote. Reviews written *about* me stay — they belong to their authors, and are
+        // other students' record of a session that did happen.
+        guard let written = await recordIDs(
+            ofType: ReviewService.recordType,
+            matching: NSPredicate(format: "studentID == %@", ownerID)
+        ) else { return false }
+        ids += written
+
         // My instructor listing, whose recordName *is* the owner id. Absent for students.
         ids.append(CKRecord.ID(recordName: ownerID))
 

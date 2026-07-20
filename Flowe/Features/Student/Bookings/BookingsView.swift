@@ -45,7 +45,12 @@ struct BookingsView: View {
             .padding(.top, 12)
         }
         .background(Color.flowWhite)
-        .refreshable { await data.syncBookings(asInstructor: false) }
+        .task { await data.syncReviews(asInstructor: false) }
+        .refreshable {
+            await data.syncBookings(asInstructor: false)
+            // Reviews come along so "Leave a review" flips to "Edit review" after a reinstall.
+            await data.syncReviews(asInstructor: false)
+        }
     }
 
     // MARK: Title

@@ -37,7 +37,12 @@ enum SeedLoader {
             Booking(
                 legacyId: seed.id, instructorId: seed.instructorId, date: seed.date, time: seed.time,
                 type: seed.type, duration: seed.duration,
-                status: BookingStatus(rawValue: seed.status) ?? .pending, order: i
+                status: BookingStatus(rawValue: seed.status) ?? .pending, order: i,
+                // A real booking carries the shared-store identity that anchors a review to a
+                // session that actually happened; seeded ones need the same, or a completed sample
+                // booking can't be reviewed. Mirrors the seeded listings' `ownerID` above.
+                remoteID: "seed-booking-\(seed.id)",
+                instructorOwnerID: "seed-instructor-\(seed.instructorId)"
             )
         }
 

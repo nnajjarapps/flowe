@@ -28,6 +28,8 @@ struct EditProfileView: View {
     @State private var isLoadingPhoto = false
 
     @State private var loaded = false
+    /// Non-nil when the content filter rejected a field on save.
+    @State private var filterMessage: String?
 
     /// An empty rate is allowed — it means "not set yet", and the profile nudges for it. Only a
     /// nonsense value blocks saving, so a new instructor can save a photo and bio before pricing.
@@ -122,6 +124,13 @@ struct EditProfileView: View {
         }
         .onAppear(perform: load)
         .task(id: pickerItem) { await loadPickedPhoto() }
+        .alert("Check your profile",
+               isPresented: .init(get: { filterMessage != nil },
+                                  set: { if !$0 { filterMessage = nil } })) {
+            Button("OK", role: .cancel) { filterMessage = nil }
+        } message: {
+            Text(filterMessage ?? "")
+        }
     }
 
     // MARK: - Photo
@@ -233,6 +242,12 @@ struct EditProfileView: View {
 
     private func save() {
         guard let me = data.currentInstructor else { dismiss(); return }
+        // Every field here is broadcast to the public catalog, so it is screened before publishing
+        // (Guideline 1.2). Private messages are deliberately not screened — see `ContentFilter`.
+        if let rejection = ContentFilter.reject(fields: [name, city, bio, cert]) {
+            filterMessage = rejection.message
+            return
+        }
         me.name = name.trimmed
         me.city = city.trimmed
         me.bio = bio.trimmed

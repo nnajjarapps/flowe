@@ -15,11 +15,15 @@ final class MockDataStore {
     private(set) var posts: [FeedPost] = []
     private(set) var bookings: [Booking] = []
     private(set) var messages: [Message] = []
+    private(set) var blocked: [BlockedUser] = []
+    private(set) var reviews: [Review] = []
 
     private let catalog = CatalogService()
     private let bookingService = BookingService()
     private let messagingService = MessagingService()
     private let deletionService = AccountDeletionService()
+    private let reportService = ReportService()
+    private let reviewService = ReviewService()
     /// Suppresses public-catalog network calls (previews + UI tests).
     private let isPreview: Bool
 
@@ -42,6 +46,8 @@ final class MockDataStore {
         try? context.delete(model: FeedPost.self)
         try? context.delete(model: Booking.self)
         try? context.delete(model: Message.self)
+        try? context.delete(model: BlockedUser.self)
+        try? context.delete(model: Review.self)
         try? context.save()
     }
 
@@ -57,6 +63,12 @@ final class MockDataStore {
         messages    = (try? context.fetch(
             FetchDescriptor<Message>(sortBy: [SortDescriptor(\.sentAt, order: .forward)])
         )) ?? []
+        blocked     = (try? context.fetch(
+            FetchDescriptor<BlockedUser>(sortBy: [SortDescriptor(\.createdAt, order: .reverse)])
+        )) ?? []
+        reviews     = (try? context.fetch(
+            FetchDescriptor<Review>(sortBy: [SortDescriptor(\.createdAt, order: .reverse)])
+        )) ?? []
     }
 
     private func fetch<M: PersistentModel>(sortBy key: KeyPath<M, Int>) -> [M] {
@@ -71,7 +83,7 @@ final class MockDataStore {
     /// Instructors students can see: an active subscription (Visible/Boost), a set-up listing,
     /// and a fresh subscription check. Boosted first, then by rating, then order.
     var visibleInstructors: [Instructor] {
-        instructors.filter(Self.isEligible).sorted {
+        instructors.filter { Self.isEligible($0) && !isBlocked($0.ownerID) }.sorted {
             if $0.visibilityRaw != $1.visibilityRaw { return $0.visibilityRaw > $1.visibilityRaw }
             if $0.rating != $1.rating { return $0.rating > $1.rating }
             return $0.order < $1.order
@@ -302,7 +314,11 @@ final class MockDataStore {
     /// The inbox: one row per counterpart, most recent first.
     var conversations: [ConversationSummary] {
         guard let me = currentUserID else { return [] }
-        let mine = messages.filter { $0.senderID == me || $0.recipientID == me }
+        let hidden = blockedIDs
+        let mine = messages.filter {
+            ($0.senderID == me || $0.recipientID == me)
+            && !hidden.contains($0.senderID) && !hidden.contains($0.recipientID)
+        }
         let grouped = Dictionary(grouping: mine, by: \.conversationID)
 
         return grouped.compactMap { _, thread -> ConversationSummary? in
@@ -329,7 +345,7 @@ final class MockDataStore {
 
     /// Messages in one thread, oldest first.
     func thread(with counterpartID: String) -> [Message] {
-        guard let me = currentUserID else { return [] }
+        guard let me = currentUserID, !isBlocked(counterpartID) else { return [] }
         let id = Message.conversationID(me, counterpartID)
         return messages.filter { $0.conversationID == id }.sorted { $0.sentAt < $1.sentAt }
     }
@@ -431,7 +447,7 @@ final class MockDataStore {
     func addressBook(asInstructor: Bool) -> [Counterpart] {
         if asInstructor {
             let students = incomingBookings.compactMap { booking -> Counterpart? in
-                guard let id = booking.studentID else { return nil }
+                guard let id = booking.studentID, !isBlocked(id) else { return nil }
                 return Counterpart(id: id, name: booking.studentName)
             }
             return dedupe(students)
@@ -440,7 +456,7 @@ final class MockDataStore {
         // an instructor who has since gone hidden (lapsed subscription).
         let bookedIDs = Set(myBookings.compactMap(\.instructorOwnerID))
         let reachable = instructors.filter { listing in
-            guard let id = listing.ownerID else { return false }
+            guard let id = listing.ownerID, !isBlocked(id) else { return false }
             return bookedIDs.contains(id) || Self.isEligible(listing)
         }
         let listings = reachable.compactMap { listing -> Counterpart? in
@@ -453,6 +469,196 @@ final class MockDataStore {
     private func dedupe(_ people: [Counterpart]) -> [Counterpart] {
         var seen = Set<String>()
         return people.filter { seen.insert($0.id).inserted }
+    }
+
+    // MARK: - Reviews
+
+    /// Reviews written about an instructor, newest first. Blocked students are filtered out for the
+    /// same reason their messages are.
+    func reviews(for instructorOwnerID: String) -> [Review] {
+        reviews
+            .filter { $0.instructorID == instructorOwnerID && !isBlocked($0.studentID) }
+            .sorted { $0.createdAt > $1.createdAt }
+    }
+
+    /// Reviews of the signed-in instructor's own listing.
+    var myReviews: [Review] {
+        guard let me = currentUserID else { return [] }
+        return reviews(for: me)
+    }
+
+    /// Average rating and count for an instructor, derived from real reviews.
+    /// Returns nil when there are none — "no reviews yet" is a different thing from a 0.0 rating.
+    func rating(for instructorOwnerID: String) -> (average: Double, count: Int)? {
+        let scored = reviews(for: instructorOwnerID).filter { $0.rating > 0 }
+        guard !scored.isEmpty else { return nil }
+        let total = scored.reduce(0) { $0 + $1.rating }
+        return (Double(total) / Double(scored.count), scored.count)
+    }
+
+    /// The student's own review of a booking, if they've written one.
+    func myReview(for booking: Booking) -> Review? {
+        guard let bookingID = booking.remoteID, let me = currentUserID else { return nil }
+        return reviews.first { $0.bookingID == bookingID && $0.studentID == me }
+    }
+
+    /// Only a completed session the student actually booked can be reviewed. This is the whole point
+    /// of anchoring a review to a booking rather than to an instructor.
+    func canReview(_ booking: Booking) -> Bool {
+        booking.status == .completed
+            && booking.remoteID != nil          // never reached the shared store → not a real session
+            && booking.instructorOwnerID != nil
+            // A locally-cached booking with no student stamped on it is this user's own, by the
+            // same rule `myBookings` applies.
+            && (booking.studentID == nil || booking.studentID == currentUserID)
+    }
+
+    /// Write or replace the review for a booking, then publish it.
+    @discardableResult
+    func submitReview(for booking: Booking, rating: Int, text: String) -> Review? {
+        guard canReview(booking),
+              let bookingID = booking.remoteID,
+              let instructorID = booking.instructorOwnerID,
+              let me = currentUserID else { return nil }
+
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let review = myReview(for: booking) ?? {
+            let fresh = Review(bookingID: bookingID, instructorID: instructorID, studentID: me)
+            context.insert(fresh)
+            return fresh
+        }()
+
+        review.studentName = currentUserName
+        review.rating = rating
+        review.text = trimmed
+        review.createdAt = Date()
+        review.pendingUpload = true
+        save()
+
+        guard !isPreview else { return review }
+        Task { await upload(review) }
+        return review
+    }
+
+    private func upload(_ review: Review) async {
+        let remoteID = await reviewService.submit(
+            bookingID: review.bookingID,
+            instructorID: review.instructorID,
+            studentID: review.studentID,
+            studentName: review.studentName,
+            rating: review.rating,
+            text: review.text,
+            createdAt: review.createdAt
+        )
+        review.remoteID = remoteID
+        review.pendingUpload = remoteID == nil
+        save()
+    }
+
+    /// Pull reviews that matter to this user: the ones about them if they're an instructor, and the
+    /// ones they've written either way (so "already reviewed" survives a reinstall).
+    func syncReviews(asInstructor: Bool) async {
+        guard !isPreview, let me = currentUserID else { return }
+
+        for review in reviews where review.pendingUpload && review.remoteID == nil {
+            await upload(review)
+        }
+
+        var remote = await reviewService.fetchForStudent(ownerID: me)
+        if asInstructor {
+            remote += await reviewService.fetchForInstructor(ownerID: me)
+        }
+        merge(remote)
+
+        // An instructor's public rating is published with their listing so the student feed doesn't
+        // have to fetch every review to sort the catalog.
+        if asInstructor { refreshMyPublishedRating() }
+    }
+
+    private func merge(_ remote: [RemoteReview]) {
+        guard !remote.isEmpty else { return }
+        var changed = false
+        for entry in remote {
+            if let existing = reviews.first(where: { $0.bookingID == entry.bookingID }) {
+                // The remote copy wins — it is the one other people see.
+                guard existing.remoteID != entry.id
+                        || existing.rating != entry.rating
+                        || existing.text != entry.text else { continue }
+                existing.remoteID = entry.id
+                existing.rating = entry.rating
+                existing.text = entry.text
+                existing.studentName = entry.studentName
+                existing.createdAt = entry.createdAt
+                existing.pendingUpload = false
+            } else {
+                context.insert(Review(
+                    remoteID: entry.id,
+                    bookingID: entry.bookingID,
+                    instructorID: entry.instructorID,
+                    studentID: entry.studentID,
+                    studentName: entry.studentName,
+                    rating: entry.rating,
+                    text: entry.text,
+                    createdAt: entry.createdAt
+                ))
+            }
+            changed = true
+        }
+        if changed { save() }
+    }
+
+    /// Recompute the signed-in instructor's rating from real reviews and republish the listing.
+    private func refreshMyPublishedRating() {
+        guard let me = currentInstructor, let ownerID = currentUserID else { return }
+        guard let summary = rating(for: ownerID) else { return }
+        guard me.rating != summary.average || me.reviews != summary.count else { return }
+        me.rating = summary.average
+        me.reviews = summary.count
+        commit()
+    }
+
+    // MARK: - Blocking & reporting (App Store Review Guideline 1.2)
+
+    var blockedIDs: Set<String> { Set(blocked.map(\.blockedID)) }
+
+    func isBlocked(_ ownerID: String?) -> Bool {
+        guard let ownerID else { return false }
+        return blockedIDs.contains(ownerID)
+    }
+
+    /// Block someone. Their messages, their listing and any route to start a new conversation with
+    /// them disappear from this user's app. Idempotent.
+    func block(id: String, name: String) {
+        guard !id.isEmpty, !blockedIDs.contains(id) else { return }
+        context.insert(BlockedUser(blockedID: id, blockedName: name))
+        save()
+    }
+
+    func unblock(_ ownerID: String) {
+        for entry in blocked where entry.blockedID == ownerID { context.delete(entry) }
+        save()
+    }
+
+    /// File a report. Returns whether it reached the server so the UI doesn't thank the user for a
+    /// report that never sent.
+    func report(reportedID: String,
+                reportedName: String,
+                content: ReportedContent,
+                contentID: String,
+                reason: ReportReason,
+                snapshot: String,
+                details: String) async -> Bool {
+        guard !isPreview, let me = currentUserID else { return true }
+        return await reportService.submit(
+            reporterID: me,
+            reportedID: reportedID,
+            reportedName: reportedName,
+            content: content,
+            contentID: contentID,
+            reason: reason,
+            snapshot: snapshot,
+            details: details
+        )
     }
 
     // MARK: - Account deletion

@@ -98,6 +98,21 @@ Flowe's first profit model. See `FLOWE-IAP-PLAN.md`.
       `visibility`/`updatedAt` **queryable** + `visibility` **sortable**, set security = `_world` read /
       `_creator` write, then **Deploy schema to Production**.
       ⚠️ Also add the `photo` field (type **Asset**, no index) for uploaded profile photos.
+- [x] **Real reviews**: anchored to a completed booking (`review-<bookingID>` in the public DB, so
+      one review per session and resubmitting updates). Instructor rating is *derived* from them —
+      nil until the first review, rather than a fabricated 0.0 — and republished onto the listing so
+      the feed can sort without fetching every review. Replaces the seeded `FeedPost` rows the
+      Reviews tab used to render. Covered by `ReviewsUITests` (10 tests).
+      ⚠️ CloudKit Dashboard: add `SessionReview` with `bookingID`/`instructorID`/`studentID`/
+      `createdAt` **queryable** (`createdAt` sortable), default `_world` read / `_creator` write.
+- [x] **Moderation (Guideline 1.2)**: block (local, private-DB synced, reversible from Settings ›
+      Safety), report (`ContentReport` in the public DB, reviewed from the Dashboard), and a content
+      filter on public listing text. Covered by `ModerationUITests` (11 tests).
+      ⚠️ CloudKit Dashboard: add `ContentReport` with `reportedID`/`contentType`/`reason`/`createdAt`
+      **queryable** (`createdAt` sortable) and — unlike every other type — **`_world` read DISABLED**,
+      creator-only, so a report can't expose who filed it.
+      ⚠️ Still needed before submission: a live, monitored support URL; an EULA acknowledgement at
+      signup; and a commitment to action reports within 24h.
 - [x] **Full listing editor**: photo (PhotosPicker → downscaled JPEG → `CKAsset`), name, city, bio,
       rate, years of experience, certification (self-declared text, labelled unverified), specialties
       and session types. Profile surfaces a "Finish your profile" nudge listing what's still blank.

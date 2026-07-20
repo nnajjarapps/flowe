@@ -6,8 +6,11 @@ struct ConversationView: View {
     let counterpart: Counterpart
 
     @Environment(MockDataStore.self) private var data
+    @Environment(\.dismiss) private var dismiss
 
     @State private var draft = ""
+    @State private var showReport = false
+    @State private var confirmBlock = false
 
     private var messages: [Message] { data.thread(with: counterpart.id) }
 
@@ -63,6 +66,41 @@ struct ConversationView: View {
                         .foregroundStyle(Color.floweInk)
                 }
             }
+
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button("Report \(counterpart.firstName)", systemImage: "flag") {
+                        showReport = true
+                    }
+                    Button("Block \(counterpart.firstName)", systemImage: "hand.raised", role: .destructive) {
+                        confirmBlock = true
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .foregroundStyle(Color.floweInk)
+                }
+                .accessibilityIdentifier("conversation.moderation")
+            }
+        }
+        .sheet(isPresented: $showReport) {
+            ReportSheet(
+                reportedID: counterpart.id,
+                reportedName: counterpart.name,
+                content: .message,
+                contentID: messages.last?.remoteID ?? "",
+                // Report the tail of the thread — a single message rarely carries the context.
+                snapshot: messages.suffix(10).map(\.text).joined(separator: "\n")
+            )
+        }
+        .confirmationDialog("Block \(counterpart.firstName)?",
+                            isPresented: $confirmBlock, titleVisibility: .visible) {
+            Button("Block", role: .destructive) {
+                data.block(id: counterpart.id, name: counterpart.name)
+                dismiss()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("You won't see their messages or their profile. You can undo this in Settings.")
         }
     }
 

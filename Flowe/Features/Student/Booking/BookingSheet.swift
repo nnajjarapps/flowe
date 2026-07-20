@@ -12,6 +12,8 @@ struct BookingSheet: View {
     @State private var time = ""
     @State private var type = ""
     @State private var booked = false
+    @State private var showReport = false
+    @State private var confirmBlock = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -35,6 +37,29 @@ struct BookingSheet: View {
         .onAppear {
             if type.isEmpty { type = instructor.sessionTypes.first ?? "" }
         }
+        .sheet(isPresented: $showReport) {
+            ReportSheet(
+                reportedID: instructor.ownerID ?? "",
+                reportedName: instructor.name,
+                content: .instructorListing,
+                contentID: instructor.ownerID ?? "",
+                snapshot: [instructor.name, instructor.city, instructor.cert, instructor.bio ?? ""]
+                    .filter { !$0.isEmpty }
+                    .joined(separator: " · ")
+            )
+        }
+        .confirmationDialog("Block \(instructor.firstName)?",
+                            isPresented: $confirmBlock, titleVisibility: .visible) {
+            Button("Block", role: .destructive) {
+                if let id = instructor.ownerID {
+                    data.block(id: id, name: instructor.name)
+                }
+                onClose()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("You won't see their profile or messages. You can undo this in Settings.")
+        }
     }
 
     // MARK: - Hero band
@@ -53,6 +78,21 @@ struct BookingSheet: View {
             VStack {
                 HStack {
                     Spacer()
+                    // A listing's name, city, bio and certification are user-written and public, so
+                    // students need a way to flag one (Guideline 1.2).
+                    Menu {
+                        Button("Report this profile", systemImage: "flag") { showReport = true }
+                        Button("Block \(instructor.firstName)", systemImage: "hand.raised",
+                               role: .destructive) { confirmBlock = true }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 28, height: 28)
+                            .background(.ultraThinMaterial, in: Circle())
+                    }
+                    .accessibilityIdentifier("booking.moderation")
+
                     Button(action: onClose) {
                         Image(systemName: "xmark")
                             .font(.system(size: 13, weight: .semibold))

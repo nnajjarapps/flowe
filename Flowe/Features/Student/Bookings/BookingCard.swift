@@ -9,6 +9,7 @@ struct BookingCard: View {
 
     @State private var bookAgainInstructor: Instructor?
     @State private var confirmingCancel = false
+    @State private var showReview = false
 
     private var instructor: Instructor? { data.instructor(id: booking.instructorId) }
 
@@ -21,6 +22,7 @@ struct BookingCard: View {
         .sheet(item: $bookAgainInstructor) { ins in
             BookingSheet(instructor: ins) { bookAgainInstructor = nil }
         }
+        .sheet(isPresented: $showReview) { ReviewSheet(booking: booking) }
         .confirmationDialog("Cancel this session?",
                             isPresented: $confirmingCancel, titleVisibility: .visible) {
             Button("Cancel session", role: .destructive) { data.cancel(booking) }
@@ -88,12 +90,25 @@ struct BookingCard: View {
             Spacer(minLength: 8)
 
             if booking.status == .completed {
-                Button {
-                    bookAgainInstructor = instructor
-                } label: {
-                    Text("Book again")
-                        .font(FloweFont.sans(11))
-                        .foregroundStyle(Color.flowePinkDeep)
+                HStack(spacing: 14) {
+                    if data.canReview(booking) {
+                        Button {
+                            showReview = true
+                        } label: {
+                            Text(data.myReview(for: booking) == nil ? "Leave a review" : "Edit review")
+                                .font(FloweFont.sans(11))
+                                .foregroundStyle(Color.flowePinkDeep)
+                        }
+                        .accessibilityIdentifier("booking.review")
+                    }
+
+                    Button {
+                        bookAgainInstructor = instructor
+                    } label: {
+                        Text("Book again")
+                            .font(FloweFont.sans(11))
+                            .foregroundStyle(Color.floweMuted)
+                    }
                 }
             } else if booking.status != .cancelled {
                 Button {

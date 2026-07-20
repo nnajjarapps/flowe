@@ -9,6 +9,7 @@ struct SettingsView: View {
 
     @State private var showNotifications = false
     @State private var showDeleteAccount = false
+    @State private var showBlocked = false
 
     var body: some View {
         @Bindable var settings = settings
@@ -47,6 +48,22 @@ struct SettingsView: View {
                     .tint(Color.floweInk)
                 }
 
+                Section("Safety") {
+                    Button {
+                        showBlocked = true
+                    } label: {
+                        HStack {
+                            Label("Blocked users", systemImage: "hand.raised")
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 13))
+                                .foregroundStyle(Color.floweMuted)
+                        }
+                    }
+                    .tint(Color.floweInk)
+                    .accessibilityIdentifier("settings.blockedUsers")
+                }
+
                 Section {
                     Button(role: .destructive) {
                         session.logout()
@@ -74,6 +91,7 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $showNotifications) { NotificationSettingsView() }
             .sheet(isPresented: $showDeleteAccount) { DeleteAccountView() }
+            .sheet(isPresented: $showBlocked) { BlockedUsersView() }
         }
     }
 }
