@@ -33,7 +33,7 @@ final class AppSession {
     /// nothing would ever look up again. Sign in with Apple is the only authenticated path, so a
     /// real session always has `appleUserID`; the fallback exists for UI-test launches that skip
     /// onboarding entirely.
-    var ownerID: String { appleUserID ?? "local-user" }
+    var ownerID: String { appleUserID ?? FloweConstants.localOwnerID }
 
     init() {
         appleUserID = KeychainStore.get(appleUserKey)

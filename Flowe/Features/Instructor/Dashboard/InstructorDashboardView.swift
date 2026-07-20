@@ -43,8 +43,12 @@ struct InstructorDashboardView: View {
     }
 
     private var ratingDisplay: String {
-        guard let rating = data.currentInstructor?.rating, rating > 0 else { return "—" }
-        return String(format: "%.1f", rating)
+        // Derived from real reviews, like the profile — not the listing's cached number, which
+        // isn't recomputed in previews and would disagree with the Reviews tab.
+        guard let ownerID = data.currentUserID, let summary = data.rating(for: ownerID) else {
+            return "—"
+        }
+        return String(format: "%.1f", summary.average)
     }
 
     var body: some View {

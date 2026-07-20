@@ -320,12 +320,50 @@ struct InstructorProfileView: View {
 
     // MARK: - Analytics
 
+    @ViewBuilder
     private var analyticsTab: some View {
-        EmptyStateView(
-            icon: "chart.bar",
-            title: "No analytics yet",
-            message: "Your session trends and rebooking stats will appear here once you start teaching on Flowe."
-        )
+        let sessionsByType = data.instructorSessionsByType
+        let hasActivity = !data.incomingBookings.isEmpty
+
+        if !hasActivity {
+            EmptyStateView(
+                icon: "chart.bar",
+                title: "No analytics yet",
+                message: "Once students start booking you, your session stats and rebooking rate will appear here."
+            )
+        } else {
+            VStack(alignment: .leading, spacing: 20) {
+                HStack(spacing: 12) {
+                    StatTile(value: "\(data.instructorCompletedCount)", label: "SESSIONS")
+                    StatTile(value: "\(data.instructorStudentCount)", label: "STUDENTS", accent: .flowePink)
+                    StatTile(value: "\(data.instructorRepeatStudentCount)", label: "REPEAT", accent: .floweSuccess)
+                }
+
+                HStack(spacing: 12) {
+                    StatTile(value: acceptanceDisplay, label: "ACCEPTED")
+                    StatTile(value: ratingSummary.map { String(format: "%.1f", $0.average) } ?? "—",
+                             label: "RATING", accent: .flowePink)
+                    StatTile(value: "\(reviews.count)", label: "REVIEWS", accent: .floweSuccess)
+                }
+
+                if !sessionsByType.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        SectionHeader(text: "SESSIONS BY TYPE")
+                        InstructorBarChart(
+                            bars: sessionsByType.map { .init(label: $0.type.uppercased(), value: $0.count) },
+                            showValues: true
+                        )
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .floweCard()
+                }
+            }
+        }
+    }
+
+    private var acceptanceDisplay: String {
+        data.instructorAcceptanceRate.map { "\(Int(($0 * 100).rounded()))%" } ?? "—"
     }
 
     // MARK: - Reviews
@@ -362,12 +400,79 @@ struct InstructorProfileView: View {
 
     // MARK: - Earnings
 
+    @ViewBuilder
     private var earningsTab: some View {
-        EmptyStateView(
-            icon: "banknote",
-            title: "No earnings yet",
-            message: "Your monthly earnings and recent payouts will appear here after your first paid session."
-        )
+        let earnings = data.instructorEarnings
+        let byType = data.instructorSessionsByType
+        let price = me?.price ?? 0
+
+        if earnings.collected == 0 && earnings.projected == 0 {
+            EmptyStateView(
+                icon: "banknote",
+                title: "No earnings yet",
+                message: price == 0
+                    ? "Set your rate in Edit Profile, then completed sessions will show up here."
+                    : "Earnings from your completed sessions will appear here."
+            )
+        } else {
+            VStack(alignment: .leading, spacing: 20) {
+                earningsHeadline(earnings)
+
+                if !byType.isEmpty, price > 0 {
+                    VStack(alignment: .leading, spacing: 12) {
+                        SectionHeader(text: "BY SESSION TYPE")
+                        ForEach(byType, id: \.type) { entry in
+                            HStack {
+                                Text(entry.type)
+                                    .font(FloweFont.sans(14))
+                                    .foregroundStyle(Color.floweInk)
+                                Text("· \(entry.count)")
+                                    .font(FloweFont.mono(11))
+                                    .foregroundStyle(Color.floweMuted)
+                                Spacer()
+                                Text(settings.money(entry.count * price))
+                                    .font(FloweFont.serif(15, .medium))
+                                    .foregroundStyle(Color.floweInk)
+                            }
+                            .padding(.vertical, 6)
+                            Divider().overlay(Color.floweBorder)
+                        }
+                    }
+                    .padding(16)
+                    .floweCard()
+                }
+
+                Text("Payment is arranged directly with your students, so these are session "
+                     + "totals at your current rate — Flowe doesn't process payments.")
+                    .font(FloweFont.sans(12))
+                    .foregroundStyle(Color.floweMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func earningsHeadline(_ earnings: (collected: Int, projected: Int)) -> some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                SectionHeader(text: "COLLECTED")
+                Text(settings.money(earnings.collected))
+                    .font(FloweFont.serif(26, .medium))
+                    .foregroundStyle(Color.floweInk)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(16)
+            .floweCard()
+
+            VStack(alignment: .leading, spacing: 4) {
+                SectionHeader(text: "PROJECTED")
+                Text(settings.money(earnings.projected))
+                    .font(FloweFont.serif(26, .medium))
+                    .foregroundStyle(Color.flowePinkDeep)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(16)
+            .floweCard()
+        }
     }
 }
 

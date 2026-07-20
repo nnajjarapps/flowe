@@ -130,6 +130,56 @@ final class MockDataStore {
         incomingBookings.filter { $0.status == .completed }.count
     }
 
+    // MARK: - Instructor analytics & earnings
+    //
+    // All derived from real incoming bookings. Bookings carry a *display* date string, not a
+    // timestamp, so there is deliberately no month-by-month time series here — inventing one would
+    // be exactly the mock data these screens are meant to replace. Every number below is something
+    // that actually happened.
+
+    /// Earnings priced at the instructor's rate. Payment is arranged directly with the student, so
+    /// `collected` is what completed sessions were worth and `projected` what accepted-but-not-yet-
+    /// delivered sessions will be worth — a forecast, not an in-app balance.
+    var instructorEarnings: (collected: Int, projected: Int) {
+        let price = currentInstructor?.price ?? 0
+        let completed = incomingBookings.filter { $0.status == .completed }.count
+        let confirmed = incomingBookings.filter { $0.status == .confirmed }.count
+        return (completed * price, confirmed * price)
+    }
+
+    /// Delivered + accepted sessions grouped by type (Private, Duet, …) — a real dimension, unlike
+    /// a fabricated timeline, so it's safe to chart.
+    var instructorSessionsByType: [(type: String, count: Int)] {
+        let counted = incomingBookings.filter { $0.status == .completed || $0.status == .confirmed }
+        let grouped = Dictionary(grouping: counted, by: { $0.type.isEmpty ? "Other" : $0.type })
+        return grouped
+            .map { (type: $0.key, count: $0.value.count) }
+            .sorted { $0.count > $1.count }
+    }
+
+    /// Distinct students who have booked more than one non-cancelled session — the clearest signal
+    /// an instructor is retaining people.
+    var instructorRepeatStudentCount: Int {
+        let active = incomingBookings.filter { $0.status != .cancelled }
+        let perStudent = Dictionary(grouping: active) { $0.studentID ?? $0.studentName }
+        return perStudent.values.filter { $0.count > 1 }.count
+    }
+
+    /// Distinct students seen, ever.
+    var instructorStudentCount: Int {
+        Set(incomingBookings.filter { $0.status != .cancelled }.map { $0.studentID ?? $0.studentName }).count
+    }
+
+    /// Share of decided requests the instructor accepted. Pending requests aren't decided yet, so
+    /// they're excluded; nil when nothing has been decided, so the UI shows "—" rather than 0%.
+    var instructorAcceptanceRate: Double? {
+        let accepted = incomingBookings.filter { $0.status == .confirmed || $0.status == .completed }.count
+        let declined = incomingBookings.filter { $0.status == .cancelled }.count
+        let decided = accepted + declined
+        guard decided > 0 else { return nil }
+        return Double(accepted) / Double(decided)
+    }
+
     /// Total practiced hours from completed sessions' durations (e.g. "55 min").
     var hoursDisplay: String {
         let minutes = myBookings

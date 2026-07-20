@@ -103,6 +103,15 @@ Flowe's first profit model. See `FLOWE-IAP-PLAN.md`.
       login verified nothing (non-empty check, no credential store), so a stable email-derived id
       would have meant impersonation, not a fix — the unauthenticated form was removed and Sign in
       with Apple is now the only path. See "Identity" in BOOKING-SYSTEM.md.
+- [x] **Instructor Analytics & Earnings tabs made real**: both were empty-state stubs. Analytics
+      now derives sessions / students / repeat-students / acceptance-rate / rating from real incoming
+      bookings and reviews, and charts sessions by type (a real dimension — bookings carry no
+      timestamp, so there is deliberately no fabricated monthly time series). Earnings shows
+      collected (completed × rate) vs projected (confirmed × rate) with a by-type breakdown, and is
+      explicit that Flowe doesn't process payments. Dashboard rating now derives from reviews too, so
+      it agrees with the profile. A seeded instructor gets a sample workspace (incoming bookings +
+      reviews, owner `local-user`) so these tabs render populated in previews/tests; the shipping app
+      seeds nothing. Covered by `ReviewsUITests` (analytics/earnings/reviews populated paths).
 - [x] **Real reviews**: anchored to a completed booking (`review-<bookingID>` in the public DB, so
       one review per session and resubmitting updates). Instructor rating is *derived* from them —
       nil until the first review, rather than a fabricated 0.0 — and republished onto the listing so

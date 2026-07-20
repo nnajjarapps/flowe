@@ -2,6 +2,10 @@ import Foundation
 
 /// Static scheduling + profile constants ported from the Figma mockup.
 enum FloweConstants {
+    /// Owner id for a session with no Apple credential — previews and UI tests, which never sign in.
+    /// Shared so seeded instructor-side data and `AppSession.ownerID` can't drift apart.
+    static let localOwnerID = "local-user"
+
     /// Booking day picker (label → first 3 chars are matched against `Instructor.available`).
     static let days = ["Mon Jul 7", "Tue Jul 8", "Wed Jul 9", "Thu Jul 10", "Fri Jul 11", "Sat Jul 12", "Sun Jul 13"]
 

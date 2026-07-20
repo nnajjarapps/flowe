@@ -25,7 +25,9 @@ final class InstructorTabsUITests: FloweUITestCase {
 
     func testDashboardHeaderAndKPIs() {
         launch(as: .instructor)
-        XCTAssertTrue(waitForAnyText(["GOOD MORNING"]), "Dashboard greeting missing")
+        // The greeting is time-of-day based, so accept any of the three.
+        XCTAssertTrue(waitForAnyText(["GOOD MORNING", "GOOD AFTERNOON", "GOOD EVENING"]),
+                      "Dashboard greeting missing")
         for kpi in ["TODAY", "THIS WEEK", "RATING"] {
             XCTAssertTrue(app.staticTexts[kpi].exists, "KPI tile '\(kpi)' missing")
         }

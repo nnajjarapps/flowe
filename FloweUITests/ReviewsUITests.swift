@@ -123,12 +123,13 @@ final class ReviewsUITests: FloweUITestCase {
                       "Objectionable wording must be refused before it is published")
     }
 
-    // MARK: - The instructor's side
+    // MARK: - The instructor's side (fresh — no workspace)
 
     /// The regression this whole change is about: the Reviews tab used to render seeded community
-    /// posts, so a brand-new instructor appeared to already have reviews.
+    /// posts, so a brand-new instructor appeared to already have reviews. A *fresh* instructor
+    /// (no seeded workspace) must see an empty state.
     func testInstructorWithNoReviewsSeesAnEmptyStateNotMockData() {
-        launch(as: .instructor, seeded: true)
+        launch(as: .instructor, seeded: false)
         selectTab("Profile")
         XCTAssertTrue(waitForAnyText(["Overview"], timeout: timeout))
         tapText(["Reviews"])
@@ -141,7 +142,7 @@ final class ReviewsUITests: FloweUITestCase {
 
     /// The empty state should point the instructor at how reviews actually arrive.
     func testEmptyReviewsExplainsHowReviewsArrive() {
-        launch(as: .instructor, seeded: true)
+        launch(as: .instructor, seeded: false)
         selectTab("Profile")
         XCTAssertTrue(waitForAnyText(["Overview"], timeout: timeout))
         tapText(["Reviews"])
@@ -151,11 +152,53 @@ final class ReviewsUITests: FloweUITestCase {
 
     /// With no reviews there is no rating, and a fabricated 0.0 would be worse than none.
     func testInstructorWithNoReviewsShowsNoRating() {
-        launch(as: .instructor, seeded: true)
+        launch(as: .instructor, seeded: false)
         selectTab("Profile")
         XCTAssertTrue(waitForAnyText(["Overview"], timeout: timeout))
         XCTAssertNil(anyStaticText(["0.0"]),
                      "An unreviewed instructor should show no rating rather than a zero")
+    }
+
+    // MARK: - The instructor's side (populated workspace)
+    //
+    // A seeded instructor has a sample workspace — incoming bookings and reviews — so the Reviews,
+    // Analytics and Earnings tabs render real, derived content rather than empty states or mock data.
+
+    func testSeededInstructorSeesRealReviews() {
+        launch(as: .instructor, seeded: true)
+        selectTab("Profile")
+        XCTAssertTrue(waitForAnyText(["Overview"], timeout: timeout))
+        tapText(["Reviews"])
+        XCTAssertTrue(waitForAnyText(["Mia Tanaka", "Jordan Lee"], timeout: 15),
+                      "A seeded instructor should see their real reviews with author names")
+        XCTAssertFalse(waitForAnyText(["No reviews yet"], timeout: 3),
+                       "A seeded instructor must not see the empty state")
+    }
+
+    func testAnalyticsTabShowsDerivedStats() {
+        launch(as: .instructor, seeded: true)
+        selectTab("Profile")
+        XCTAssertTrue(waitForAnyText(["Overview"], timeout: timeout))
+        tapText(["Analytics"])
+        for label in ["SESSIONS", "STUDENTS", "REPEAT", "ACCEPTED", "RATING"] {
+            XCTAssertTrue(scrollToText([label]), "Analytics stat '\(label)' missing")
+        }
+        XCTAssertTrue(scrollToText(["SESSIONS BY TYPE"]),
+                      "Analytics should chart real sessions by type")
+    }
+
+    func testEarningsTabShowsRealTotals() {
+        launch(as: .instructor, seeded: true)
+        selectTab("Profile")
+        XCTAssertTrue(waitForAnyText(["Overview"], timeout: timeout))
+        tapText(["Earnings"])
+        XCTAssertTrue(scrollToText(["COLLECTED"]), "Earnings should show a collected total")
+        XCTAssertTrue(scrollToText(["PROJECTED"]), "Earnings should show a projected total")
+        XCTAssertTrue(scrollToText(["BY SESSION TYPE"]),
+                      "Earnings should break down by session type")
+        // Three completed sessions at $70 = $210 collected.
+        XCTAssertTrue(scrollToTextContaining("210"),
+                      "Collected earnings should be derived from completed sessions × rate")
     }
 
     // MARK: - Helper
