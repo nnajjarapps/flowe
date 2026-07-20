@@ -72,11 +72,12 @@ targets:
           - ar
         UILaunchScreen:
           UIColorName: ""
+        # Portrait-only iPhone app. UIRequiresFullScreen opts out of iPad multitasking, which is what
+        # lets a portrait-only app pass App Store validation without declaring all four iPad
+        # orientations. No ~ipad override — the base portrait orientation applies everywhere.
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
-        UISupportedInterfaceOrientations~ipad:
-          - UIInterfaceOrientationPortrait
-          - UIInterfaceOrientationPortraitUpsideDown
+        UIRequiresFullScreen: true
         NSLocationWhenInUseUsageDescription: "Flowe uses your location to show nearby instructors."
         NSPhotoLibraryUsageDescription: "Flowe uses your photo library so you can share images in posts."
         UIBackgroundModes:
@@ -102,6 +103,9 @@ targets:
       base:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        # iPhone-only. Must be set at the target level: xcodegen's per-target default is "1,2"
+        # (universal), which overrides the project-level base and pulled in iPad requirements.
+        TARGETED_DEVICE_FAMILY: "1"
 
   FloweUITests:
     type: bundle.ui-testing
