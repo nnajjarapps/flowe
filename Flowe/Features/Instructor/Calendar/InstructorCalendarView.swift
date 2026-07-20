@@ -62,7 +62,7 @@ struct InstructorCalendarView: View {
 
             Spacer()
 
-            AvatarView(id: data.currentInstructor?.img ?? "", size: 46, ring: true)
+            AvatarView(id: data.currentInstructor?.img ?? "", photo: data.currentInstructor?.photo, size: 46, ring: true)
         }
     }
 
