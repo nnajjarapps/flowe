@@ -28,14 +28,14 @@ enum FloweModelContainer {
 
         let userData = ModelConfiguration(
             "UserData",
-            schema: Schema([FeedPost.self, Booking.self]),
+            schema: Schema([FeedPost.self, Booking.self, Message.self]),
             isStoredInMemoryOnly: inMemory,
             cloudKitDatabase: userDataCloudKitDatabase(inMemory: inMemory)
         )
 
         do {
             return try ModelContainer(
-                for: Instructor.self, FeedPost.self, Booking.self,
+                for: Instructor.self, FeedPost.self, Booking.self, Message.self,
                 configurations: reference, userData
             )
         } catch {

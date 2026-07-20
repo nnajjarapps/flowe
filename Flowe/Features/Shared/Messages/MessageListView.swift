@@ -1,40 +1,26 @@
 import SwiftUI
 
-/// A conversation summary shown in the inbox list. `instructorId` links to a
-/// real `Instructor` for the avatar and name.
-struct Conversation: Identifiable {
-    let id: Int
-    let instructorId: Int
-    let preview: String
-    let time: String
-    let unread: Bool
-}
-
-/// Messages inbox: a searchable list of conversations. Each row shows the
-/// instructor avatar, name, last-message preview, time, and an unread dot.
-/// Tapping pushes `ConversationView` inside a `NavigationStack`.
+/// Messages inbox: a searchable list of conversations, shared by both roles. Each row shows the
+/// counterpart's avatar and name, the last-message preview, when it arrived, and an unread dot.
+/// Tapping pushes `ConversationView`.
+///
+/// Conversations are derived from real messages rather than from a list of instructors: a student's
+/// counterpart is an instructor, but an instructor's counterpart is a student, who has no listing.
 struct MessageListView: View {
     @Environment(MockDataStore.self) private var data
+    @Environment(AppSession.self) private var session
 
     @State private var search = ""
     @State private var showCompose = false
 
-    /// Real inbox — empty until conversations are exchanged.
-    @State private var inbox: [Conversation] = []
+    private var conversations: [ConversationSummary] { data.conversations }
 
-    private var conversations: [(convo: Conversation, instructor: Instructor)] {
-        inbox.compactMap { convo in
-            guard let ins = data.instructor(id: convo.instructorId) else { return nil }
-            return (convo, ins)
-        }
-    }
-
-    private var filtered: [(convo: Conversation, instructor: Instructor)] {
+    private var filtered: [ConversationSummary] {
         guard !search.isEmpty else { return conversations }
         let q = search.lowercased()
         return conversations.filter {
-            $0.instructor.name.lowercased().contains(q) ||
-            $0.convo.preview.lowercased().contains(q)
+            $0.counterpart.displayName.lowercased().contains(q) ||
+            $0.lastMessage.lowercased().contains(q)
         }
     }
 
@@ -47,11 +33,11 @@ struct MessageListView: View {
                         .padding(.top, 4)
                         .padding(.bottom, 12)
 
-                    ForEach(filtered, id: \.convo.id) { item in
+                    ForEach(filtered) { summary in
                         NavigationLink {
-                            ConversationView(instructor: item.instructor)
+                            ConversationView(counterpart: summary.counterpart)
                         } label: {
-                            row(convo: item.convo, instructor: item.instructor)
+                            row(summary)
                         }
                         .buttonStyle(.plain)
                         Divider().overlay(Color.floweBorder).padding(.leading, 78)
@@ -71,7 +57,9 @@ struct MessageListView: View {
             }
             .background(Color.flowWhite)
             .safeAreaInset(edge: .top, spacing: 0) { header }
+            .refreshable { await data.syncMessages() }
         }
+        .task { await data.syncMessages() }
         .sheet(isPresented: $showCompose) { NewMessageSheet() }
     }
 
@@ -131,29 +119,29 @@ struct MessageListView: View {
 
     // MARK: - Row
 
-    private func row(convo: Conversation, instructor: Instructor) -> some View {
+    private func row(_ summary: ConversationSummary) -> some View {
         HStack(spacing: 14) {
-            AvatarView(id: instructor.img, size: 50, ring: convo.unread)
+            AvatarView(id: summary.counterpart.avatarID, size: 50, ring: summary.hasUnread)
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack {
-                    Text(instructor.name)
+                    Text(summary.counterpart.displayName)
                         .font(FloweFont.serif(15))
                         .foregroundStyle(Color.floweInk)
                     Spacer()
-                    Text(convo.time)
+                    Text(Self.relativeTime(summary.lastSentAt))
                         .font(FloweFont.mono(10))
-                        .foregroundStyle(convo.unread ? Color.flowePinkDeep : Color.floweMuted)
+                        .foregroundStyle(summary.hasUnread ? Color.flowePinkDeep : Color.floweMuted)
                 }
 
                 HStack(spacing: 8) {
-                    Text(convo.preview)
-                        .font(FloweFont.sans(13, convo.unread ? .medium : .regular))
-                        .foregroundStyle(convo.unread ? Color.floweInk : Color.floweMuted)
+                    Text(summary.lastMessage)
+                        .font(FloweFont.sans(13, summary.hasUnread ? .medium : .regular))
+                        .foregroundStyle(summary.hasUnread ? Color.floweInk : Color.floweMuted)
                         .lineLimit(1)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
-                    if convo.unread {
+                    if summary.hasUnread {
                         Circle()
                             .fill(FlowGradients.gradDark)
                             .frame(width: 8, height: 8)
@@ -164,6 +152,17 @@ struct MessageListView: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
         .contentShape(Rectangle())
+    }
+
+    /// "Now" / "4m" / "3h" / "Tue" / "12 Mar" — compact enough for the trailing slot.
+    static func relativeTime(_ date: Date) -> String {
+        let seconds = Date().timeIntervalSince(date)
+        if seconds < 60 { return "Now" }
+        if seconds < 3600 { return "\(Int(seconds / 60))m" }
+        if seconds < 86_400 { return "\(Int(seconds / 3600))h" }
+        let formatter = DateFormatter()
+        formatter.dateFormat = seconds < 7 * 86_400 ? "EEE" : "d MMM"
+        return formatter.string(from: date)
     }
 
     private var searchEmptyState: some View {

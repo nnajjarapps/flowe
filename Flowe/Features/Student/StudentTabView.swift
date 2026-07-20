@@ -2,6 +2,7 @@ import SwiftUI
 
 struct StudentTabView: View {
     @Environment(AppSession.self) private var session
+    @Environment(MockDataStore.self) private var data
 
     var body: some View {
         TabView {
@@ -13,6 +14,11 @@ struct StudentTabView: View {
 
             BookingsView()
                 .tabItem { Label("Bookings", systemImage: "calendar") }
+
+            // Messaging needs both sides reachable — students previously had no way in at all.
+            MessageListView()
+                .tabItem { Label("Messages", systemImage: "message") }
+                .badge(data.unreadMessageCount)
 
             ProfileView()
                 .tabItem { Label("Profile", systemImage: "person.circle") }

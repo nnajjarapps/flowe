@@ -18,6 +18,9 @@ enum SeedLoader {
             // Sample data (previews only): first is Boosted/featured, the rest Visible.
             instructor.visibility = i == 0 ? .boosted : .visible
             instructor.visibilityVerifiedAt = Date()
+            // Every real listing is keyed by its owner (recordName == ownerID), so seeded ones need
+            // one too — without it they can't be booked or messaged.
+            instructor.ownerID = "seed-instructor-\(seed.id)"
             return instructor
         }
 

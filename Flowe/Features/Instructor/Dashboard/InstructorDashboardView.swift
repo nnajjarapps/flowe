@@ -115,6 +115,7 @@ struct InstructorDashboardView: View {
             .clipShape(RoundedRectangle(cornerRadius: 20))
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("dashboard.getDiscovered")
     }
 
     private func handle(_ action: QuickAction) {

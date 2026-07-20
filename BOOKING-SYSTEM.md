@@ -91,3 +91,65 @@ Queryable indexes, and the app will silently show no bookings.
   `SessionBooking` is the natural next step.
 - **No availability collision check.** Two students can request the same slot; the instructor
   resolves it by declining one.
+
+---
+
+# Messaging
+
+Same constraint, same place: messages travel over the CloudKit **public** database, because the
+private database is per-account and a message written by one user would never reach the other.
+
+Unlike bookings, no two-record split is needed. Messages are append-only and each one is written by
+its sender, so the default `_creator`-write role already fits — a participant only ever creates
+their own messages and never edits the other side's.
+
+## Threads
+
+`conversationID` is the two participants' owner ids sorted and joined with `~`, so both devices
+derive the same thread id without coordinating (`Message.conversationID(_:_:)`).
+
+CloudKit query predicates do **not** support `OR`, so the inbox is assembled from two equality
+queries — messages I sent and messages I received — rather than one compound query. Opening a
+thread uses a single `conversationID ==` query so it refreshes without a full sync.
+
+## Counterparts
+
+A conversation's other party is a `Counterpart` (owner id + display name), deliberately **not** an
+`Instructor`: a student's counterpart is an instructor, but an instructor's counterpart is a
+student, who has no listing. The old inbox modelled every partner as an `Instructor`, which is why
+it could never have worked on the instructor side.
+
+Who you can start a thread with (`MockDataStore.addressBook(asInstructor:)`):
+
+- **student** → instructors in the feed, plus any already booked, so an instructor who has since
+  gone hidden (lapsed subscription) stays reachable
+- **instructor** → students who have booked them
+
+Unread state (`Message.isRead`) is recipient-local and never round-trips to the sender; it drives
+the inbox dot and the tab badge, and clears when the thread is opened.
+
+## CloudKit Dashboard setup
+
+### `ChatMessage`
+
+| Field | Type | Index |
+|---|---|---|
+| `conversationID` | String | **Queryable** |
+| `senderID` | String | **Queryable** |
+| `senderName` | String | — |
+| `recipientID` | String | **Queryable** |
+| `recipientName` | String | — |
+| `text` | String | — |
+| `sentAt` | Date/Time | **Queryable, Sortable** |
+
+Default security role (`_world` read, `_creator` write). As with bookings, the queries silently
+return nothing if the indexes are missing.
+
+## Known limitations
+
+- **No push notifications** — messages arrive on open, pull-to-refresh, or when a thread is opened.
+- **No delivery/read receipts across users.** A message shows "Sending…" until it reaches the
+  server; `isRead` is local to the recipient.
+- **Public-DB readability.** Message bodies are readable by any authenticated app user. This is the
+  most sensitive data in the app and is the strongest reason to move to a server-side API before
+  going beyond a pilot.

@@ -1,20 +1,15 @@
 import SwiftUI
 
-/// A single chat message inside a conversation thread.
-struct ChatMessage: Identifiable {
-    let id: Int
-    let isOutgoing: Bool
-    let text: String
-    let time: String
-}
-
-/// A chat thread with one instructor: a scrolling stack of `MessageBubble`s and
-/// a bottom composer bar (rounded field + gradient send button).
+/// A chat thread with one counterpart: a scrolling stack of `MessageBubble`s and a bottom composer.
+/// Messages persist to the shared store, so both sides see the thread (see `MessagingService`).
 struct ConversationView: View {
-    let instructor: Instructor
+    let counterpart: Counterpart
+
+    @Environment(MockDataStore.self) private var data
 
     @State private var draft = ""
-    @State private var messages: [ChatMessage] = []
+
+    private var messages: [Message] { data.thread(with: counterpart.id) }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -24,11 +19,18 @@ struct ConversationView: View {
                         if messages.isEmpty {
                             emptyHint
                         } else {
-                            dateStamp
-
-                            ForEach(messages) { msg in
-                                MessageBubble(isOutgoing: msg.isOutgoing, text: msg.text, time: msg.time)
-                                    .id(msg.id)
+                            ForEach(groupedByDay, id: \.day) { group in
+                                dateStamp(group.day)
+                                ForEach(group.messages) { message in
+                                    MessageBubble(
+                                        isOutgoing: message.senderID == data.currentUserID,
+                                        text: message.text,
+                                        time: message.pendingUpload
+                                            ? "Sending…"
+                                            : Self.timeLabel(message.sentAt)
+                                    )
+                                    .id(message.persistentModelID)
+                                }
                             }
                         }
                     }
@@ -38,7 +40,7 @@ struct ConversationView: View {
                 }
                 .onChange(of: messages.count) {
                     withAnimation(.easeOut(duration: 0.25)) {
-                        proxy.scrollTo(messages.last?.id, anchor: .bottom)
+                        proxy.scrollTo(messages.last?.persistentModelID, anchor: .bottom)
                     }
                 }
             }
@@ -47,21 +49,46 @@ struct ConversationView: View {
         }
         .background(Color.flowWhite)
         .navigationBarTitleDisplayMode(.inline)
+        .task {
+            await data.syncThread(with: counterpart.id)
+            data.markThreadRead(with: counterpart.id)
+        }
+        .refreshable { await data.syncThread(with: counterpart.id) }
         .toolbar {
             ToolbarItem(placement: .principal) {
                 HStack(spacing: 10) {
-                    AvatarView(id: instructor.img, size: 30)
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text(instructor.firstName)
-                            .font(FloweFont.serif(15))
-                            .foregroundStyle(Color.floweInk)
-                        Text("Active now")
-                            .font(FloweFont.mono(9))
-                            .foregroundStyle(Color.floweSuccess)
-                    }
+                    AvatarView(id: counterpart.avatarID, size: 30)
+                    Text(counterpart.firstName)
+                        .font(FloweFont.serif(15))
+                        .foregroundStyle(Color.floweInk)
                 }
             }
         }
+    }
+
+    // MARK: - Grouping
+
+    /// Messages bucketed by day so each run gets one date stamp.
+    private var groupedByDay: [(day: String, messages: [Message])] {
+        let grouped = Dictionary(grouping: messages) { Self.dayLabel($0.sentAt) }
+        return grouped
+            .map { (day: $0.key, messages: $0.value.sorted { $0.sentAt < $1.sentAt }) }
+            .sorted { ($0.messages.first?.sentAt ?? .distantPast) < ($1.messages.first?.sentAt ?? .distantPast) }
+    }
+
+    static func dayLabel(_ date: Date) -> String {
+        let calendar = Calendar.current
+        if calendar.isDateInToday(date) { return "TODAY" }
+        if calendar.isDateInYesterday(date) { return "YESTERDAY" }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "d MMM"
+        return formatter.string(from: date).uppercased()
+    }
+
+    static func timeLabel(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
     }
 
     // MARK: - Pieces
@@ -71,7 +98,7 @@ struct ConversationView: View {
             Image(systemName: "bubble.left.and.bubble.right")
                 .font(.system(size: 30))
                 .foregroundStyle(Color.flowePinkSoft)
-            Text("Say hello to \(instructor.firstName)")
+            Text("Say hello to \(counterpart.firstName)")
                 .font(FloweFont.serif(15))
                 .foregroundStyle(Color.floweInk)
             Text("Send a message to start the conversation.")
@@ -83,8 +110,8 @@ struct ConversationView: View {
         .padding(.top, 80)
     }
 
-    private var dateStamp: some View {
-        Text("TODAY")
+    private func dateStamp(_ label: String) -> some View {
+        Text(label)
             .font(FloweFont.mono(9))
             .foregroundStyle(Color.floweMuted)
             .padding(.horizontal, 12)
@@ -100,6 +127,7 @@ struct ConversationView: View {
                     .font(FloweFont.sans(14))
                     .foregroundStyle(Color.floweInk)
                     .lineLimit(1...4)
+                    .accessibilityIdentifier("conversation.field")
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
@@ -117,6 +145,7 @@ struct ConversationView: View {
             }
             .buttonStyle(.plain)
             .disabled(!canSend)
+            .accessibilityIdentifier("conversation.send")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -131,19 +160,15 @@ struct ConversationView: View {
     }
 
     private func send() {
-        let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
-        let nextId = (messages.map(\.id).max() ?? 0) + 1
-        messages.append(ChatMessage(id: nextId, isOutgoing: true, text: text, time: "Now"))
+        data.sendMessage(to: counterpart, text: draft)
         draft = ""
     }
 }
 
 #Preview {
-    let store = MockDataStore.preview
-    return NavigationStack {
-        ConversationView(instructor: store.instructors.first!)
+    NavigationStack {
+        ConversationView(counterpart: Counterpart(id: "preview", name: "Alex Rivera"))
     }
-    .environment(store)
+    .environment(MockDataStore.preview)
     .environment(AppSession())
 }

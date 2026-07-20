@@ -10,6 +10,7 @@
 		0090B8F0D20E644F666A5511 /* DMSans-LightItalic.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D599E204E351EBA66AFCC9B7 /* DMSans-LightItalic.ttf */; };
 		04DF42D3F8F09485B0167B07 /* CalendarComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = D924C099B8699B291D7C43DA /* CalendarComponents.swift */; };
 		073E425562DDD8F043790E0E /* InstructorBarChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65268B66DE3AFF92DA3C484D /* InstructorBarChart.swift */; };
+		0DE9C9395490F9BEF5BE04C2 /* MessagingUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DBB3E399C8BF1C8511DF1B7 /* MessagingUITests.swift */; };
 		0F346C6CD319E875C3D3EAF4 /* MockDataStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7363600B48D9D0491D076A9 /* MockDataStore.swift */; };
 		11CDDA2ABFDB2E6D4700B209 /* FloweConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06D1617BBCF38F203A11C316 /* FloweConstants.swift */; };
 		14250FA88FC8450E613B0377 /* PaywallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8DB231BCFA389ECC8C1D762 /* PaywallView.swift */; };
@@ -54,6 +55,7 @@
 		80100DE4455F8F8024B6B638 /* FloweUITestCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = E388152C9A9602205EA34963 /* FloweUITestCase.swift */; };
 		8B7232D19B5F6A1CE1E7F245 /* CalendarModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60B3922DB1CB825C3570DB99 /* CalendarModels.swift */; };
 		8CD6F7076188FCB80948E77E /* OnboardingUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23BC35F24816C68247C04B36 /* OnboardingUITests.swift */; };
+		8CD86B4F2A0C8A3F1544DCDE /* Message.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB36077D528099D817B27E2B /* Message.swift */; };
 		8F005CECFE7C6E453C28CD31 /* NotificationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB385017BADE1E22104629B2 /* NotificationSettingsView.swift */; };
 		9088BE8675CAE227464F994B /* StudentTabsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DBB42D00526892D939DC9F1 /* StudentTabsUITests.swift */; };
 		94FA958AC3A40CC2D5011435 /* AppSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = D095FAA6B074F1AF2221AE6A /* AppSession.swift */; };
@@ -75,6 +77,7 @@
 		B99AFAFB4749D0B2361C2BEE /* RemoteImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = B264A9BA6AB860A28BAC86B9 /* RemoteImage.swift */; };
 		B9E765D524BEBFAE495D618D /* 0AD9894E-764F-47AF-AC95-56485A70A3C4.PNG in Resources */ = {isa = PBXBuildFile; fileRef = ED2BC5AAEAE57BD8B4B05646 /* 0AD9894E-764F-47AF-AC95-56485A70A3C4.PNG */; };
 		BA845ED7BB33CB99331BC16A /* PostRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72D6B8E3948B89E8B171AF07 /* PostRowView.swift */; };
+		BC6AADB35930B1E34011D7C7 /* MessagingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AEA61C0D5A07FA6156A5B5F /* MessagingService.swift */; };
 		BD00F0125CDD9AEFD8EB42C6 /* Date+Flowe.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34F13E4C3B93F2B1A8D4706A /* Date+Flowe.swift */; };
 		C0CE885E52944562F46100D6 /* EmptyStateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0F3A0FB151C0F688534ACEF /* EmptyStateView.swift */; };
 		C153033035FA8E7A3BB94A43 /* BookingSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 737B91E7269C6447C335D02B /* BookingSheet.swift */; };
@@ -122,6 +125,7 @@
 		06D1617BBCF38F203A11C316 /* FloweConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloweConstants.swift; sourceTree = "<group>"; };
 		077B3B4C3600ECE4CE0E1861 /* UnsplashImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnsplashImage.swift; sourceTree = "<group>"; };
 		08B690A006F7E8352F3A828D /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
+		0AEA61C0D5A07FA6156A5B5F /* MessagingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessagingService.swift; sourceTree = "<group>"; };
 		0D7CAF2291282ED6FAC4D459 /* bookings.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = bookings.json; sourceTree = "<group>"; };
 		0F28297BD9C654202E87114A /* DMSans-Light.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "DMSans-Light.ttf"; sourceTree = "<group>"; };
 		10A50AB15C47E4490CEB456C /* CatalogService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatalogService.swift; sourceTree = "<group>"; };
@@ -175,6 +179,7 @@
 		91D1DD42C0E5A323D1D28FEB /* DisciplineTag.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisciplineTag.swift; sourceTree = "<group>"; };
 		92C935E2CA20B8E5750DEE0F /* OnboardingFlowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingFlowView.swift; sourceTree = "<group>"; };
 		9AC3550079CA887E6CF28838 /* Fraunces-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Fraunces-Regular.ttf"; sourceTree = "<group>"; };
+		9DBB3E399C8BF1C8511DF1B7 /* MessagingUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessagingUITests.swift; sourceTree = "<group>"; };
 		9F1129DAD3FC5185D2130BEF /* SettingsAndPaywallUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsAndPaywallUITests.swift; sourceTree = "<group>"; };
 		A15B6F9D171C9756B65D7423 /* InstructorTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstructorTabView.swift; sourceTree = "<group>"; };
 		A6408CF78769237EA0E93AC0 /* Fraunces-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Fraunces-Medium.ttf"; sourceTree = "<group>"; };
@@ -207,6 +212,7 @@
 		E388152C9A9602205EA34963 /* FloweUITestCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloweUITestCase.swift; sourceTree = "<group>"; };
 		E44A0A10890CCFF23B150A04 /* StudentTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudentTabView.swift; sourceTree = "<group>"; };
 		E7BA85F0573AA35B279EAE3F /* Fraunces-Light.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Fraunces-Light.ttf"; sourceTree = "<group>"; };
+		EB36077D528099D817B27E2B /* Message.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Message.swift; sourceTree = "<group>"; };
 		EBBF0D4617C61C89A66EFC81 /* Color+Flowe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Color+Flowe.swift"; sourceTree = "<group>"; };
 		ED2BC5AAEAE57BD8B4B05646 /* 0AD9894E-764F-47AF-AC95-56485A70A3C4.PNG */ = {isa = PBXFileReference; path = "0AD9894E-764F-47AF-AC95-56485A70A3C4.PNG"; sourceTree = "<group>"; };
 		EDB60A412E456123013E75E4 /* IconButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IconButton.swift; sourceTree = "<group>"; };
@@ -247,6 +253,7 @@
 				A9B8DD81B48D4AD3BC2545FF /* Booking.swift */,
 				F8FDF5E6BF0F2C754325BF04 /* FeedPost.swift */,
 				DA077844D989E093BABC8C4D /* Instructor.swift */,
+				EB36077D528099D817B27E2B /* Message.swift */,
 				7F25A7337CFD62358334F757 /* User.swift */,
 			);
 			path = Models;
@@ -271,6 +278,7 @@
 				06D1617BBCF38F203A11C316 /* FloweConstants.swift */,
 				72C3E59E33D98698F840ADCF /* FloweModelContainer.swift */,
 				5C9867A521AD55E8C878C940 /* KeychainStore.swift */,
+				0AEA61C0D5A07FA6156A5B5F /* MessagingService.swift */,
 				A7363600B48D9D0491D076A9 /* MockDataStore.swift */,
 				63D62E1B399B329D0B6C2B62 /* SeedLoader.swift */,
 			);
@@ -508,6 +516,7 @@
 				75EABC10430200F40133C4BA /* BookingFlowUITests.swift */,
 				E388152C9A9602205EA34963 /* FloweUITestCase.swift */,
 				B36038D7F8CF809375873BCC /* InstructorTabsUITests.swift */,
+				9DBB3E399C8BF1C8511DF1B7 /* MessagingUITests.swift */,
 				23BC35F24816C68247C04B36 /* OnboardingUITests.swift */,
 				9F1129DAD3FC5185D2130BEF /* SettingsAndPaywallUITests.swift */,
 				5DBB42D00526892D939DC9F1 /* StudentTabsUITests.swift */,
@@ -685,6 +694,7 @@
 				E9524FB6F9B00D029F560401 /* BookingFlowUITests.swift in Sources */,
 				80100DE4455F8F8024B6B638 /* FloweUITestCase.swift in Sources */,
 				AB05550DCEF4EEF50E9E57E9 /* InstructorTabsUITests.swift in Sources */,
+				0DE9C9395490F9BEF5BE04C2 /* MessagingUITests.swift in Sources */,
 				8CD6F7076188FCB80948E77E /* OnboardingUITests.swift in Sources */,
 				A4FD8265A8D205270FAEDD66 /* SettingsAndPaywallUITests.swift in Sources */,
 				9088BE8675CAE227464F994B /* StudentTabsUITests.swift in Sources */,
@@ -742,8 +752,10 @@
 				3B5ACC010BC814AAD54EF6E8 /* InstructorTabView.swift in Sources */,
 				608B13B7ACC18F54705EFA14 /* KeychainStore.swift in Sources */,
 				4EDC58F56C1F076CE1C54553 /* LoginView.swift in Sources */,
+				8CD86B4F2A0C8A3F1544DCDE /* Message.swift in Sources */,
 				DFD748F681DCD84E0CD8BFE4 /* MessageBubble.swift in Sources */,
 				E95011B178469C57A021A6D9 /* MessageListView.swift in Sources */,
+				BC6AADB35930B1E34011D7C7 /* MessagingService.swift in Sources */,
 				0F346C6CD319E875C3D3EAF4 /* MockDataStore.swift in Sources */,
 				24A9D9345D589AA3843DF653 /* NewMessageSheet.swift in Sources */,
 				8F005CECFE7C6E453C28CD31 /* NotificationSettingsView.swift in Sources */,

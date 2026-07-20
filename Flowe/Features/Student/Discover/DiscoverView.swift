@@ -44,6 +44,7 @@ struct DiscoverView: View {
                     VStack(alignment: .leading, spacing: 10) {
                         SectionHeader(text: "FEATURED")
                         FeaturedHeroCard(instructor: featured) { selected = featured }
+                            .accessibilityIdentifier("discover.instructorCard")
                     }
                     .padding(.horizontal, 20)
                     .padding(.bottom, 20)
@@ -64,6 +65,7 @@ struct DiscoverView: View {
                         VStack(spacing: 12) {
                             ForEach(filteredInstructors) { ins in
                                 InstructorCard(instructor: ins) { selected = ins }
+                                    .accessibilityIdentifier("discover.instructorCard")
                             }
                         }
                     }

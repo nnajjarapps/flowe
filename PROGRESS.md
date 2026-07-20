@@ -170,3 +170,38 @@ Not done (deliberate, documented in `BOOKING-SYSTEM.md`):
 - [ ] Booking records are readable by any authenticated app user (public DB). Display name only,
       no email — but this should move server-side before scaling past a pilot.
 - [ ] No double-booking check: two students can request the same slot.
+
+## Phase 12 — Messaging (end-to-end)  ✅
+Messaging was a UI shell: `MessageListView.inbox` was a hardcoded empty array nothing wrote to, and
+`ConversationView.send()` appended to a local `@State` array, so messages vanished on dismiss and
+were never delivered. Two deeper problems sat underneath:
+
+- **Students had no Messages tab at all** — messaging needs two reachable sides.
+- **Conversation partners were modelled as `Instructor`.** A student's counterpart is an instructor,
+  but an instructor's counterpart is a *student*, who has no listing — so the instructor inbox could
+  never have worked regardless of persistence.
+
+- [x] **`Message` model + `MessagingService`** — messages exchanged over the CloudKit **public**
+      database. Append-only and each written by its sender, so the default `_creator`-write role
+      fits directly; no two-record split like bookings needed. See `BOOKING-SYSTEM.md`.
+- [x] **Deterministic threads** — `conversationID` is the two owner ids sorted and joined, so both
+      devices derive the same thread without coordinating.
+- [x] **`Counterpart` abstraction** replaces `Instructor` throughout the messaging UI, making the
+      inbox role-agnostic and driven by real messages.
+- [x] **Role-aware address book** — students write to instructors in the feed *plus any already
+      booked* (so a lapsed-subscription instructor stays reachable); instructors write to students
+      who have booked them.
+- [x] **Student Messages tab** added (5 tabs — a deliberate divergence from the 4-tab Figma mockup,
+      since the feature is unusable without an entry point). Both roles show an unread badge.
+- [x] **Delivery retry + unread state** — `pendingUpload` retried on sync, "Sending…" until
+      delivered; `isRead` is recipient-local, clears when a thread is opened.
+- [x] **Seed fix** — seeded instructors had no `ownerID`, so they could not be booked or messaged.
+      Every real listing is keyed by its owner, so the fixture was unrealistic.
+- [x] **Tests** — `MessagingUITests` covers tab access for both roles, both empty states, the
+      role-aware compose lists, sending, persistence across leaving a thread, and send-button state.
+
+Not done (documented in `BOOKING-SYSTEM.md`):
+- [ ] Push notifications — messages arrive on open, pull-to-refresh, or opening a thread.
+- [ ] Message bodies are readable by any authenticated app user (public DB). This is the most
+      sensitive data in the app and the strongest reason to move server-side before scaling.
+- [ ] No typing indicators, delivery/read receipts across users, or attachments.

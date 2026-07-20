@@ -14,9 +14,11 @@ final class MockDataStore {
     private(set) var instructors: [Instructor] = []
     private(set) var posts: [FeedPost] = []
     private(set) var bookings: [Booking] = []
+    private(set) var messages: [Message] = []
 
     private let catalog = CatalogService()
     private let bookingService = BookingService()
+    private let messagingService = MessagingService()
     /// Suppresses public-catalog network calls (previews + UI tests).
     private let isPreview: Bool
 
@@ -38,6 +40,7 @@ final class MockDataStore {
         try? context.delete(model: Instructor.self)
         try? context.delete(model: FeedPost.self)
         try? context.delete(model: Booking.self)
+        try? context.delete(model: Message.self)
         try? context.save()
     }
 
@@ -50,6 +53,9 @@ final class MockDataStore {
         instructors = fetch(sortBy: \Instructor.order)
         posts       = fetch(sortBy: \FeedPost.order)
         bookings    = fetch(sortBy: \Booking.order)
+        messages    = (try? context.fetch(
+            FetchDescriptor<Message>(sortBy: [SortDescriptor(\.sentAt, order: .forward)])
+        )) ?? []
     }
 
     private func fetch<M: PersistentModel>(sortBy key: KeyPath<M, Int>) -> [M] {
@@ -288,6 +294,164 @@ final class MockDataStore {
         guard let first = parts.first else { return day }
         let rest = parts.dropFirst().joined(separator: " ")
         return rest.isEmpty ? String(first) : "\(first), \(rest)"
+    }
+
+    // MARK: - Messaging
+
+    /// The inbox: one row per counterpart, most recent first.
+    var conversations: [ConversationSummary] {
+        guard let me = currentUserID else { return [] }
+        let mine = messages.filter { $0.senderID == me || $0.recipientID == me }
+        let grouped = Dictionary(grouping: mine, by: \.conversationID)
+
+        return grouped.compactMap { _, thread -> ConversationSummary? in
+            guard let latest = thread.max(by: { $0.sentAt < $1.sentAt }) else { return nil }
+            var counterpart = latest.counterpart(for: me)
+            // Instructors have a listing photo; students don't.
+            if let listing = instructors.first(where: { $0.ownerID == counterpart.id }) {
+                counterpart.avatarID = listing.img
+            }
+            return ConversationSummary(
+                counterpart: counterpart,
+                lastMessage: latest.text,
+                lastSentAt: latest.sentAt,
+                unreadCount: thread.filter { $0.recipientID == me && !$0.isRead }.count
+            )
+        }
+        .sorted { $0.lastSentAt > $1.lastSentAt }
+    }
+
+    /// Total unread messages, for a tab badge.
+    var unreadMessageCount: Int {
+        conversations.reduce(0) { $0 + $1.unreadCount }
+    }
+
+    /// Messages in one thread, oldest first.
+    func thread(with counterpartID: String) -> [Message] {
+        guard let me = currentUserID else { return [] }
+        let id = Message.conversationID(me, counterpartID)
+        return messages.filter { $0.conversationID == id }.sorted { $0.sentAt < $1.sentAt }
+    }
+
+    /// Append a message to a thread and publish it.
+    func sendMessage(to counterpart: Counterpart, text: String) {
+        guard let me = currentUserID else { return }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        let message = Message(
+            conversationID: Message.conversationID(me, counterpart.id),
+            senderID: me,
+            senderName: currentUserName,
+            recipientID: counterpart.id,
+            recipientName: counterpart.name,
+            text: trimmed,
+            sentAt: Date(),
+            isRead: true,            // my own message needs no unread state
+            pendingUpload: true      // cleared once it reaches the server
+        )
+        context.insert(message)
+        save()
+        guard !isPreview else { return }
+        Task { await upload(message) }
+    }
+
+    private func upload(_ message: Message) async {
+        let remoteID = await messagingService.send(
+            conversationID: message.conversationID,
+            senderID: message.senderID,
+            senderName: message.senderName,
+            recipientID: message.recipientID,
+            recipientName: message.recipientName,
+            text: message.text,
+            sentAt: message.sentAt
+        )
+        message.remoteID = remoteID
+        message.pendingUpload = remoteID == nil
+        save()
+    }
+
+    /// Mark everything received in a thread as read (called when the thread is opened).
+    func markThreadRead(with counterpartID: String) {
+        guard let me = currentUserID else { return }
+        let id = Message.conversationID(me, counterpartID)
+        var changed = false
+        for message in messages where message.conversationID == id
+            && message.recipientID == me && !message.isRead {
+            message.isRead = true
+            changed = true
+        }
+        if changed { save() }
+    }
+
+    /// Pull all messages involving this user and cache anything new.
+    func syncMessages() async {
+        guard !isPreview, let me = currentUserID else { return }
+        for message in messages where message.pendingUpload && message.remoteID == nil {
+            await upload(message)
+        }
+        let remote = await messagingService.fetchMessages(for: me)
+        merge(remote, me: me)
+    }
+
+    /// Refresh a single thread — cheaper than a full sync while a conversation is open.
+    func syncThread(with counterpartID: String) async {
+        guard !isPreview, let me = currentUserID else { return }
+        let remote = await messagingService.fetchThread(
+            conversationID: Message.conversationID(me, counterpartID)
+        )
+        merge(remote, me: me)
+    }
+
+    private func merge(_ remote: [RemoteMessage], me: String) {
+        guard !remote.isEmpty else { return }
+        let known = Set(messages.compactMap(\.remoteID))
+        var inserted = false
+        for entry in remote where !known.contains(entry.id) {
+            context.insert(Message(
+                remoteID: entry.id,
+                conversationID: entry.conversationID,
+                senderID: entry.senderID,
+                senderName: entry.senderName,
+                recipientID: entry.recipientID,
+                recipientName: entry.recipientName,
+                text: entry.text,
+                sentAt: entry.sentAt,
+                // Anything I sent is implicitly read; anything received starts unread.
+                isRead: entry.senderID == me
+            ))
+            inserted = true
+        }
+        if inserted { save() }
+    }
+
+    /// People this user can start a conversation with. A student writes to instructors they can
+    /// see; an instructor writes to students who have booked them.
+    func addressBook(asInstructor: Bool) -> [Counterpart] {
+        if asInstructor {
+            let students = incomingBookings.compactMap { booking -> Counterpart? in
+                guard let id = booking.studentID else { return nil }
+                return Counterpart(id: id, name: booking.studentName)
+            }
+            return dedupe(students)
+        }
+        // Instructors in the feed, plus any already booked — a student must still be able to reach
+        // an instructor who has since gone hidden (lapsed subscription).
+        let bookedIDs = Set(myBookings.compactMap(\.instructorOwnerID))
+        let reachable = instructors.filter { listing in
+            guard let id = listing.ownerID else { return false }
+            return bookedIDs.contains(id) || Self.isEligible(listing)
+        }
+        let listings = reachable.compactMap { listing -> Counterpart? in
+            guard let id = listing.ownerID else { return nil }
+            return Counterpart(id: id, name: listing.name, avatarID: listing.img)
+        }
+        return dedupe(listings)
+    }
+
+    private func dedupe(_ people: [Counterpart]) -> [Counterpart] {
+        var seen = Set<String>()
+        return people.filter { seen.insert($0.id).inserted }
     }
 
     // MARK: - Like / save toggles

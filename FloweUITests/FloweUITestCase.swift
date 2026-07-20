@@ -103,6 +103,17 @@ class FloweUITestCase: XCTestCase {
         return false
     }
 
+    /// Tap the first element carrying one of these labels, failing the test if none is present.
+    /// Prefer an accessibility identifier where one exists — a label inside a `Button` only
+    /// forwards its tap by hit-testing luck.
+    func tapText(_ candidates: [String], file: StaticString = #filePath, line: UInt = #line) {
+        guard let element = anyStaticText(candidates) else {
+            return XCTFail("None of \(candidates) found to tap", file: file, line: line)
+        }
+        _ = waitUntil({ element.isHittable })
+        element.tap()
+    }
+
     /// Poll a condition until it holds. SwiftUI applies state changes a frame or two after a tap,
     /// so reading `isEnabled` immediately after tapping is a race.
     @discardableResult

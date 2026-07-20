@@ -53,6 +53,7 @@ struct FlowApp: App {
                     }
                     guard session.authState != .unauthenticated else { return }
                     await data.syncBookings(asInstructor: isInstructor)
+                    await data.syncMessages()
                 }
                 // Reflect the instructor's subscription onto their feed listing.
                 .onChange(of: subscription.tier) {

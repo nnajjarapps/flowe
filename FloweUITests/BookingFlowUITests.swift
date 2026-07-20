@@ -13,15 +13,18 @@ final class BookingFlowUITests: FloweUITestCase {
         launch(as: .student, seeded: true)
         guard waitForAnyText(["GOOD MORNING"]) else { return "Discover never loaded" }
 
-        // Open the first instructor in the feed.
+        // Open the first instructor in the feed. Tapping the card by identifier rather than by a
+        // section header, which only opened the sheet by hit-testing luck.
+        let card = app.buttons["discover.instructorCard"].firstMatch
+        guard card.waitForExistence(timeout: timeout) else { return "No instructor card in the feed" }
+        _ = waitUntil({ card.isHittable })
+        card.tap()
+
         let bookCTA = app.buttons.matching(
             NSPredicate(format: "label BEGINSWITH 'Book a Session'")
         ).firstMatch
-        if !bookCTA.exists {
-            guard let card = anyStaticText(["FEATURED"]) else { return "No instructor card in the feed" }
-            card.tap()
-        }
         guard bookCTA.waitForExistence(timeout: timeout) else { return "'Book a Session' CTA never appeared" }
+        _ = waitUntil({ bookCTA.isHittable })
         bookCTA.tap()
 
         // Step 1 — pick the first bookable day, then continue. Unavailable days are disabled,
