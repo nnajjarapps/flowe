@@ -17,6 +17,7 @@ struct InstructorProfileView: View {
     @Environment(AppSettings.self) private var settings
 
     @State private var showSettings = false
+    @State private var showEditProfile = false
 
     /// The signed-in instructor's own (possibly-empty) listing.
     private var me: Instructor? { data.currentInstructor }
@@ -74,6 +75,7 @@ struct InstructorProfileView: View {
         }
         .background(Color.flowWhite.ignoresSafeArea())
         .sheet(isPresented: $showSettings) { InstructorSettingsView() }
+        .sheet(isPresented: $showEditProfile) { EditProfileView() }
     }
 
     // MARK: - Header
@@ -81,7 +83,21 @@ struct InstructorProfileView: View {
     private var header: some View {
         VStack(spacing: 14) {
             HStack(alignment: .top) {
+                Button {
+                    showEditProfile = true
+                } label: {
+                    Text("Edit Profile")
+                        .font(FloweFont.sans(13, .medium))
+                        .foregroundStyle(Color.flowePinkDeep)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 7)
+                        .background(Color.flowePink.opacity(0.10), in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("instructor.editProfile")
+
                 Spacer()
+
                 Button {
                     showSettings = true
                 } label: {
@@ -96,7 +112,7 @@ struct InstructorProfileView: View {
                 .accessibilityIdentifier("instructor.settings")
             }
 
-            AvatarView(id: me?.img ?? "", size: 88, ring: true)
+            EditableAvatarView(id: me?.img ?? "", photo: me?.photo, size: 88)
 
             VStack(spacing: 6) {
                 Text(displayName)
@@ -136,6 +152,8 @@ struct InstructorProfileView: View {
             if let specialties = me?.specialties, !specialties.isEmpty {
                 FlowChipRow(items: specialties)
             }
+
+            if !missingPieces.isEmpty { completenessCard }
         }
         .padding(.horizontal, 20)
         .padding(.top, 8)
@@ -143,6 +161,56 @@ struct InstructorProfileView: View {
         .overlay(alignment: .bottom) {
             Rectangle().fill(Color.floweBorder).frame(height: 1)
         }
+    }
+
+    // MARK: - Profile completeness
+
+    /// The listing fields a student actually judges an instructor on. A profile missing these gets
+    /// booked less, so the gaps are surfaced rather than left for the instructor to notice.
+    private var missingPieces: [String] {
+        guard let me else { return [] }
+        var missing: [String] = []
+        if me.photo == nil && me.img.isEmpty { missing.append("photo") }
+        if me.city.isEmpty { missing.append("city") }
+        if (me.bio ?? "").isEmpty { missing.append("bio") }
+        if me.cert.isEmpty { missing.append("certification") }
+        if me.specialties.isEmpty { missing.append("specialties") }
+        if me.price == 0 { missing.append("rate") }
+        return missing
+    }
+
+    private var completenessCard: some View {
+        Button {
+            showEditProfile = true
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 15))
+                    .foregroundStyle(Color.flowePinkDeep)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Finish your profile")
+                        .font(FloweFont.sans(13, .medium))
+                        .foregroundStyle(Color.floweInk)
+                    Text("Add your \(missingPieces.listed) so students can find you.")
+                        .font(FloweFont.sans(12))
+                        .foregroundStyle(Color.floweMuted)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 0)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color.floweMuted)
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .floweCard()
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("instructor.completeness")
     }
 
     // MARK: - Overview
@@ -192,7 +260,57 @@ struct InstructorProfileView: View {
                         .foregroundStyle(Color.floweMuted)
                 }
             }
+
+            rateCard
+
+            VStack(alignment: .leading, spacing: 10) {
+                SectionHeader(text: "CERTIFICATION")
+                if let cert = me?.cert, !cert.isEmpty {
+                    HStack(spacing: 8) {
+                        Image(systemName: "rosette")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Color.flowePinkDeep)
+                        Text(cert)
+                            .font(FloweFont.sans(14))
+                            .foregroundStyle(Color.floweInk)
+                    }
+                } else {
+                    Text("Add your certification in Edit Profile.")
+                        .font(FloweFont.sans(13))
+                        .foregroundStyle(Color.floweMuted)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 10) {
+                SectionHeader(text: "AVAILABILITY")
+                if let days = me?.available, !days.isEmpty {
+                    FlowChipRow(items: days)
+                } else {
+                    Text("Set the days you teach in Settings › Availability.")
+                        .font(FloweFont.sans(13))
+                        .foregroundStyle(Color.floweMuted)
+                }
+            }
         }
+    }
+
+    /// The headline number a student compares instructors on.
+    private var rateCard: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                SectionHeader(text: "RATE PER SESSION")
+                Text(me.map { $0.price > 0 ? settings.money($0.price) : "Not set" } ?? "Not set")
+                    .font(FloweFont.serif(22, .medium))
+                    .foregroundStyle(me?.price ?? 0 > 0 ? Color.floweInk : Color.floweMuted)
+            }
+            Spacer()
+            Image(systemName: "creditcard")
+                .font(.system(size: 20))
+                .foregroundStyle(Color.flowePinkSoft)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity)
+        .floweCard()
     }
 
     // MARK: - Analytics
@@ -240,6 +358,14 @@ struct InstructorProfileView: View {
             title: "No earnings yet",
             message: "Your monthly earnings and recent payouts will appear here after your first paid session."
         )
+    }
+}
+
+private extension Array where Element == String {
+    /// "photo, city and bio" — reads as a sentence in the completeness nudge.
+    var listed: String {
+        guard count > 1 else { return first ?? "" }
+        return dropLast().joined(separator: ", ") + " and " + (last ?? "")
     }
 }
 

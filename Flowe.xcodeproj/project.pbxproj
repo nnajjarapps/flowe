@@ -45,6 +45,7 @@
 		56077DC95736DA622C1DF012 /* Fraunces-LightItalic.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 143E9E63DDABC0E3547106A5 /* Fraunces-LightItalic.ttf */; };
 		59337B263035088E6520BD42 /* OnboardingFlowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92C935E2CA20B8E5750DEE0F /* OnboardingFlowView.swift */; };
 		5A2EE1DF006C8C9F6D546BEC /* EditProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6FD9EE5DA26FD915263821D /* EditProfileView.swift */; };
+		5C6FA6FABB0DE0ADDD4FEEAD /* DeleteAccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E09779C0DB32FD617F7DAC2 /* DeleteAccountView.swift */; };
 		5F5D5FC4AA54E7A2EA6D0819 /* Instructor.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA077844D989E093BABC8C4D /* Instructor.swift */; };
 		608B13B7ACC18F54705EFA14 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C9867A521AD55E8C878C940 /* KeychainStore.swift */; };
 		6E4EBF835A2231B680429E5E /* FeaturedHeroCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F5C862793134F2194515695 /* FeaturedHeroCard.swift */; };
@@ -52,6 +53,8 @@
 		73C750F9D9D807EAD4A2DD6F /* PrimaryButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = F31A42A348DDC6B4F180F617 /* PrimaryButton.swift */; };
 		73DF171F35C47E63F5526C7F /* Booking.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9B8DD81B48D4AD3BC2545FF /* Booking.swift */; };
 		784B74D6C2D1D88C929DF6C7 /* FlowGradients.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20A872F7B6C9D27EEC6EBBDD /* FlowGradients.swift */; };
+		78A8DB4E680912E9FC05F9E6 /* InstructorProfileEditingUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA6156CB4F1D101D5B8CD78B /* InstructorProfileEditingUITests.swift */; };
+		79C49C0A8E0FCDBF3F911413 /* AccountDeletionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 809064CB2D2B53C56BDBAFB0 /* AccountDeletionService.swift */; };
 		80100DE4455F8F8024B6B638 /* FloweUITestCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = E388152C9A9602205EA34963 /* FloweUITestCase.swift */; };
 		8B7232D19B5F6A1CE1E7F245 /* CalendarModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60B3922DB1CB825C3570DB99 /* CalendarModels.swift */; };
 		8CD6F7076188FCB80948E77E /* OnboardingUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23BC35F24816C68247C04B36 /* OnboardingUITests.swift */; };
@@ -63,6 +66,7 @@
 		986ABAA1BDFD64361E931FD2 /* InstructorRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6847444198EA74400DF94E05 /* InstructorRouter.swift */; };
 		9A44D9B9B707452DFE04029F /* QuickActionsGrid.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CE171D2ABA3957094B2DD59 /* QuickActionsGrid.swift */; };
 		A23AD802E43F2485CF6D38E3 /* UnsplashImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 077B3B4C3600ECE4CE0E1861 /* UnsplashImage.swift */; };
+		A25C3733272650C54089C8BE /* ProfileImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAD7A38FB22FCE268513F1B9 /* ProfileImage.swift */; };
 		A272AB954AC5935F65F0578E /* IconButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDB60A412E456123013E75E4 /* IconButton.swift */; };
 		A4FD8265A8D205270FAEDD66 /* SettingsAndPaywallUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F1129DAD3FC5185D2130BEF /* SettingsAndPaywallUITests.swift */; };
 		A6D68D101065C7820B5BB267 /* SubscriptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB5F301524BA50E4D3032BEA /* SubscriptionService.swift */; };
@@ -99,6 +103,7 @@
 		E95011B178469C57A021A6D9 /* MessageListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 594972ECDB3299BF98B27D86 /* MessageListView.swift */; };
 		E9524FB6F9B00D029F560401 /* BookingFlowUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75EABC10430200F40133C4BA /* BookingFlowUITests.swift */; };
 		E9550CCFABED3F34246C166E /* View+Flowe.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47F8623B33C1E3994C637742 /* View+Flowe.swift */; };
+		EF02E1D3FD1998804128264B /* AccountDeletionUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D9DC7CE9663E57AFACB3D10 /* AccountDeletionUITests.swift */; };
 		F1E76AE529DDF67C03BE46E3 /* Fraunces-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A6408CF78769237EA0E93AC0 /* Fraunces-Medium.ttf */; };
 		F360CCFF8BACA3777ED050BB /* Color+Flowe.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBBF0D4617C61C89A66EFC81 /* Color+Flowe.swift */; };
 		F582316F6833E1BD8CCF771E /* InstructorCalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D02BBF683FC16C7795428F78 /* InstructorCalendarView.swift */; };
@@ -160,6 +165,7 @@
 		6847444198EA74400DF94E05 /* InstructorRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstructorRouter.swift; sourceTree = "<group>"; };
 		6BB80E8BFD8BD9DBD361FB44 /* FlowColor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowColor.swift; sourceTree = "<group>"; };
 		6D8AAB7DA8B7C8BE80DFEEC5 /* InstructorSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstructorSettingsView.swift; sourceTree = "<group>"; };
+		6E09779C0DB32FD617F7DAC2 /* DeleteAccountView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeleteAccountView.swift; sourceTree = "<group>"; };
 		6E73535B1CD21C5BF1DB3585 /* BookingCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookingCard.swift; sourceTree = "<group>"; };
 		6EED8908487E5CCD626B5506 /* WeeklyBarChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeeklyBarChart.swift; sourceTree = "<group>"; };
 		72C3E59E33D98698F840ADCF /* FloweModelContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloweModelContainer.swift; sourceTree = "<group>"; };
@@ -172,6 +178,7 @@
 		7C215EA6CA9B6C406E13E338 /* DMSans-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "DMSans-Regular.ttf"; sourceTree = "<group>"; };
 		7F25A7337CFD62358334F757 /* User.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = User.swift; sourceTree = "<group>"; };
 		7F5C862793134F2194515695 /* FeaturedHeroCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeaturedHeroCard.swift; sourceTree = "<group>"; };
+		809064CB2D2B53C56BDBAFB0 /* AccountDeletionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountDeletionService.swift; sourceTree = "<group>"; };
 		8834262674B21339DCB9CC33 /* FlowApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowApp.swift; sourceTree = "<group>"; };
 		8AD8385BD6E748B58CBA04BD /* Flowe.storekit */ = {isa = PBXFileReference; path = Flowe.storekit; sourceTree = "<group>"; };
 		8D324CCEA79663B5D1A47DE4 /* FilterChipsBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilterChipsBar.swift; sourceTree = "<group>"; };
@@ -179,6 +186,7 @@
 		91D1DD42C0E5A323D1D28FEB /* DisciplineTag.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisciplineTag.swift; sourceTree = "<group>"; };
 		92C935E2CA20B8E5750DEE0F /* OnboardingFlowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingFlowView.swift; sourceTree = "<group>"; };
 		9AC3550079CA887E6CF28838 /* Fraunces-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Fraunces-Regular.ttf"; sourceTree = "<group>"; };
+		9D9DC7CE9663E57AFACB3D10 /* AccountDeletionUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountDeletionUITests.swift; sourceTree = "<group>"; };
 		9DBB3E399C8BF1C8511DF1B7 /* MessagingUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessagingUITests.swift; sourceTree = "<group>"; };
 		9F1129DAD3FC5185D2130BEF /* SettingsAndPaywallUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsAndPaywallUITests.swift; sourceTree = "<group>"; };
 		A15B6F9D171C9756B65D7423 /* InstructorTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstructorTabView.swift; sourceTree = "<group>"; };
@@ -192,6 +200,7 @@
 		B264A9BA6AB860A28BAC86B9 /* RemoteImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteImage.swift; sourceTree = "<group>"; };
 		B36038D7F8CF809375873BCC /* InstructorTabsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstructorTabsUITests.swift; sourceTree = "<group>"; };
 		B5A1882EB901E61B7AF2A487 /* FloatingLabelField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingLabelField.swift; sourceTree = "<group>"; };
+		BAD7A38FB22FCE268513F1B9 /* ProfileImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileImage.swift; sourceTree = "<group>"; };
 		BB5F301524BA50E4D3032BEA /* SubscriptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionService.swift; sourceTree = "<group>"; };
 		BCEE457F802C00210A9FFFF9 /* FloweUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = FloweUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C0F3A0FB151C0F688534ACEF /* EmptyStateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyStateView.swift; sourceTree = "<group>"; };
@@ -212,6 +221,7 @@
 		E388152C9A9602205EA34963 /* FloweUITestCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloweUITestCase.swift; sourceTree = "<group>"; };
 		E44A0A10890CCFF23B150A04 /* StudentTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudentTabView.swift; sourceTree = "<group>"; };
 		E7BA85F0573AA35B279EAE3F /* Fraunces-Light.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Fraunces-Light.ttf"; sourceTree = "<group>"; };
+		EA6156CB4F1D101D5B8CD78B /* InstructorProfileEditingUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstructorProfileEditingUITests.swift; sourceTree = "<group>"; };
 		EB36077D528099D817B27E2B /* Message.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Message.swift; sourceTree = "<group>"; };
 		EBBF0D4617C61C89A66EFC81 /* Color+Flowe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Color+Flowe.swift"; sourceTree = "<group>"; };
 		ED2BC5AAEAE57BD8B4B05646 /* 0AD9894E-764F-47AF-AC95-56485A70A3C4.PNG */ = {isa = PBXFileReference; path = "0AD9894E-764F-47AF-AC95-56485A70A3C4.PNG"; sourceTree = "<group>"; };
@@ -272,6 +282,7 @@
 		3CDA4AFAE6092BB3F7773A35 /* Data */ = {
 			isa = PBXGroup;
 			children = (
+				809064CB2D2B53C56BDBAFB0 /* AccountDeletionService.swift */,
 				F71DDCF02E488698B7C62351 /* AppSettings.swift */,
 				76B4EA7D7447F4834D4A1344 /* BookingService.swift */,
 				10A50AB15C47E4490CEB456C /* CatalogService.swift */,
@@ -347,6 +358,7 @@
 		4FA4BB420C875E3C7671DE1A /* Settings */ = {
 			isa = PBXGroup;
 			children = (
+				6E09779C0DB32FD617F7DAC2 /* DeleteAccountView.swift */,
 				FB385017BADE1E22104629B2 /* NotificationSettingsView.swift */,
 				15B1DE12827C5A88561BD697 /* SettingsView.swift */,
 			);
@@ -444,6 +456,7 @@
 			children = (
 				EBBF0D4617C61C89A66EFC81 /* Color+Flowe.swift */,
 				34F13E4C3B93F2B1A8D4706A /* Date+Flowe.swift */,
+				BAD7A38FB22FCE268513F1B9 /* ProfileImage.swift */,
 				077B3B4C3600ECE4CE0E1861 /* UnsplashImage.swift */,
 				47F8623B33C1E3994C637742 /* View+Flowe.swift */,
 			);
@@ -513,8 +526,10 @@
 		C6C9E38383509E8DBB1D35B0 /* FloweUITests */ = {
 			isa = PBXGroup;
 			children = (
+				9D9DC7CE9663E57AFACB3D10 /* AccountDeletionUITests.swift */,
 				75EABC10430200F40133C4BA /* BookingFlowUITests.swift */,
 				E388152C9A9602205EA34963 /* FloweUITestCase.swift */,
+				EA6156CB4F1D101D5B8CD78B /* InstructorProfileEditingUITests.swift */,
 				B36038D7F8CF809375873BCC /* InstructorTabsUITests.swift */,
 				9DBB3E399C8BF1C8511DF1B7 /* MessagingUITests.swift */,
 				23BC35F24816C68247C04B36 /* OnboardingUITests.swift */,
@@ -691,8 +706,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				EF02E1D3FD1998804128264B /* AccountDeletionUITests.swift in Sources */,
 				E9524FB6F9B00D029F560401 /* BookingFlowUITests.swift in Sources */,
 				80100DE4455F8F8024B6B638 /* FloweUITestCase.swift in Sources */,
+				78A8DB4E680912E9FC05F9E6 /* InstructorProfileEditingUITests.swift in Sources */,
 				AB05550DCEF4EEF50E9E57E9 /* InstructorTabsUITests.swift in Sources */,
 				0DE9C9395490F9BEF5BE04C2 /* MessagingUITests.swift in Sources */,
 				8CD6F7076188FCB80948E77E /* OnboardingUITests.swift in Sources */,
@@ -705,6 +722,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				79C49C0A8E0FCDBF3F911413 /* AccountDeletionService.swift in Sources */,
 				5120BF42BF3F17FB47029FE0 /* AppRouter.swift in Sources */,
 				94FA958AC3A40CC2D5011435 /* AppSession.swift in Sources */,
 				21F6073EC1671FA50A254C10 /* AppSettings.swift in Sources */,
@@ -723,6 +741,7 @@
 				45DB3B4C623193D3DCE3E722 /* ConversationView.swift in Sources */,
 				3EDD960F8F65E3919A6AD717 /* CreateAccountView.swift in Sources */,
 				BD00F0125CDD9AEFD8EB42C6 /* Date+Flowe.swift in Sources */,
+				5C6FA6FABB0DE0ADDD4FEEAD /* DeleteAccountView.swift in Sources */,
 				E926C630D96C838A67495894 /* DisciplineTag.swift in Sources */,
 				D9BB2A3E7220EBE6FC21C87D /* DiscoverView.swift in Sources */,
 				5A2EE1DF006C8C9F6D546BEC /* EditProfileView.swift in Sources */,
@@ -763,6 +782,7 @@
 				14250FA88FC8450E613B0377 /* PaywallView.swift in Sources */,
 				BA845ED7BB33CB99331BC16A /* PostRowView.swift in Sources */,
 				73C750F9D9D807EAD4A2DD6F /* PrimaryButton.swift in Sources */,
+				A25C3733272650C54089C8BE /* ProfileImage.swift in Sources */,
 				3569E85932969520E8E9FC32 /* ProfileView.swift in Sources */,
 				9A44D9B9B707452DFE04029F /* QuickActionsGrid.swift in Sources */,
 				B99AFAFB4749D0B2361C2BEE /* RemoteImage.swift in Sources */,

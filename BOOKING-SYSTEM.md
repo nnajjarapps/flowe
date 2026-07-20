@@ -153,3 +153,64 @@ return nothing if the indexes are missing.
 - **Public-DB readability.** Message bodies are readable by any authenticated app user. This is the
   most sensitive data in the app and is the strongest reason to move to a server-side API before
   going beyond a pilot.
+
+---
+
+# Account deletion
+
+App Store Review Guideline 5.1.1(v) requires an in-app way to delete the account. `DeleteAccountView`
+(reachable from Settings for both roles) drives `MockDataStore.deleteAccount()`, which sweeps the
+public database via `AccountDeletionService`, wipes the local SwiftData store, and signs out.
+
+## What gets swept
+
+Only `_creator`-owned records can go — the public database grants write to whoever created a record.
+
+| Record | Found by |
+|---|---|
+| `ChatMessage` | `senderID == ownerID` |
+| `SessionBooking` | `studentID == ownerID` |
+| `SessionDecision` | `decision-<bookingID>` for every booking where `instructorID == ownerID` |
+| `InstructorListing` | `recordName == ownerID` (carries the profile photo as a `CKAsset`) |
+
+`SessionDecision` carries no instructor id, so it can't be queried directly; its recordName is
+derived from the booking it answers, which is why the sweep goes through the instructor's incoming
+bookings. Decisions never written simply don't exist, and a missing record (`unknownItem`) counts as
+success — the goal state is "gone".
+
+The id sweep follows query cursors rather than trusting one page, so an account past the 400-record
+page limit is still fully erased.
+
+**Messages the other party sent are not deleted.** They are owned by their sender and the public
+database won't let anyone else remove them. The departing user's own text is gone; the counterpart's
+remains on their side.
+
+## Failure is not partial
+
+If any query or delete fails (offline, signed out of iCloud), `deleteAccount()` returns false and
+wipes **nothing** locally — the user keeps their account and can retry. Signing someone out while
+their records stay world-readable is precisely what 5.1.1(v) exists to prevent.
+
+## Sign in with Apple
+
+Token revocation is deliberately not attempted. The REST revoke endpoint needs a client-secret JWT
+that cannot ship in a binary, and Flowe never retains the `authorizationCode` required to obtain a
+refresh token — `AppSession.setAppleUserID` keeps only the stable user identifier.
+
+Apple's [TN3194][tn3194] documents this exact case: delete the user's data, then direct them to
+revoke the credential themselves. `DeleteAccountView`'s footer tells the user to open
+Settings › their name › Sign in with Apple › Flowe › *Stop Using Apple ID*, which Apple states is
+functionally equivalent to the revoke call. No backend is required.
+
+If a backend ever exists, capture the `authorizationCode` at sign-in, exchange it for a refresh
+token server-side, and revoke properly — that removes the manual step.
+
+[tn3194]: https://developer.apple.com/documentation/technotes/tn3194-handling-account-deletions-and-revoking-tokens-for-sign-in-with-apple
+
+## Known limitations
+
+- **No automated coverage of the remote sweep.** `AccountDeletionUITests` runs offline like every
+  other UI test, so it exercises the local wipe and the sign-out but never `AccountDeletionService`.
+  Verifying the CloudKit sweep needs a real iCloud account.
+- **Community posts are local-only** and so are covered by the local wipe. When feed bodies move to
+  the public database they must be added to the sweep.

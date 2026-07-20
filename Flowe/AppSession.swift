@@ -104,6 +104,15 @@ final class AppSession {
         KeychainStore.set(nil, for: appleUserKey)
     }
 
+    /// Forget the credential after the account's data has been erased (see `DeleteAccountView`).
+    ///
+    /// Identical to `logout()` today because logout already discards the stored identity. It stays a
+    /// separate entry point so deletion can never quietly degrade into a plain sign-out should
+    /// `logout()` ever gain session-preserving behaviour.
+    func deleteAccount() {
+        logout()
+    }
+
     private func persist(role: UserRole) {
         UserDefaults.standard.set(role.rawValue, forKey: roleKey)
         UserDefaults.standard.set(true, forKey: loggedInKey)

@@ -23,7 +23,11 @@ final class Instructor {
     var specialties: [String] = []
     var sessionTypes: [String] = []
     var cert: String = ""
-    var img: String = ""            // Unsplash photo id
+    var img: String = ""            // Unsplash photo id — seeded reference listings only
+    /// Uploaded profile photo, already downscaled by `ProfileImage.prepare`. Published to the public
+    /// catalog as a `CKAsset`; `img` stays the fallback for seeded listings that have no upload.
+    /// External storage keeps the blob out of the SQLite row.
+    @Attribute(.externalStorage) var photo: Data?
     var available: [String] = []
     var bio: String?
     var order: Int = 0              // stable display order

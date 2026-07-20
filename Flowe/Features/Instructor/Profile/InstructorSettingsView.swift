@@ -15,6 +15,7 @@ struct InstructorSettingsView: View {
     @State private var showNotifications = false
     @State private var showManageSubscriptions = false
     @State private var confirmLogout = false
+    @State private var showDeleteAccount = false
 
     private var planLabel: String {
         switch subscription.tier {
@@ -108,6 +109,13 @@ struct InstructorSettingsView: View {
                     } label: {
                         Text("Log Out").frame(maxWidth: .infinity, alignment: .leading)
                     }
+
+                    Button(role: .destructive) {
+                        showDeleteAccount = true
+                    } label: {
+                        Text("Delete Account").frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .accessibilityIdentifier("account.delete")
                 } footer: {
                     if let email = session.currentUser?.email, !email.isEmpty {
                         Text("Signed in as \(email)")
@@ -128,6 +136,7 @@ struct InstructorSettingsView: View {
             .sheet(isPresented: $showAvailability) { AvailabilityView() }
             .sheet(isPresented: $showPaywall) { PaywallView() }
             .sheet(isPresented: $showNotifications) { NotificationSettingsView() }
+            .sheet(isPresented: $showDeleteAccount) { DeleteAccountView() }
             .manageSubscriptionsSheet(isPresented: $showManageSubscriptions)
             .confirmationDialog("Log out of Flowe?", isPresented: $confirmLogout, titleVisibility: .visible) {
                 Button("Log Out", role: .destructive) {

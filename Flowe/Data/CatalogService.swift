@@ -17,6 +17,8 @@ struct CatalogListing {
     let cert: String
     let visibility: Int
     let updatedAt: Date
+    /// Uploaded profile photo, if the instructor set one.
+    let photo: Data?
 
     init?(record: CKRecord) {
         guard let name = record["name"] as? String else { return nil }
@@ -34,6 +36,8 @@ struct CatalogListing {
         cert = record["cert"] as? String ?? ""
         visibility = record["visibility"] as? Int ?? 0
         updatedAt = record["updatedAt"] as? Date ?? .distantPast
+        // CloudKit stages an asset as a local file; read it now, before the temp copy is reclaimed.
+        photo = (record["photo"] as? CKAsset)?.fileURL.flatMap { try? Data(contentsOf: $0) }
     }
 }
 
@@ -69,6 +73,11 @@ final class CatalogService {
         record["visibility"] = instructor.visibilityRaw
         record["updatedAt"] = Date()
 
+        // A CKAsset is uploaded from a file, so the photo has to be staged on disk for the save.
+        let staged = instructor.photo.flatMap(Self.stageAsset)
+        record["photo"] = staged.map { CKAsset(fileURL: $0) }
+        defer { staged.map { try? FileManager.default.removeItem(at: $0) } }
+
         do {
             _ = try await database.save(record)
         } catch let error as CKError where error.code == .serverRecordChanged {
@@ -77,6 +86,9 @@ final class CatalogService {
                 server["visibility"] = instructor.visibilityRaw
                 server["price"] = instructor.price
                 server["updatedAt"] = Date()
+                // The staged file outlives this block (`defer` fires on return), so the retry can
+                // reuse it — otherwise a conflicting save would silently drop the new photo.
+                server["photo"] = staged.map { CKAsset(fileURL: $0) }
                 _ = try? await database.save(server)
             }
         } catch {
@@ -100,6 +112,21 @@ final class CatalogService {
         return []
         #endif
     }
+
+    #if CLOUDKIT_ENABLED
+    /// Write photo bytes to a temp file so `CKAsset` can upload them. Returns nil if the write
+    /// fails, which simply means this save carries no photo rather than failing outright.
+    private static func stageAsset(_ data: Data) -> URL? {
+        let url = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("listing-photo-\(UUID().uuidString).jpg")
+        do {
+            try data.write(to: url)
+            return url
+        } catch {
+            return nil
+        }
+    }
+    #endif
 
     /// Remove the instructor's listing (e.g. account deletion).
     func remove(ownerID: String) async {

@@ -8,6 +8,7 @@ struct SettingsView: View {
     @Environment(AppSession.self) private var session
 
     @State private var showNotifications = false
+    @State private var showDeleteAccount = false
 
     var body: some View {
         @Bindable var settings = settings
@@ -52,6 +53,13 @@ struct SettingsView: View {
                     } label: {
                         Text("Log out")
                     }
+
+                    Button(role: .destructive) {
+                        showDeleteAccount = true
+                    } label: {
+                        Text("Delete Account")
+                    }
+                    .accessibilityIdentifier("account.delete")
                 }
             }
             .tint(Color.flowePinkDeep)
@@ -65,6 +73,7 @@ struct SettingsView: View {
                 }
             }
             .sheet(isPresented: $showNotifications) { NotificationSettingsView() }
+            .sheet(isPresented: $showDeleteAccount) { DeleteAccountView() }
         }
     }
 }

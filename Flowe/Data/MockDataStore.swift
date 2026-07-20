@@ -19,6 +19,7 @@ final class MockDataStore {
     private let catalog = CatalogService()
     private let bookingService = BookingService()
     private let messagingService = MessagingService()
+    private let deletionService = AccountDeletionService()
     /// Suppresses public-catalog network calls (previews + UI tests).
     private let isPreview: Bool
 
@@ -454,6 +455,25 @@ final class MockDataStore {
         return people.filter { seen.insert($0.id).inserted }
     }
 
+    // MARK: - Account deletion
+
+    /// Erase this account: every record the user created in the shared store, then the local cache.
+    ///
+    /// Returns false if the shared store could not be cleared (offline, signed out of iCloud), and
+    /// in that case wipes nothing locally either. Keeping the account intact so the user can retry
+    /// is far better than signing them out while their records stay world-readable — a half-deleted
+    /// account is exactly what Guideline 5.1.1(v) is meant to prevent.
+    func deleteAccount() async -> Bool {
+        if !isPreview, let me = currentUserID {
+            guard await deletionService.deleteAllRecords(ownerID: me) else { return false }
+        }
+        Self.deleteAll(context)
+        currentUserID = nil
+        currentUserName = ""
+        refresh()
+        return true
+    }
+
     // MARK: - Like / save toggles
 
     func toggleLike(_ post: FeedPost) {
@@ -523,6 +543,10 @@ final class MockDataStore {
         ins.rating = l.rating; ins.reviews = l.reviews; ins.img = l.img; ins.cert = l.cert
         ins.visibilityRaw = l.visibility
         ins.visibilityVerifiedAt = Date()
+        // Only overwrite the cached photo when the server actually has one. A nil here usually means
+        // "this listing has no upload", but for my own listing it can also mean my photo hasn't
+        // reached the server yet — and clobbering it would lose the picture the user just chose.
+        if let photo = l.photo { ins.photo = photo }
     }
 
     /// The signed-in instructor's own listing (resolved by owner), if it exists.

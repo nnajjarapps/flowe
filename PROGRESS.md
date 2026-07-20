@@ -97,6 +97,11 @@ Flowe's first profit model. See `FLOWE-IAP-PLAN.md`.
       ⚠️ You must, in the **CloudKit Dashboard**: add the `InstructorListing` record type, make
       `visibility`/`updatedAt` **queryable** + `visibility` **sortable**, set security = `_world` read /
       `_creator` write, then **Deploy schema to Production**.
+      ⚠️ Also add the `photo` field (type **Asset**, no index) for uploaded profile photos.
+- [x] **Full listing editor**: photo (PhotosPicker → downscaled JPEG → `CKAsset`), name, city, bio,
+      rate, years of experience, certification (self-declared text, labelled unverified), specialties
+      and session types. Profile surfaces a "Finish your profile" nudge listing what's still blank.
+      Covered by `InstructorProfileEditingUITests` (12 tests).
 - [ ] **Phase C — App Store Connect**: create the subscription group + products/prices/trial, banking/tax,
       sandbox tester, CloudKit public-DB security roles (user-side)
 
