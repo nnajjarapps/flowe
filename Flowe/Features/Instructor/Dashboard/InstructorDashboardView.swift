@@ -24,10 +24,15 @@ struct InstructorDashboardView: View {
         data.incomingBookings.filter { $0.status == .pending }
     }
 
+    /// Instructor's first name, preferring the listing (which they can edit) and falling back to the
+    /// signed-in account, then a neutral label if neither is set yet. Guards against empty strings —
+    /// a blank listing name would otherwise slip past a plain `??`.
     private var instructorName: String {
-        data.currentInstructor?.firstName
-            ?? session.currentUser?.fullName.split(separator: " ").first.map(String.init)
-            ?? "there"
+        let listingName = data.currentInstructor?.firstName ?? ""
+        if !listingName.isEmpty { return listingName }
+        let accountFirst = session.currentUser?.fullName
+            .split(separator: " ").first.map(String.init) ?? ""
+        return accountFirst.isEmpty ? "there" : accountFirst
     }
 
     /// This week's earnings from accepted sessions, priced at the instructor's rate.
@@ -132,14 +137,14 @@ struct InstructorDashboardView: View {
     private var header: some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: FlowSpacing.xs) {
-                Text("GOOD MORNING")
+                Text(greeting.uppercased())
                     .font(FloweFont.mono(11))
                     .foregroundStyle(Color.floweMuted)
 
                 (
-                    Text("Your ")
+                    Text("Hi ")
                         .font(FloweFont.serif(30, .light))
-                    + Text("studio.")
+                    + Text("\(instructorName).")
                         .font(FloweFont.serif(30, .regular, italic: true))
                 )
                 .foregroundStyle(Color.floweInk)
@@ -148,6 +153,15 @@ struct InstructorDashboardView: View {
             Spacer()
 
             AvatarView(id: data.currentInstructor?.img ?? "", photo: data.currentInstructor?.photo, size: 46, ring: true)
+        }
+    }
+
+    /// Time-of-day greeting, so the dashboard reads like it was opened just now.
+    private var greeting: String {
+        switch Calendar.current.component(.hour, from: Date()) {
+        case 5..<12:  return "Good morning"
+        case 12..<17: return "Good afternoon"
+        default:      return "Good evening"
         }
     }
 
