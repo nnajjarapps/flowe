@@ -103,16 +103,33 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
 
+  FloweUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: FloweUITests
+    dependencies:
+      - target: Flowe
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.flowepilates.app.uitests
+        TEST_TARGET_NAME: Flowe
+        GENERATE_INFOPLIST_FILE: YES
+
 schemes:
   Flowe:
     build:
       targets:
         Flowe: all
+        FloweUITests: [test]
     run:
       config: Debug
       storeKitConfiguration: Flowe/Flowe.storekit
     test:
       config: Debug
+      targets:
+        - FloweUITests
     profile:
       config: Release
     analyze:

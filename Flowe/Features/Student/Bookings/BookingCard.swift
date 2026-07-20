@@ -8,6 +8,7 @@ struct BookingCard: View {
     let booking: Booking
 
     @State private var bookAgainInstructor: Instructor?
+    @State private var confirmingCancel = false
 
     private var instructor: Instructor? { data.instructor(id: booking.instructorId) }
 
@@ -19,6 +20,13 @@ struct BookingCard: View {
         .floweCard()
         .sheet(item: $bookAgainInstructor) { ins in
             BookingSheet(instructor: ins) { bookAgainInstructor = nil }
+        }
+        .confirmationDialog("Cancel this session?",
+                            isPresented: $confirmingCancel, titleVisibility: .visible) {
+            Button("Cancel session", role: .destructive) { data.cancel(booking) }
+            Button("Keep it", role: .cancel) { }
+        } message: {
+            Text("Your instructor will be notified that you can no longer make it.")
         }
     }
 
@@ -68,8 +76,13 @@ struct BookingCard: View {
     private var bodyRow: some View {
         HStack {
             HStack(spacing: 12) {
-                metaLabel(icon: "calendar", text: booking.date)
-                metaLabel(icon: "clock", text: booking.time)
+                if booking.pendingUpload {
+                    // Honest about delivery: the request hasn't reached the instructor yet.
+                    metaLabel(icon: "arrow.clockwise", text: "Not sent yet")
+                } else {
+                    metaLabel(icon: "calendar", text: booking.date)
+                    metaLabel(icon: "clock", text: booking.time)
+                }
             }
 
             Spacer(minLength: 8)
@@ -82,13 +95,15 @@ struct BookingCard: View {
                         .font(FloweFont.sans(11))
                         .foregroundStyle(Color.flowePinkDeep)
                 }
-            } else {
+            } else if booking.status != .cancelled {
                 Button {
+                    confirmingCancel = true
                 } label: {
                     Text("Cancel")
                         .font(FloweFont.sans(11))
                         .foregroundStyle(Color.floweMuted)
                 }
+                .accessibilityIdentifier("booking.cancel")
             }
         }
         .padding(.horizontal, 16)

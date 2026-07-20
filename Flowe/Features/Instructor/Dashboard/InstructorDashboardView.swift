@@ -13,10 +13,15 @@ struct InstructorDashboardView: View {
     @State private var showEditProfile = false
     @State private var showPaywall = false
 
-    /// Real bookings for the signed-in instructor's own listing. Empty until students book.
+    /// Sessions students have booked with this instructor, newest first. Declined and cancelled
+    /// requests drop off the schedule.
     private var todaysSessions: [Booking] {
-        guard let id = data.currentInstructor?.legacyId else { return [] }
-        return data.bookings.filter { $0.instructorId == id }
+        data.incomingBookings.filter { $0.status != .cancelled }
+    }
+
+    /// Requests still awaiting an accept/decline.
+    private var pendingRequests: [Booking] {
+        data.incomingBookings.filter { $0.status == .pending }
     }
 
     private var instructorName: String {
@@ -25,10 +30,11 @@ struct InstructorDashboardView: View {
             ?? "there"
     }
 
-    /// This week's earnings from real sessions, priced at the instructor's rate.
+    /// This week's earnings from accepted sessions, priced at the instructor's rate.
+    /// Payment is collected directly from the student, so this is a projection, not a balance.
     private var weekEarnings: Int {
         let price = data.currentInstructor?.price ?? 0
-        return todaysSessions.count * price
+        return data.incomingBookings.filter { $0.status == .confirmed }.count * price
     }
 
     private var ratingDisplay: String {
@@ -44,6 +50,15 @@ struct InstructorDashboardView: View {
 
                 if !subscription.isVisible {
                     visibilityBanner
+                }
+
+                if !pendingRequests.isEmpty {
+                    VStack(alignment: .leading, spacing: FlowSpacing.md) {
+                        SectionHeader(text: "REQUESTS")
+                        ForEach(pendingRequests) { booking in
+                            BookingRequestCard(request: booking)
+                        }
+                    }
                 }
 
                 VStack(alignment: .leading, spacing: FlowSpacing.md) {
@@ -71,6 +86,7 @@ struct InstructorDashboardView: View {
             .padding(.bottom, FlowSpacing.xxxl)
         }
         .background(Color.flowWhite.ignoresSafeArea())
+        .refreshable { await data.syncBookings(asInstructor: true) }
         .sheet(isPresented: $showAvailability) { AvailabilityView() }
         .sheet(isPresented: $showEditProfile) { EditProfileView() }
         .sheet(isPresented: $showPaywall) { PaywallView() }

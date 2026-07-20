@@ -31,7 +31,7 @@ struct ProfileView: View {
 
     /// Distinct instructors this user has booked with.
     private var distinctInstructorCount: Int {
-        Set(data.bookings.map(\.instructorId)).count
+        Set(data.myBookings.map(\.instructorId)).count
     }
 
     /// Progress tiles computed entirely from real bookings.
@@ -50,7 +50,7 @@ struct ProfileView: View {
             ("Fri", "F"), ("Sat", "S"), ("Sun", "S"),
         ]
         return weekdays.map { day in
-            let minutes = data.bookings
+            let minutes = data.myBookings
                 .filter { $0.date.hasPrefix(day.prefix) }
                 .reduce(0) { $0 + (Int($1.duration.filter(\.isNumber)) ?? 0) }
             return WeeklyBar(day: day.letter, minutes: minutes)
@@ -68,7 +68,7 @@ struct ProfileView: View {
                     SectionHeader(text: "YOUR PROGRESS")
                         .padding(.bottom, 12)
 
-                    if data.bookings.isEmpty {
+                    if data.myBookings.isEmpty {
                         EmptyStateView(
                             icon: "sparkles",
                             title: "No sessions yet",
@@ -135,6 +135,7 @@ struct ProfileView: View {
                     .overlay(Circle().stroke(Color.floweBorder, lineWidth: 1))
                     .clipShape(Circle())
             }
+            .accessibilityIdentifier("student.settings")
         }
         .padding(.horizontal, 20)
         .padding(.top, 16)

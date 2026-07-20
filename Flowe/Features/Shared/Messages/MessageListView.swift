@@ -94,6 +94,7 @@ struct MessageListView: View {
                     .clipShape(Circle())
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier("messages.compose")
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)

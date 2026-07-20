@@ -7,16 +7,24 @@ struct InstructorCalendarView: View {
     @Environment(MockDataStore.self) private var data
 
     @State private var selectedDay = 0
-    // No real booking requests yet — students' requests will populate this.
-    @State private var requests: [BookingRequest] = []
 
-    private var daySessions: [CalendarSession] {
-        CalendarSession.sessions(on: selectedDay)
+    /// Accepted sessions on the selected weekday. `Booking.date` reads "Thu, Jul 24", so the
+    /// weekday prefix is what matches it to a strip day.
+    private var daySessions: [Booking] {
+        sessions(on: selectedDay).filter { $0.status != .pending && $0.status != .cancelled }
     }
 
-    private var pendingCount: Int {
-        requests.filter { $0.state == .pending }.count
+    private func sessions(on dayIndex: Int) -> [Booking] {
+        guard let weekday = WeekDay.all.first(where: { $0.id == dayIndex })?.weekday else { return [] }
+        return data.incomingBookings.filter { $0.date.hasPrefix(weekday) }
     }
+
+    /// Requests still awaiting a decision, across the whole week.
+    private var requests: [Booking] {
+        data.incomingBookings.filter { $0.status == .pending }
+    }
+
+    private var pendingCount: Int { requests.count }
 
     var body: some View {
         ScrollView {
@@ -31,6 +39,7 @@ struct InstructorCalendarView: View {
             .padding(.bottom, FlowSpacing.xxxl)
         }
         .background(Color.flowWhite.ignoresSafeArea())
+        .refreshable { await data.syncBookings(asInstructor: true) }
     }
 
     // MARK: Header
@@ -66,7 +75,7 @@ struct InstructorCalendarView: View {
                     WeekDayPill(
                         day: day,
                         isSelected: day.id == selectedDay,
-                        hasSessions: !CalendarSession.sessions(on: day.id).isEmpty
+                        hasSessions: !sessions(on: day.id).isEmpty
                     ) {
                         withAnimation(.easeInOut(duration: 0.18)) { selectedDay = day.id }
                     }
@@ -127,8 +136,8 @@ struct InstructorCalendarView: View {
                     message: "New requests from students will appear here."
                 )
             } else {
-                ForEach($requests) { $request in
-                    BookingRequestCard(request: $request)
+                ForEach(requests) { request in
+                    BookingRequestCard(request: request)
                 }
             }
         }

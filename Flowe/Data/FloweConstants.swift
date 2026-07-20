@@ -9,7 +9,6 @@ enum FloweConstants {
 
     static let discoverCategories = ["All", "Mat", "Reformer", "Barre", "Tower", "Prenatal", "Rehab"]
 
-    static let serviceFee = 9
 }
 
 /// Small profile-screen models (Figma inlines these).

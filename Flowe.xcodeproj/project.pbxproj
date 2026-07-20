@@ -51,16 +51,21 @@
 		73C750F9D9D807EAD4A2DD6F /* PrimaryButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = F31A42A348DDC6B4F180F617 /* PrimaryButton.swift */; };
 		73DF171F35C47E63F5526C7F /* Booking.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9B8DD81B48D4AD3BC2545FF /* Booking.swift */; };
 		784B74D6C2D1D88C929DF6C7 /* FlowGradients.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20A872F7B6C9D27EEC6EBBDD /* FlowGradients.swift */; };
+		80100DE4455F8F8024B6B638 /* FloweUITestCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = E388152C9A9602205EA34963 /* FloweUITestCase.swift */; };
 		8B7232D19B5F6A1CE1E7F245 /* CalendarModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60B3922DB1CB825C3570DB99 /* CalendarModels.swift */; };
+		8CD6F7076188FCB80948E77E /* OnboardingUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23BC35F24816C68247C04B36 /* OnboardingUITests.swift */; };
 		8F005CECFE7C6E453C28CD31 /* NotificationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB385017BADE1E22104629B2 /* NotificationSettingsView.swift */; };
+		9088BE8675CAE227464F994B /* StudentTabsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DBB42D00526892D939DC9F1 /* StudentTabsUITests.swift */; };
 		94FA958AC3A40CC2D5011435 /* AppSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = D095FAA6B074F1AF2221AE6A /* AppSession.swift */; };
 		958A6D29014C8C1A506A1995 /* SeedLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63D62E1B399B329D0B6C2B62 /* SeedLoader.swift */; };
 		986ABAA1BDFD64361E931FD2 /* InstructorRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6847444198EA74400DF94E05 /* InstructorRouter.swift */; };
 		9A44D9B9B707452DFE04029F /* QuickActionsGrid.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CE171D2ABA3957094B2DD59 /* QuickActionsGrid.swift */; };
 		A23AD802E43F2485CF6D38E3 /* UnsplashImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 077B3B4C3600ECE4CE0E1861 /* UnsplashImage.swift */; };
 		A272AB954AC5935F65F0578E /* IconButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDB60A412E456123013E75E4 /* IconButton.swift */; };
+		A4FD8265A8D205270FAEDD66 /* SettingsAndPaywallUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F1129DAD3FC5185D2130BEF /* SettingsAndPaywallUITests.swift */; };
 		A6D68D101065C7820B5BB267 /* SubscriptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB5F301524BA50E4D3032BEA /* SubscriptionService.swift */; };
 		AAE895D3AA0E84243D96DC8A /* FlowLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = E055796162D11DF1E7B8D52D /* FlowLayout.swift */; };
+		AB05550DCEF4EEF50E9E57E9 /* InstructorTabsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B36038D7F8CF809375873BCC /* InstructorTabsUITests.swift */; };
 		B029AD2888183B7786C5B22F /* Fraunces-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 9AC3550079CA887E6CF28838 /* Fraunces-Regular.ttf */; };
 		B1588F941847D026226D4A2A /* InstructorDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06C30D7FCF06A724C45BDF53 /* InstructorDashboardView.swift */; };
 		B19662C03EF9724511AD914B /* SessionRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB831E5B6127A2464D0E1D52 /* SessionRow.swift */; };
@@ -76,6 +81,7 @@
 		C42DB4FDEF5E04C3E9F9FA6D /* FilterChipsBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D324CCEA79663B5D1A47DE4 /* FilterChipsBar.swift */; };
 		C4AD3CD466AEE186EDBD677A /* FloweModelContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72C3E59E33D98698F840ADCF /* FloweModelContainer.swift */; };
 		CF622EEBD2BC486D9A84998C /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15B1DE12827C5A88561BD697 /* SettingsView.swift */; };
+		D25960D86785C7A62A7E889F /* BookingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76B4EA7D7447F4834D4A1344 /* BookingService.swift */; };
 		D366C3A2F61CAD85483EF88D /* FeedPost.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8FDF5E6BF0F2C754325BF04 /* FeedPost.swift */; };
 		D5AA2DE96CEDB7C90B840036 /* RoleSelectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 185D1CBA0B81BE9EA96AC524 /* RoleSelectionView.swift */; };
 		D9BB2A3E7220EBE6FC21C87D /* DiscoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9E71A63E8A8245F5C5FD06C /* DiscoverView.swift */; };
@@ -88,6 +94,7 @@
 		E815BCA13D3567FA7795A4D1 /* AvailabilityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF88155B514DE388CAED43C6 /* AvailabilityView.swift */; };
 		E926C630D96C838A67495894 /* DisciplineTag.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91D1DD42C0E5A323D1D28FEB /* DisciplineTag.swift */; };
 		E95011B178469C57A021A6D9 /* MessageListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 594972ECDB3299BF98B27D86 /* MessageListView.swift */; };
+		E9524FB6F9B00D029F560401 /* BookingFlowUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75EABC10430200F40133C4BA /* BookingFlowUITests.swift */; };
 		E9550CCFABED3F34246C166E /* View+Flowe.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47F8623B33C1E3994C637742 /* View+Flowe.swift */; };
 		F1E76AE529DDF67C03BE46E3 /* Fraunces-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A6408CF78769237EA0E93AC0 /* Fraunces-Medium.ttf */; };
 		F360CCFF8BACA3777ED050BB /* Color+Flowe.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBBF0D4617C61C89A66EFC81 /* Color+Flowe.swift */; };
@@ -97,6 +104,16 @@
 		FC5D98EC9D318EFBDA4996B2 /* InstructorCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = B12BC58F995114991F32175F /* InstructorCard.swift */; };
 		FC96FF052010A41027421DDF /* InstructorSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D8AAB7DA8B7C8BE80DFEEC5 /* InstructorSettingsView.swift */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		FDC1E79B7EFB749F42D0A505 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = FE59C0F2329FC79031165DAE /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = DFCD776C6CD9F1A0AB448FF1;
+			remoteInfo = Flowe;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		02CDF14067779CC6520621BC /* CreateAccountView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateAccountView.swift; sourceTree = "<group>"; };
@@ -115,6 +132,7 @@
 		1DA7831F38CF5EE21BF1DD69 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		206335F390E5CC2B31825A47 /* ConversationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationView.swift; sourceTree = "<group>"; };
 		20A872F7B6C9D27EEC6EBBDD /* FlowGradients.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowGradients.swift; sourceTree = "<group>"; };
+		23BC35F24816C68247C04B36 /* OnboardingUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingUITests.swift; sourceTree = "<group>"; };
 		2900A4121599897991E4CAC5 /* Flowe.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Flowe.entitlements; sourceTree = "<group>"; };
 		2FA0573290F70741DFB0929C /* DMSans-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "DMSans-Medium.ttf"; sourceTree = "<group>"; };
 		34F13E4C3B93F2B1A8D4706A /* Date+Flowe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Date+Flowe.swift"; sourceTree = "<group>"; };
@@ -129,6 +147,7 @@
 		594972ECDB3299BF98B27D86 /* MessageListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageListView.swift; sourceTree = "<group>"; };
 		5AC61D37EA7417055C6A8D66 /* ReviewRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewRow.swift; sourceTree = "<group>"; };
 		5C9867A521AD55E8C878C940 /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
+		5DBB42D00526892D939DC9F1 /* StudentTabsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudentTabsUITests.swift; sourceTree = "<group>"; };
 		5FA653CE87EE4098EAB086D5 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
 		60545907F022F43BE60F178C /* FlowTypography.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowTypography.swift; sourceTree = "<group>"; };
 		60B3922DB1CB825C3570DB99 /* CalendarModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarModels.swift; sourceTree = "<group>"; };
@@ -144,6 +163,8 @@
 		737B91E7269C6447C335D02B /* BookingSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookingSheet.swift; sourceTree = "<group>"; };
 		7381734E749647CBCF81D5DC /* FloweCommon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloweCommon.swift; sourceTree = "<group>"; };
 		7577F6212A80C9C837232B63 /* FlowSpacing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowSpacing.swift; sourceTree = "<group>"; };
+		75EABC10430200F40133C4BA /* BookingFlowUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookingFlowUITests.swift; sourceTree = "<group>"; };
+		76B4EA7D7447F4834D4A1344 /* BookingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookingService.swift; sourceTree = "<group>"; };
 		7C215EA6CA9B6C406E13E338 /* DMSans-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "DMSans-Regular.ttf"; sourceTree = "<group>"; };
 		7F25A7337CFD62358334F757 /* User.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = User.swift; sourceTree = "<group>"; };
 		7F5C862793134F2194515695 /* FeaturedHeroCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeaturedHeroCard.swift; sourceTree = "<group>"; };
@@ -154,6 +175,7 @@
 		91D1DD42C0E5A323D1D28FEB /* DisciplineTag.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisciplineTag.swift; sourceTree = "<group>"; };
 		92C935E2CA20B8E5750DEE0F /* OnboardingFlowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingFlowView.swift; sourceTree = "<group>"; };
 		9AC3550079CA887E6CF28838 /* Fraunces-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Fraunces-Regular.ttf"; sourceTree = "<group>"; };
+		9F1129DAD3FC5185D2130BEF /* SettingsAndPaywallUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsAndPaywallUITests.swift; sourceTree = "<group>"; };
 		A15B6F9D171C9756B65D7423 /* InstructorTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstructorTabView.swift; sourceTree = "<group>"; };
 		A6408CF78769237EA0E93AC0 /* Fraunces-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Fraunces-Medium.ttf"; sourceTree = "<group>"; };
 		A7363600B48D9D0491D076A9 /* MockDataStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockDataStore.swift; sourceTree = "<group>"; };
@@ -163,8 +185,10 @@
 		AAFA6AE90A7A57AEF5C1D9A2 /* instructors.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = instructors.json; sourceTree = "<group>"; };
 		B12BC58F995114991F32175F /* InstructorCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstructorCard.swift; sourceTree = "<group>"; };
 		B264A9BA6AB860A28BAC86B9 /* RemoteImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteImage.swift; sourceTree = "<group>"; };
+		B36038D7F8CF809375873BCC /* InstructorTabsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstructorTabsUITests.swift; sourceTree = "<group>"; };
 		B5A1882EB901E61B7AF2A487 /* FloatingLabelField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingLabelField.swift; sourceTree = "<group>"; };
 		BB5F301524BA50E4D3032BEA /* SubscriptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionService.swift; sourceTree = "<group>"; };
+		BCEE457F802C00210A9FFFF9 /* FloweUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = FloweUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C0F3A0FB151C0F688534ACEF /* EmptyStateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyStateView.swift; sourceTree = "<group>"; };
 		C15E26BF2DDDBD1EECABB0EC /* DMMono-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "DMMono-Regular.ttf"; sourceTree = "<group>"; };
 		C6FD9EE5DA26FD915263821D /* EditProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditProfileView.swift; sourceTree = "<group>"; };
@@ -180,6 +204,7 @@
 		DF88155B514DE388CAED43C6 /* AvailabilityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvailabilityView.swift; sourceTree = "<group>"; };
 		E055796162D11DF1E7B8D52D /* FlowLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowLayout.swift; sourceTree = "<group>"; };
 		E24A8794C056D4128BA7AA25 /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
+		E388152C9A9602205EA34963 /* FloweUITestCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloweUITestCase.swift; sourceTree = "<group>"; };
 		E44A0A10890CCFF23B150A04 /* StudentTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudentTabView.swift; sourceTree = "<group>"; };
 		E7BA85F0573AA35B279EAE3F /* Fraunces-Light.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Fraunces-Light.ttf"; sourceTree = "<group>"; };
 		EBBF0D4617C61C89A66EFC81 /* Color+Flowe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Color+Flowe.swift"; sourceTree = "<group>"; };
@@ -241,6 +266,7 @@
 			isa = PBXGroup;
 			children = (
 				F71DDCF02E488698B7C62351 /* AppSettings.swift */,
+				76B4EA7D7447F4834D4A1344 /* BookingService.swift */,
 				10A50AB15C47E4490CEB456C /* CatalogService.swift */,
 				06D1617BBCF38F203A11C316 /* FloweConstants.swift */,
 				72C3E59E33D98698F840ADCF /* FloweModelContainer.swift */,
@@ -305,6 +331,7 @@
 			isa = PBXGroup;
 			children = (
 				DC9ABB91B083120DA9223F30 /* Flowe.app */,
+				BCEE457F802C00210A9FFFF9 /* FloweUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -470,8 +497,22 @@
 			isa = PBXGroup;
 			children = (
 				88D703B5A2880B0B24BDA0C4 /* Flowe */,
+				C6C9E38383509E8DBB1D35B0 /* FloweUITests */,
 				4DD511629605BE9AC2F40F7B /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		C6C9E38383509E8DBB1D35B0 /* FloweUITests */ = {
+			isa = PBXGroup;
+			children = (
+				75EABC10430200F40133C4BA /* BookingFlowUITests.swift */,
+				E388152C9A9602205EA34963 /* FloweUITestCase.swift */,
+				B36038D7F8CF809375873BCC /* InstructorTabsUITests.swift */,
+				23BC35F24816C68247C04B36 /* OnboardingUITests.swift */,
+				9F1129DAD3FC5185D2130BEF /* SettingsAndPaywallUITests.swift */,
+				5DBB42D00526892D939DC9F1 /* StudentTabsUITests.swift */,
+			);
+			path = FloweUITests;
 			sourceTree = "<group>";
 		};
 		DA8DD826B16F248729A5F8FC /* Instructor */ = {
@@ -529,6 +570,24 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		1596587B88409C02CE0F9FD6 /* FloweUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A7C682EFD74D52143F3372E8 /* Build configuration list for PBXNativeTarget "FloweUITests" */;
+			buildPhases = (
+				AAE94C92249F1C160D318F51 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				0B4600ACB6D19B494B738BD0 /* PBXTargetDependency */,
+			);
+			name = FloweUITests;
+			packageProductDependencies = (
+			);
+			productName = FloweUITests;
+			productReference = BCEE457F802C00210A9FFFF9 /* FloweUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 		DFCD776C6CD9F1A0AB448FF1 /* Flowe */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = B83056B62B529E328A37513B /* Build configuration list for PBXNativeTarget "Flowe" */;
@@ -556,6 +615,11 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1500;
 				TargetAttributes = {
+					1596587B88409C02CE0F9FD6 = {
+						DevelopmentTeam = UYY2KBNZYQ;
+						ProvisioningStyle = Automatic;
+						TestTargetID = DFCD776C6CD9F1A0AB448FF1;
+					};
 					DFCD776C6CD9F1A0AB448FF1 = {
 						DevelopmentTeam = UYY2KBNZYQ;
 						ProvisioningStyle = Automatic;
@@ -580,6 +644,7 @@
 			projectRoot = "";
 			targets = (
 				DFCD776C6CD9F1A0AB448FF1 /* Flowe */,
+				1596587B88409C02CE0F9FD6 /* FloweUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -613,6 +678,19 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		AAE94C92249F1C160D318F51 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E9524FB6F9B00D029F560401 /* BookingFlowUITests.swift in Sources */,
+				80100DE4455F8F8024B6B638 /* FloweUITestCase.swift in Sources */,
+				AB05550DCEF4EEF50E9E57E9 /* InstructorTabsUITests.swift in Sources */,
+				8CD6F7076188FCB80948E77E /* OnboardingUITests.swift in Sources */,
+				A4FD8265A8D205270FAEDD66 /* SettingsAndPaywallUITests.swift in Sources */,
+				9088BE8675CAE227464F994B /* StudentTabsUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		D9BB2985D2DC87623DECC611 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -623,6 +701,7 @@
 				E815BCA13D3567FA7795A4D1 /* AvailabilityView.swift in Sources */,
 				73DF171F35C47E63F5526C7F /* Booking.swift in Sources */,
 				B856A8B42978FBFBE8435D06 /* BookingCard.swift in Sources */,
+				D25960D86785C7A62A7E889F /* BookingService.swift in Sources */,
 				C153033035FA8E7A3BB94A43 /* BookingSheet.swift in Sources */,
 				3FF8C57AFCC90DFF4A68A8D3 /* BookingStatus+Badge.swift in Sources */,
 				40D6611F9D19149DD4E25E1A /* BookingsView.swift in Sources */,
@@ -693,7 +772,33 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		0B4600ACB6D19B494B738BD0 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = DFCD776C6CD9F1A0AB448FF1 /* Flowe */;
+			targetProxy = FDC1E79B7EFB749F42D0A505 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		0C046A88658C2DA0B6AA8ACC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.flowepilates.app.uitests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Flowe;
+			};
+			name = Release;
+		};
 		1868D42B01E8CFFDEB934AEB /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -783,6 +888,24 @@
 			};
 			name = Release;
 		};
+		435F1D6B94DE770239AE307C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.flowepilates.app.uitests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Flowe;
+			};
+			name = Debug;
+		};
 		A33F5D958C956D439D83D307 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -869,6 +992,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		A7C682EFD74D52143F3372E8 /* Build configuration list for PBXNativeTarget "FloweUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				435F1D6B94DE770239AE307C /* Debug */,
+				0C046A88658C2DA0B6AA8ACC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		B83056B62B529E328A37513B /* Build configuration list for PBXNativeTarget "Flowe" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

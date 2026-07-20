@@ -23,15 +23,20 @@ struct SessionRow: View {
                 .fill(Color.floweBorder)
                 .frame(width: 1, height: 40)
 
-            // Session type + date
+            // Who booked (instructor side) or session type, plus the date
             VStack(alignment: .leading, spacing: 3) {
-                Text(booking.type.isEmpty ? "Session" : "\(booking.type) Session")
+                Text(booking.studentName.isEmpty
+                     ? (booking.type.isEmpty ? "Session" : "\(booking.type) Session")
+                     : booking.studentName)
                     .font(FloweFont.serif(16, .medium))
                     .foregroundStyle(Color.floweInk)
                     .lineLimit(1)
-                Text(booking.date.uppercased())
+                Text(booking.studentName.isEmpty
+                     ? booking.date.uppercased()
+                     : "\(booking.date.uppercased()) · \(booking.type.uppercased())")
                     .font(FloweFont.mono(10))
                     .foregroundStyle(Color.floweMuted)
+                    .lineLimit(1)
             }
 
             Spacer(minLength: FlowSpacing.sm)

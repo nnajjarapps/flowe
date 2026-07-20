@@ -45,6 +45,7 @@ struct BookingsView: View {
             .padding(.top, 12)
         }
         .background(Color.flowWhite)
+        .refreshable { await data.syncBookings(asInstructor: false) }
     }
 
     // MARK: Title

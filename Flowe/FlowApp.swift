@@ -13,8 +13,20 @@ struct FlowApp: App {
     init() {
         let container = FloweModelContainer.make()
         self.container = container
+        // UI tests drive state via launch arguments (debug builds only): reset for isolation,
+        // optional seeded sample data, and offline so the public catalog isn't hit.
+        #if DEBUG
+        let defaults = UserDefaults.standard
+        let seed = defaults.bool(forKey: "flowe.uiTestSeed")
+        let reset = defaults.bool(forKey: "flowe.uiTestReset")
+        let offline = seed || reset
+        #else
+        let seed = false, reset = false, offline = false
+        #endif
         // App.init runs on the main thread at launch; the store + mainContext are @MainActor.
-        let store = MainActor.assumeIsolated { MockDataStore(container.mainContext) }
+        let store = MainActor.assumeIsolated {
+            MockDataStore(container.mainContext, seed: seed, reset: reset, offline: offline)
+        }
         _data = State(initialValue: store)
     }
 
@@ -31,12 +43,16 @@ struct FlowApp: App {
                 .task { await session.validateAppleCredential() }
                 .task(id: session.authState) {
                     data.currentUserID = session.ownerID
-                    if session.authState == .instructor {
+                    data.currentUserName = session.currentUser?.fullName ?? ""
+                    let isInstructor = session.authState == .instructor
+                    if isInstructor {
                         data.ensureInstructorProfile(
                             ownerID: session.ownerID,
                             name: session.currentUser?.fullName ?? "Instructor"
                         )
                     }
+                    guard session.authState != .unauthenticated else { return }
+                    await data.syncBookings(asInstructor: isInstructor)
                 }
                 // Reflect the instructor's subscription onto their feed listing.
                 .onChange(of: subscription.tier) {

@@ -137,3 +137,36 @@ Still hollow:
 ## Phase 10 — Infra  ⬜
 - [ ] Unit tests (models, MockDataStore, filtering), UI smoke tests
 - [ ] CI (build + test)
+
+## Phase 11 — Booking delivery (end-to-end)  ✅
+The booking loop previously did not connect the two parties: `Booking` lived in the CloudKit
+**private** database, so a student's booking synced only to that student's own devices and the
+instructor never received it. The instructor dashboard filtered local bookings by `legacyId`, which
+could never match a booking made on another device.
+
+- [x] **`BookingService`** — bookings exchanged over the CloudKit **public** database as raw
+      `CKRecord`. Two record types (`SessionBooking` written by the student, `SessionDecision`
+      written by the instructor) so the default `_creator`-write security is sufficient and no
+      world-writable record type is needed. See `BOOKING-SYSTEM.md`.
+- [x] **Status merge** — pending until the instructor responds; a student cancellation always wins.
+      A sync never downgrades a local decision whose write hasn't landed yet.
+- [x] **Delivery retry** — `pendingUpload` / `pendingDecision` mark writes that didn't reach the
+      server; `flushPendingWrites()` retries them at the start of every sync. An undelivered booking
+      shows "Not sent yet" rather than falsely claiming success.
+- [x] **Instructor side is live** — dashboard REQUESTS section + calendar requests/schedule now read
+      real incoming bookings; Accept/Decline publishes a decision (previously local-only state that
+      did nothing). `CalendarSession`/`BookingRequest` placeholder models deleted.
+- [x] **Student side** — Cancel button wired (was a no-op) with confirmation; pull-to-refresh on
+      Bookings, Dashboard and Calendar.
+- [x] **No payment in-app** — confirmation reads "Request sent!" and shows only the session fee
+      marked "Paid directly to your instructor". The `serviceFee` constant and the fabricated
+      service-fee/total rows were removed, since Flowe collects nothing on sessions this release.
+- [x] **Tests** — `BookingFlowUITests` covers the full request flow, pending-not-confirmed, the
+      absence of a service fee, cancellation, and both instructor empty states.
+
+Not done (deliberate, documented in `BOOKING-SYSTEM.md`):
+- [ ] Push notifications — an instructor learns of a request on next open/refresh. `aps-environment`
+      is already entitled; a `CKQuerySubscription` on `SessionBooking` is the natural next step.
+- [ ] Booking records are readable by any authenticated app user (public DB). Display name only,
+      no email — but this should move server-side before scaling past a pilot.
+- [ ] No double-booking check: two students can request the same slot.

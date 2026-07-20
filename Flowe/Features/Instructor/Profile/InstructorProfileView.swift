@@ -93,6 +93,7 @@ struct InstructorProfileView: View {
                         .overlay(Circle().stroke(Color.floweBorder, lineWidth: 1))
                         .clipShape(Circle())
                 }
+                .accessibilityIdentifier("instructor.settings")
             }
 
             AvatarView(id: me?.img ?? "", size: 88, ring: true)
@@ -167,7 +168,7 @@ struct InstructorProfileView: View {
             HStack(spacing: 12) {
                 StatTile(value: "\(me?.students ?? 0)", label: "STUDENTS")
                 StatTile(value: "\(me?.yearsExp ?? 0)", label: "YEARS", accent: .flowePink)
-                StatTile(value: "\(data.completedCount)", label: "SESSIONS", accent: .floweSuccess)
+                StatTile(value: "\(data.instructorCompletedCount)", label: "SESSIONS", accent: .floweSuccess)
             }
 
             VStack(alignment: .leading, spacing: 10) {

@@ -55,11 +55,7 @@ struct WeekDayPill: View {
 /// A booked slot on the selected day: time column, student avatar + name,
 /// session type, and a status badge.
 struct CalendarSessionCard: View {
-    @Environment(MockDataStore.self) private var data
-
-    let session: CalendarSession
-
-    private var student: Instructor? { data.instructor(id: session.studentId) }
+    let session: Booking
 
     var body: some View {
         HStack(spacing: FlowSpacing.md) {
@@ -77,10 +73,10 @@ struct CalendarSessionCard: View {
                 .fill(Color.floweBorder)
                 .frame(width: 1, height: 40)
 
-            AvatarView(id: student?.img ?? "", size: 42)
+            AvatarView(id: "", size: 42)
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(student?.name ?? "Student")
+                Text(session.studentName.isEmpty ? "Student" : session.studentName)
                     .font(FloweFont.serif(16, .medium))
                     .foregroundStyle(Color.floweInk)
                     .lineLimit(1)
@@ -121,22 +117,21 @@ struct CalendarEmptyState: View {
 
 // MARK: - Booking request card (Accept / Decline)
 
-/// A pending request with student, when, and two actions. On decision the card
-/// collapses to a resolved confirmation line.
+/// A pending request with student, when, and two actions. Accepting or declining publishes the
+/// instructor's decision to the shared database, which is how the student learns the outcome.
+/// On decision the card collapses to a resolved confirmation line.
 struct BookingRequestCard: View {
     @Environment(MockDataStore.self) private var data
 
-    @Binding var request: BookingRequest
-
-    private var student: Instructor? { data.instructor(id: request.studentId) }
+    let request: Booking
 
     var body: some View {
         VStack(alignment: .leading, spacing: FlowSpacing.md) {
             HStack(spacing: FlowSpacing.md) {
-                AvatarView(id: student?.img ?? "", size: 44)
+                AvatarView(id: "", size: 44)
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(student?.name ?? "Student")
+                    Text(request.studentName.isEmpty ? "A student" : request.studentName)
                         .font(FloweFont.serif(16, .medium))
                         .foregroundStyle(Color.floweInk)
                         .lineLimit(1)
@@ -148,7 +143,7 @@ struct BookingRequestCard: View {
                 Spacer(minLength: FlowSpacing.sm)
 
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text(request.day)
+                    Text(request.date)
                         .font(FloweFont.mono(11))
                         .foregroundStyle(Color.flowePinkDeep)
                     Text(request.time)
@@ -157,11 +152,13 @@ struct BookingRequestCard: View {
                 }
             }
 
-            switch request.state {
+            switch request.status {
             case .pending:
                 HStack(spacing: FlowSpacing.sm) {
                     Button {
-                        withAnimation(.easeOut(duration: 0.2)) { request.state = .declined }
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            data.respond(to: request, confirmed: false)
+                        }
                     } label: {
                         Text("Decline")
                             .font(FloweFont.sans(13, .medium))
@@ -174,9 +171,12 @@ struct BookingRequestCard: View {
                             )
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier("request.decline")
 
                     Button {
-                        withAnimation(.easeOut(duration: 0.2)) { request.state = .accepted }
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            data.respond(to: request, confirmed: true)
+                        }
                     } label: {
                         Text("Accept")
                             .font(FloweFont.sans(13, .medium))
@@ -187,11 +187,12 @@ struct BookingRequestCard: View {
                             .clipShape(RoundedRectangle(cornerRadius: 14))
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier("request.accept")
                 }
-            case .accepted:
-                resolvedRow(icon: "checkmark.circle.fill", text: "Accepted", tint: .floweSuccess)
-            case .declined:
+            case .cancelled:
                 resolvedRow(icon: "xmark.circle.fill", text: "Declined", tint: .floweCancel)
+            default:
+                resolvedRow(icon: "checkmark.circle.fill", text: "Accepted", tint: .floweSuccess)
             }
         }
         .padding(FlowSpacing.lg)

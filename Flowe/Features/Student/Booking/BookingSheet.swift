@@ -264,7 +264,7 @@ struct BookingSheet: View {
             }
             .padding(.bottom, 20)
 
-            GradientButton(title: "Confirm · \(settings.money(instructor.price))", enabled: !time.isEmpty) {
+            GradientButton(title: "Request · \(settings.money(instructor.price))", enabled: !time.isEmpty) {
                 confirmBooking()
                 step = 3
             }
@@ -298,7 +298,7 @@ struct BookingSheet: View {
                 .padding(.top, 16)
                 .padding(.bottom, 16)
 
-            Text("You're booked!")
+            Text("Request sent!")
                 .font(FloweFont.serif(22))
                 .foregroundStyle(Color.floweInk)
                 .padding(.bottom, 4)
@@ -311,19 +311,25 @@ struct BookingSheet: View {
             Text("\(day) at \(time)")
                 .font(FloweFont.mono(12))
                 .foregroundStyle(Color.floweMuted)
+                .padding(.bottom, 12)
+
+            Text("\(instructor.firstName) will confirm your session shortly. You'll see it update in Bookings.")
+                .font(FloweFont.sans(13))
+                .foregroundStyle(Color.floweMuted)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 16)
                 .padding(.bottom, 20)
 
+            // Flowe takes no payment for sessions in this release — the student settles up with
+            // the instructor directly, so no service fee or total is shown.
             VStack(spacing: 0) {
-                receiptRow("Session fee", settings.money(instructor.price), bold: false)
+                receiptRow("Session fee", settings.money(instructor.price), bold: true)
                     .padding(.top, 4)
-                receiptRow("Service fee", settings.money(FloweConstants.serviceFee), bold: false)
-                    .padding(.top, 4)
-                receiptRow("Total", settings.money(instructor.price + FloweConstants.serviceFee), bold: true)
-                    .padding(.top, 12)
-                    .overlay(alignment: .top) {
-                        Rectangle().fill(Color.floweBorder).frame(height: 1)
-                    }
-                    .padding(.top, 8)
+                Text("Paid directly to your instructor")
+                    .font(FloweFont.mono(10))
+                    .foregroundStyle(Color.floweMuted)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 6)
             }
             .padding(16)
             .floweCard()
