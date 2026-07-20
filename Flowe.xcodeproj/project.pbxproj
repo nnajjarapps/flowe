@@ -95,6 +95,7 @@
 		F93612202282923224BD9201 /* FloweCommon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7381734E749647CBCF81D5DC /* FloweCommon.swift */; };
 		F9F588829CD0FF210899133A /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 08B690A006F7E8352F3A828D /* Localizable.xcstrings */; };
 		FC5D98EC9D318EFBDA4996B2 /* InstructorCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = B12BC58F995114991F32175F /* InstructorCard.swift */; };
+		FC96FF052010A41027421DDF /* InstructorSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D8AAB7DA8B7C8BE80DFEEC5 /* InstructorSettingsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -135,6 +136,7 @@
 		65268B66DE3AFF92DA3C484D /* InstructorBarChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstructorBarChart.swift; sourceTree = "<group>"; };
 		6847444198EA74400DF94E05 /* InstructorRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstructorRouter.swift; sourceTree = "<group>"; };
 		6BB80E8BFD8BD9DBD361FB44 /* FlowColor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowColor.swift; sourceTree = "<group>"; };
+		6D8AAB7DA8B7C8BE80DFEEC5 /* InstructorSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstructorSettingsView.swift; sourceTree = "<group>"; };
 		6E73535B1CD21C5BF1DB3585 /* BookingCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookingCard.swift; sourceTree = "<group>"; };
 		6EED8908487E5CCD626B5506 /* WeeklyBarChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeeklyBarChart.swift; sourceTree = "<group>"; };
 		72C3E59E33D98698F840ADCF /* FloweModelContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloweModelContainer.swift; sourceTree = "<group>"; };
@@ -376,6 +378,7 @@
 				C6FD9EE5DA26FD915263821D /* EditProfileView.swift */,
 				65268B66DE3AFF92DA3C484D /* InstructorBarChart.swift */,
 				540B00E56D89BF2B030B5185 /* InstructorProfileView.swift */,
+				6D8AAB7DA8B7C8BE80DFEEC5 /* InstructorSettingsView.swift */,
 				5AC61D37EA7417055C6A8D66 /* ReviewRow.swift */,
 			);
 			path = Profile;
@@ -656,6 +659,7 @@
 				B1588F941847D026226D4A2A /* InstructorDashboardView.swift in Sources */,
 				3C21FE2BC3DA2E3AA770048F /* InstructorProfileView.swift in Sources */,
 				986ABAA1BDFD64361E931FD2 /* InstructorRouter.swift in Sources */,
+				FC96FF052010A41027421DDF /* InstructorSettingsView.swift in Sources */,
 				3B5ACC010BC814AAD54EF6E8 /* InstructorTabView.swift in Sources */,
 				608B13B7ACC18F54705EFA14 /* KeychainStore.swift in Sources */,
 				4EDC58F56C1F076CE1C54553 /* LoginView.swift in Sources */,

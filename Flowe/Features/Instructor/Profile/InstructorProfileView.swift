@@ -17,10 +17,6 @@ struct InstructorProfileView: View {
     @Environment(AppSettings.self) private var settings
 
     @State private var showSettings = false
-    @State private var showEditProfile = false
-    @State private var showNotifications = false
-    @State private var showAppSettings = false
-    @State private var showPaywall = false
 
     /// The signed-in instructor's own (possibly-empty) listing.
     private var me: Instructor? { data.currentInstructor }
@@ -77,18 +73,7 @@ struct InstructorProfileView: View {
             }
         }
         .background(Color.flowWhite.ignoresSafeArea())
-        .confirmationDialog("Account", isPresented: $showSettings, titleVisibility: .visible) {
-            Button("Get discovered") { showPaywall = true }
-            Button("Edit profile") { showEditProfile = true }
-            Button("Settings") { showAppSettings = true }
-            Button("Notifications") { showNotifications = true }
-            Button("Log out", role: .destructive) { session.logout() }
-            Button("Cancel", role: .cancel) {}
-        }
-        .sheet(isPresented: $showEditProfile) { EditProfileView() }
-        .sheet(isPresented: $showNotifications) { NotificationSettingsView() }
-        .sheet(isPresented: $showAppSettings) { SettingsView() }
-        .sheet(isPresented: $showPaywall) { PaywallView() }
+        .sheet(isPresented: $showSettings) { InstructorSettingsView() }
     }
 
     // MARK: - Header
