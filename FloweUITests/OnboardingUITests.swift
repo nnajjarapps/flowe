@@ -53,4 +53,50 @@ final class OnboardingUITests: FloweUITestCase {
         XCTAssertTrue(waitForAnyText(["Join flowe", "Create Account"]),
                       "Create-account screen should appear")
     }
+
+    // MARK: - Apple-only sign-in
+
+    /// The email/password form verified nothing — it checked the fields were non-empty and signed
+    /// the user in, and every login minted a new identity that orphaned their data. Sign in with
+    /// Apple is the only credential this app can honestly issue, so the form must stay gone.
+    func testCreateAccountOffersOnlyAppleSignIn() {
+        launchSignedOut()
+        XCTAssertTrue(waitForAnyText(["I'm here to train"]))
+        anyStaticText(["I'm here to train"])?.tap()
+        app.buttons.containing(NSPredicate(format: "label CONTAINS 'Continue as'")).firstMatch.tap()
+        XCTAssertTrue(waitForAnyText(["Join flowe"]), "Create-account screen should appear")
+
+        XCTAssertTrue(app.buttons["createAccount.apple"].waitForExistence(timeout: timeout),
+                      "Sign in with Apple must be offered")
+        XCTAssertEqual(app.secureTextFields.count, 0,
+                       "No password field should remain — nothing could verify it")
+        XCTAssertEqual(app.textFields.count, 0,
+                       "No name/email fields should remain — Apple supplies both")
+    }
+
+    func testLoginOffersOnlyAppleSignIn() {
+        launchSignedOut()
+        XCTAssertTrue(waitForAnyText(["I already have an account"]))
+        tapText(["I already have an account"])
+        XCTAssertTrue(waitForAnyText(["Welcome back"], timeout: 15), "Login screen should appear")
+
+        XCTAssertTrue(app.buttons["login.apple"].waitForExistence(timeout: timeout),
+                      "Sign in with Apple must be offered")
+        XCTAssertEqual(app.secureTextFields.count, 0,
+                       "No password field should remain — nothing could verify it")
+        XCTAssertNil(anyStaticText(["Forgot Password?"]),
+                     "Password recovery makes no sense without password auth")
+    }
+
+    /// Users should be told why Apple is the only option rather than left wondering.
+    func testLoginExplainsWhyAppleIsTheOnlyOption() {
+        launchSignedOut()
+        XCTAssertTrue(waitForAnyText(["I already have an account"]))
+        tapText(["I already have an account"])
+        XCTAssertTrue(waitForAnyText(["Welcome back"], timeout: 15))
+
+        let predicate = NSPredicate(format: "label CONTAINS[c] %@", "never see your password")
+        XCTAssertTrue(app.staticTexts.matching(predicate).firstMatch.waitForExistence(timeout: timeout),
+                      "The screen should explain what Apple sign-in means for the user")
+    }
 }

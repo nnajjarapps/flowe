@@ -1,12 +1,17 @@
 import SwiftUI
 import AuthenticationServices
 
+/// Log in. Sign in with Apple is the only path.
+///
+/// The email/password form this screen used to carry verified nothing — it checked the fields were
+/// non-empty and signed the user straight in. With no backend there is nothing to check a password
+/// against, so the form was theatre, and it meant every login minted a brand-new identity that
+/// orphaned the user's bookings, messages and reviews. Apple's credential is a real, verified,
+/// stable id, and it is the only one this app can honestly issue.
 struct LoginView: View {
     let role: UserRole
     @Environment(AppSession.self) private var session
 
-    @State private var email = ""
-    @State private var password = ""
     @State private var errorMessage: String?
 
     var body: some View {
@@ -22,32 +27,10 @@ struct LoginView: View {
                         .foregroundStyle(Color.floweMuted)
                 }
 
-                VStack(spacing: FlowSpacing.md) {
-                    FloatingLabelField(title: "Email Address", text: $email)
-                    FloatingLabelField(title: "Password", text: $password, isSecure: true)
-                }
-
-                HStack {
-                    Spacer()
-                    Button("Forgot Password?") {}
-                        .flowFont(.bodyMedium)
-                        .foregroundStyle(Color.flowePinkDeep)
-                }
-
                 if let error = errorMessage {
                     Text(error)
                         .flowFont(.caption)
                         .foregroundStyle(Color.red)
-                }
-
-                PrimaryButton(title: "Log In") {
-                    handleLogin()
-                }
-
-                HStack {
-                    Rectangle().fill(Color.floweBorder).frame(height: 1)
-                    Text("or").flowFont(.caption).foregroundStyle(Color.floweMuted)
-                    Rectangle().fill(Color.floweBorder).frame(height: 1)
                 }
 
                 SignInWithAppleButton(.signIn) { request in
@@ -58,6 +41,13 @@ struct LoginView: View {
                 .signInWithAppleButtonStyle(.black)
                 .frame(maxWidth: .infinity, minHeight: 56)
                 .clipShape(RoundedRectangle(cornerRadius: 14))
+                .accessibilityIdentifier("login.apple")
+
+                Text("Flowe uses your Apple account so your sessions, messages and reviews stay "
+                     + "with you across devices. We never see your password.")
+                    .flowFont(.caption)
+                    .foregroundStyle(Color.floweMuted)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 HStack(spacing: FlowSpacing.xs) {
                     Text("Not a member?")
@@ -79,20 +69,17 @@ struct LoginView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    private func handleLogin() {
-        guard !email.isEmpty, !password.isEmpty else {
-            errorMessage = "Please enter your email and password."
-            return
-        }
-        session.login(email: email, role: role)
-    }
-
     private func handleApple(_ result: Result<ASAuthorization, Error>) {
         switch result {
         case .success(let auth):
-            let cred = auth.credential as? ASAuthorizationAppleIDCredential
-            if let userID = cred?.user { session.setAppleUserID(userID) }
-            session.login(email: cred?.email ?? "member@flowe.app", role: role)
+            guard let cred = auth.credential as? ASAuthorizationAppleIDCredential else {
+                errorMessage = "Apple Sign-In didn't return an account. Please try again."
+                return
+            }
+            // Record the Apple id *before* starting the session: it is the owner id every booking,
+            // message and review is filed under, and a session without it would own nothing.
+            session.setAppleUserID(cred.user)
+            session.login(email: cred.email ?? "member@flowe.app", role: role)
         case .failure(let error):
             if (error as NSError).code == ASAuthorizationError.canceled.rawValue { return }
             errorMessage = "Apple Sign-In failed: \(error.localizedDescription)"

@@ -22,8 +22,18 @@ final class AppSession {
     private let appleUserKey = "flowe.appleUserID"
     private let userKey = "flowe.user"
 
-    /// Stable id for the signed-in user — used to own their SwiftData records.
-    var ownerID: String { appleUserID ?? currentUser?.id.uuidString ?? "local-user" }
+    /// Stable id for the signed-in user — used to own their bookings, messages and reviews.
+    ///
+    /// This is the Apple credential's user id, which Apple guarantees is stable for this app across
+    /// the user's devices and reinstalls, and which the Keychain preserves locally.
+    ///
+    /// It deliberately does **not** fall back to `currentUser.id`. That is a fresh `UUID` minted on
+    /// every sign-in, so using it as an owner id silently orphaned everything the user had the
+    /// moment they signed out and back in — their records stayed in the shared store under an id
+    /// nothing would ever look up again. Sign in with Apple is the only authenticated path, so a
+    /// real session always has `appleUserID`; the fallback exists for UI-test launches that skip
+    /// onboarding entirely.
+    var ownerID: String { appleUserID ?? "local-user" }
 
     init() {
         appleUserID = KeychainStore.get(appleUserKey)
@@ -63,6 +73,10 @@ final class AppSession {
         }
     }
 
+    /// Start a session for an Apple-authenticated user.
+    ///
+    /// `User.id` is a fresh UUID and is **display-only** — never use it as an owner id. Ownership
+    /// comes from `ownerID`, which is backed by the Apple credential; see the note there.
     func signUp(name: String, email: String, role: UserRole) {
         currentUser = User(
             id: UUID(),

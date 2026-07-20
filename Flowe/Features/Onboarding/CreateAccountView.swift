@@ -1,14 +1,12 @@
 import SwiftUI
 import AuthenticationServices
 
+/// Create an account. Sign in with Apple is the only path — see `LoginView` for why the
+/// email/password form was removed rather than repaired.
 struct CreateAccountView: View {
     let role: UserRole
     @Environment(AppSession.self) private var session
 
-    @State private var fullName = ""
-    @State private var email = ""
-    @State private var password = ""
-    @State private var confirmPassword = ""
     @State private var errorMessage: String?
 
     var body: some View {
@@ -25,27 +23,10 @@ struct CreateAccountView: View {
                         .foregroundStyle(Color.floweMuted)
                 }
 
-                VStack(spacing: FlowSpacing.md) {
-                    FloatingLabelField(title: "Full Name", text: $fullName)
-                    FloatingLabelField(title: "Email Address", text: $email)
-                    FloatingLabelField(title: "Password", text: $password, isSecure: true)
-                    FloatingLabelField(title: "Confirm Password", text: $confirmPassword, isSecure: true)
-                }
-
                 if let error = errorMessage {
                     Text(error)
                         .flowFont(.caption)
                         .foregroundStyle(Color.red)
-                }
-
-                PrimaryButton(title: "Create Account") {
-                    handleCreate()
-                }
-
-                HStack {
-                    Rectangle().fill(Color.floweBorder).frame(height: 1)
-                    Text("or").flowFont(.caption).foregroundStyle(Color.floweMuted)
-                    Rectangle().fill(Color.floweBorder).frame(height: 1)
                 }
 
                 SignInWithAppleButton(.signUp) { request in
@@ -56,6 +37,13 @@ struct CreateAccountView: View {
                 .signInWithAppleButtonStyle(.black)
                 .frame(maxWidth: .infinity, minHeight: 56)
                 .clipShape(RoundedRectangle(cornerRadius: 14))
+                .accessibilityIdentifier("createAccount.apple")
+
+                Text("Flowe uses your Apple account so your sessions, messages and reviews stay "
+                     + "with you across devices. You can hide your email, and we never see a password.")
+                    .flowFont(.caption)
+                    .foregroundStyle(Color.floweMuted)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 HStack(spacing: FlowSpacing.xs) {
                     Text("Already have an account?")
@@ -77,29 +65,24 @@ struct CreateAccountView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    private func handleCreate() {
-        guard !fullName.isEmpty, !email.isEmpty, !password.isEmpty else {
-            errorMessage = "Please fill in all fields."
-            return
-        }
-        guard password == confirmPassword else {
-            errorMessage = "Passwords do not match."
-            return
-        }
-        session.signUp(name: fullName, email: email, role: role)
-    }
-
     private func handleApple(_ result: Result<ASAuthorization, Error>) {
         switch result {
         case .success(let auth):
-            let cred = auth.credential as? ASAuthorizationAppleIDCredential
-            if let userID = cred?.user { session.setAppleUserID(userID) }
-            // Apple only returns name/email on the first authorization; fall back otherwise.
-            let name = [cred?.fullName?.givenName, cred?.fullName?.familyName]
-                .compactMap { $0 }.joined(separator: " ")
+            guard let cred = auth.credential as? ASAuthorizationAppleIDCredential else {
+                errorMessage = "Apple Sign-In didn't return an account. Please try again."
+                return
+            }
+            // The Apple id must be recorded before the session starts — it is the owner id every
+            // booking, message and review is filed under.
+            session.setAppleUserID(cred.user)
+            // Apple returns name and email only on the *first* authorization, so both are optional
+            // on every later sign-in.
+            let name = [cred.fullName?.givenName, cred.fullName?.familyName]
+                .compactMap { $0 }
+                .joined(separator: " ")
             session.signUp(
-                name: name.isEmpty ? "Flowe Member" : name,
-                email: cred?.email ?? "member@flowe.app",
+                name: name.isEmpty ? "Member" : name,
+                email: cred.email ?? "",
                 role: role
             )
         case .failure(let error):

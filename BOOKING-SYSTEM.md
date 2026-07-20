@@ -209,6 +209,34 @@ token server-side, and revoke properly — that removes the manual step.
 
 ---
 
+# Identity
+
+Every shared record — bookings, messages, reviews, listings, reports — is filed under an
+**ownerID**. That id is the Sign in with Apple credential's user id, which Apple guarantees is
+stable for this app across the user's devices and reinstalls, and which the Keychain preserves
+locally (`AppSession.setAppleUserID`).
+
+`ownerID` deliberately does **not** fall back to `currentUser.id`. That is a fresh `UUID` minted on
+every sign-in, so using it as an owner id orphaned everything the user had the moment they signed
+out and back in: their records stayed in the public database under an id nothing would look up
+again. The bug was invisible on the Apple path (which always has a real id) and total on the email
+path.
+
+## Why email/password login was removed rather than repaired
+
+It verified nothing. `handleLogin` checked the fields were non-empty and signed the user straight
+in — there is no backend and no credential store, so there was nothing to check a password against.
+
+That is why the orphaning couldn't be fixed by deriving a stable id from the email. With no password
+check, a stable email-derived id means typing someone's address logs you in **as them** — and with
+messages and bookings in a `_world`-readable database, that is a total account takeover. The fix
+would have been strictly worse than the bug.
+
+Sign in with Apple is the only credential this app can honestly issue without a server, so it is now
+the only path. If a backend ever exists, real email auth can be added alongside it.
+
+---
+
 # Reviews
 
 A review is anchored to a **booking**, not to an instructor. That is what makes it earned: only a

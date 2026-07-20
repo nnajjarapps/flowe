@@ -98,6 +98,11 @@ Flowe's first profit model. See `FLOWE-IAP-PLAN.md`.
       `visibility`/`updatedAt` **queryable** + `visibility` **sortable**, set security = `_world` read /
       `_creator` write, then **Deploy schema to Production**.
       ⚠️ Also add the `photo` field (type **Asset**, no index) for uploaded profile photos.
+- [x] **Stable identity / Apple-only sign-in**: `ownerID` no longer falls back to `currentUser.id`,
+      a fresh UUID per sign-in that orphaned every booking, message and review on logout. Email
+      login verified nothing (non-empty check, no credential store), so a stable email-derived id
+      would have meant impersonation, not a fix — the unauthenticated form was removed and Sign in
+      with Apple is now the only path. See "Identity" in BOOKING-SYSTEM.md.
 - [x] **Real reviews**: anchored to a completed booking (`review-<bookingID>` in the public DB, so
       one review per session and resubmitting updates). Instructor rating is *derived* from them —
       nil until the first review, rather than a fabricated 0.0 — and republished onto the listing so
