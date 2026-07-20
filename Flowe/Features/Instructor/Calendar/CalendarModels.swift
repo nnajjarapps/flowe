@@ -1,17 +1,12 @@
-import SwiftUI
+import Foundation
 
 // MARK: - Week-strip day helper
 
-/// A parsed entry from `FloweConstants.days` ("Mon Jul 7").
-struct WeekDay: Identifiable {
-    let id: Int          // index 0…6
-    let weekday: String  // "Mon"
-    let number: String   // "7"
+/// The instructor calendar's day is the real current-week day (see `FloweWeek`), which replaced the
+/// old fixed "Mon Jul 7" strings.
+typealias WeekDay = FloweWeek.Day
 
-    static let all: [WeekDay] = FloweConstants.days.enumerated().map { index, raw in
-        let parts = raw.split(separator: " ").map(String.init)
-        return WeekDay(id: index,
-                       weekday: parts.first ?? "",
-                       number: parts.last ?? "")
-    }
+extension FloweWeek.Day {
+    /// The current week, in the device calendar/time zone, starting today.
+    static var all: [WeekDay] { FloweWeek.current() }
 }

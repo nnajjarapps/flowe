@@ -201,17 +201,15 @@ struct BookingSheet: View {
                 .padding(.bottom, 12)
 
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
-                ForEach(FloweConstants.days, id: \.self) { d in
-                    let short = String(d.prefix(3))
-                    let rest = String(d.dropFirst(4))
-                    let avail = instructor.available.contains(short)
-                    let sel = day == d
-                    Button { if avail { day = d } } label: {
+                ForEach(FloweWeek.current()) { d in
+                    let avail = instructor.available.contains(d.matchWeekday)
+                    let sel = day == d.pickerValue
+                    Button { if avail { day = d.pickerValue } } label: {
                         VStack(spacing: 2) {
-                            Text(short)
+                            (d.isToday ? Text("Today") : Text(verbatim: d.displayWeekday))
                                 .font(FloweFont.mono(10))
                                 .foregroundStyle(sel ? .white : Color.floweInk)
-                            Text(rest)
+                            Text(verbatim: d.displayShortDate)
                                 .font(FloweFont.sans(11))
                                 .foregroundStyle(sel ? .white : Color.floweInk)
                         }

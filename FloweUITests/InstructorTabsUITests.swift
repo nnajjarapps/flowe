@@ -98,6 +98,19 @@ final class InstructorTabsUITests: FloweUITestCase {
                       "Calendar sections missing")
     }
 
+    /// The calendar used to be pinned to a hardcoded "JUL 7 – JUL 13" week; it now reflects the real
+    /// current week, so today must be marked and the old fixed header must be gone.
+    func testCalendarReflectsTheRealCurrentWeek() {
+        launch(as: .instructor)
+        selectTab("Calendar")
+        XCTAssertTrue(waitForAnyText(["SCHEDULE"], timeout: 15))
+        XCTAssertTrue(app.buttons.containing(NSPredicate(format: "label CONTAINS[c] 'TODAY'")).firstMatch
+                        .waitForExistence(timeout: 10),
+                      "The week strip should mark today")
+        XCTAssertNil(anyStaticText(["JUL 7 – JUL 13"]),
+                     "The hardcoded mockup week must be gone")
+    }
+
     func testCalendarDaySelectionWorks() {
         launch(as: .instructor)
         selectTab("Calendar")

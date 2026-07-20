@@ -6,8 +6,8 @@ enum FloweConstants {
     /// Shared so seeded instructor-side data and `AppSession.ownerID` can't drift apart.
     static let localOwnerID = "local-user"
 
-    /// Booking day picker (label → first 3 chars are matched against `Instructor.available`).
-    static let days = ["Mon Jul 7", "Tue Jul 8", "Wed Jul 9", "Thu Jul 10", "Fri Jul 11", "Sat Jul 12", "Sun Jul 13"]
+    // The booking day picker and instructor calendar now derive their days from the real current
+    // week — see `FloweWeek`. The old fixed "Mon Jul 7 … Sun Jul 13" array is gone.
 
     static let times = ["8:00 AM", "9:00 AM", "10:00 AM", "11:00 AM", "2:00 PM", "3:30 PM", "5:00 PM", "6:00 PM"]
 

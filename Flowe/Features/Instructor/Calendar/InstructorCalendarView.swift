@@ -15,9 +15,12 @@ struct InstructorCalendarView: View {
     }
 
     private func sessions(on dayIndex: Int) -> [Booking] {
-        guard let weekday = WeekDay.all.first(where: { $0.id == dayIndex })?.weekday else { return [] }
+        guard let weekday = week.first(where: { $0.id == dayIndex })?.matchWeekday else { return [] }
         return data.incomingBookings.filter { $0.date.hasPrefix(weekday) }
     }
+
+    /// The real current week, recomputed once per render.
+    private var week: [WeekDay] { WeekDay.all }
 
     /// Requests still awaiting a decision, across the whole week.
     private var requests: [Booking] {
@@ -47,7 +50,7 @@ struct InstructorCalendarView: View {
     private var header: some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: FlowSpacing.xs) {
-                Text("JUL 7 – JUL 13")
+                Text(FloweWeek.rangeLabel().uppercased())
                     .font(FloweFont.mono(11))
                     .foregroundStyle(Color.floweMuted)
 
@@ -71,7 +74,7 @@ struct InstructorCalendarView: View {
     private var weekStrip: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: FlowSpacing.sm) {
-                ForEach(WeekDay.all) { day in
+                ForEach(week) { day in
                     WeekDayPill(
                         day: day,
                         isSelected: day.id == selectedDay,

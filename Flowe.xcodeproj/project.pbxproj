@@ -66,6 +66,7 @@
 		9088BE8675CAE227464F994B /* StudentTabsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DBB42D00526892D939DC9F1 /* StudentTabsUITests.swift */; };
 		94FA958AC3A40CC2D5011435 /* AppSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = D095FAA6B074F1AF2221AE6A /* AppSession.swift */; };
 		958A6D29014C8C1A506A1995 /* SeedLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63D62E1B399B329D0B6C2B62 /* SeedLoader.swift */; };
+		95B086C7C6364077E773C74F /* FloweWeek.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB7FD826615D7BA62DCE05B3 /* FloweWeek.swift */; };
 		986ABAA1BDFD64361E931FD2 /* InstructorRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6847444198EA74400DF94E05 /* InstructorRouter.swift */; };
 		9A44D9B9B707452DFE04029F /* QuickActionsGrid.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CE171D2ABA3957094B2DD59 /* QuickActionsGrid.swift */; };
 		9DCA5C2170345114418E543F /* Review.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A165701631D2B42B1FD295B /* Review.swift */; };
@@ -235,6 +236,7 @@
 		D924C099B8699B291D7C43DA /* CalendarComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarComponents.swift; sourceTree = "<group>"; };
 		D9E71A63E8A8245F5C5FD06C /* DiscoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverView.swift; sourceTree = "<group>"; };
 		DA077844D989E093BABC8C4D /* Instructor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Instructor.swift; sourceTree = "<group>"; };
+		DB7FD826615D7BA62DCE05B3 /* FloweWeek.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloweWeek.swift; sourceTree = "<group>"; };
 		DC9ABB91B083120DA9223F30 /* Flowe.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Flowe.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DF88155B514DE388CAED43C6 /* AvailabilityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvailabilityView.swift; sourceTree = "<group>"; };
 		E055796162D11DF1E7B8D52D /* FlowLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowLayout.swift; sourceTree = "<group>"; };
@@ -313,6 +315,7 @@
 				6032AC367E2365ADAFD2BF43 /* ContentFilter.swift */,
 				06D1617BBCF38F203A11C316 /* FloweConstants.swift */,
 				72C3E59E33D98698F840ADCF /* FloweModelContainer.swift */,
+				DB7FD826615D7BA62DCE05B3 /* FloweWeek.swift */,
 				5C9867A521AD55E8C878C940 /* KeychainStore.swift */,
 				0AEA61C0D5A07FA6156A5B5F /* MessagingService.swift */,
 				A7363600B48D9D0491D076A9 /* MockDataStore.swift */,
@@ -806,6 +809,7 @@
 				F93612202282923224BD9201 /* FloweCommon.swift in Sources */,
 				11CDDA2ABFDB2E6D4700B209 /* FloweConstants.swift in Sources */,
 				C4AD3CD466AEE186EDBD677A /* FloweModelContainer.swift in Sources */,
+				95B086C7C6364077E773C74F /* FloweWeek.swift in Sources */,
 				A272AB954AC5935F65F0578E /* IconButton.swift in Sources */,
 				5F5D5FC4AA54E7A2EA6D0819 /* Instructor.swift in Sources */,
 				073E425562DDD8F043790E0E /* InstructorBarChart.swift in Sources */,

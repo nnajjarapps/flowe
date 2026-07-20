@@ -13,11 +13,12 @@ struct WeekDayPill: View {
     var body: some View {
         Button(action: action) {
             VStack(spacing: 6) {
-                Text(day.weekday.uppercased())
+                weekdayText
                     .font(FloweFont.mono(10))
-                    .foregroundStyle(isSelected ? .white.opacity(0.85) : Color.floweMuted)
+                    .foregroundStyle(isSelected ? .white.opacity(0.85)
+                                     : (day.isToday ? Color.flowePinkDeep : Color.floweMuted))
 
-                Text(day.number)
+                Text(day.displayNumber)
                     .font(FloweFont.serif(18, .medium))
                     .foregroundStyle(isSelected ? .white : Color.floweInk)
 
@@ -42,6 +43,14 @@ struct WeekDayPill: View {
             }
         }
         .buttonStyle(.plain)
+    }
+
+    /// "TODAY" (localized) on the current day, otherwise the localized weekday. The weekday is
+    /// already region-formatted data, so it's rendered verbatim rather than looked up as a key.
+    private var weekdayText: Text {
+        day.isToday
+            ? Text(LocalizedStringKey("TODAY"))
+            : Text(verbatim: day.displayWeekday.uppercased())
     }
 
     private var dotColor: Color {

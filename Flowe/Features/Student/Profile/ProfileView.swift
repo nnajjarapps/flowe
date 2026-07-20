@@ -219,7 +219,7 @@ struct ProfileView: View {
                     }
                 } label: {
                     HStack {
-                        Text(row)
+                        Text(LocalizedStringKey(row))
                             .font(FloweFont.sans(14))
                             .foregroundStyle(isLogout ? Color.flowePinkDeep : Color.floweInk)
                         Spacer()
