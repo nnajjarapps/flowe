@@ -29,7 +29,7 @@ struct ReportSheet: View {
             Form {
                 Section("Why are you reporting this?") {
                     Picker("Reason", selection: $reason) {
-                        ForEach(ReportReason.allCases) { Text($0.rawValue).tag($0) }
+                        ForEach(ReportReason.allCases) { Text(LocalizedStringKey($0.rawValue)).tag($0) }
                     }
                     .pickerStyle(.inline)
                     .labelsHidden()
@@ -58,7 +58,7 @@ struct ReportSheet: View {
                     } label: {
                         HStack {
                             if isSending { ProgressView().controlSize(.small) }
-                            Text(isSending ? "Sending…" : "Submit Report")
+                            Text(LocalizedStringKey(isSending ? "Sending…" : "Submit Report"))
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }

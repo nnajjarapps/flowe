@@ -141,7 +141,7 @@ struct InstructorDashboardView: View {
     private var header: some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: FlowSpacing.xs) {
-                Text(greeting.uppercased())
+                Text(LocalizedStringKey(greeting))
                     .font(FloweFont.mono(11))
                     .foregroundStyle(Color.floweMuted)
 
@@ -161,11 +161,12 @@ struct InstructorDashboardView: View {
     }
 
     /// Time-of-day greeting, so the dashboard reads like it was opened just now.
+    /// Uppercase to match the mono label style *and* the localization keys, so it translates.
     private var greeting: String {
         switch Calendar.current.component(.hour, from: Date()) {
-        case 5..<12:  return "Good morning"
-        case 12..<17: return "Good afternoon"
-        default:      return "Good evening"
+        case 5..<12:  return "GOOD MORNING"
+        case 12..<17: return "GOOD AFTERNOON"
+        default:      return "GOOD EVENING"
         }
     }
 

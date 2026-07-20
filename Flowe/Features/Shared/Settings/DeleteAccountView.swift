@@ -49,7 +49,7 @@ struct DeleteAccountView: View {
                             if isDeleting {
                                 ProgressView().controlSize(.small)
                             }
-                            Text(isDeleting ? "Deleting…" : "Delete Account")
+                            Text(LocalizedStringKey(isDeleting ? "Deleting…" : "Delete Account"))
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }

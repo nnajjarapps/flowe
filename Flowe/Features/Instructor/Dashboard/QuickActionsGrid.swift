@@ -58,11 +58,11 @@ private struct QuickActionTile: View {
             }
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(action.title)
+                Text(LocalizedStringKey(action.title))
                     .font(FloweFont.sans(14, .medium))
                     .foregroundStyle(Color.floweInk)
                     .lineLimit(1)
-                Text(action.subtitle)
+                Text(LocalizedStringKey(action.subtitle))
                     .font(FloweFont.mono(9))
                     .foregroundStyle(Color.floweMuted)
             }

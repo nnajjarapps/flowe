@@ -95,7 +95,7 @@ struct BookingCard: View {
                         Button {
                             showReview = true
                         } label: {
-                            Text(data.myReview(for: booking) == nil ? "Leave a review" : "Edit review")
+                            Text(LocalizedStringKey(data.myReview(for: booking) == nil ? "Leave a review" : "Edit review"))
                                 .font(FloweFont.sans(11))
                                 .foregroundStyle(Color.flowePinkDeep)
                         }

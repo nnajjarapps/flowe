@@ -13,6 +13,7 @@
 		0DE9C9395490F9BEF5BE04C2 /* MessagingUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DBB3E399C8BF1C8511DF1B7 /* MessagingUITests.swift */; };
 		0F346C6CD319E875C3D3EAF4 /* MockDataStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7363600B48D9D0491D076A9 /* MockDataStore.swift */; };
 		11CDDA2ABFDB2E6D4700B209 /* FloweConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06D1617BBCF38F203A11C316 /* FloweConstants.swift */; };
+		12FFB71BB54063CD1880C95F /* LocalizationUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C6A6B72111739FB381005F1 /* LocalizationUITests.swift */; };
 		14250FA88FC8450E613B0377 /* PaywallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8DB231BCFA389ECC8C1D762 /* PaywallView.swift */; };
 		17940F585D865F455EC5E145 /* Fraunces-Light.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E7BA85F0573AA35B279EAE3F /* Fraunces-Light.ttf */; };
 		1AD5555D04999A8995C8D686 /* User.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F25A7337CFD62358334F757 /* User.swift */; };
@@ -141,6 +142,7 @@
 		077B3B4C3600ECE4CE0E1861 /* UnsplashImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnsplashImage.swift; sourceTree = "<group>"; };
 		08B690A006F7E8352F3A828D /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		0AEA61C0D5A07FA6156A5B5F /* MessagingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessagingService.swift; sourceTree = "<group>"; };
+		0C6A6B72111739FB381005F1 /* LocalizationUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizationUITests.swift; sourceTree = "<group>"; };
 		0CE4F79CAA257F95E8F9B243 /* ReviewService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewService.swift; sourceTree = "<group>"; };
 		0D7CAF2291282ED6FAC4D459 /* bookings.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = bookings.json; sourceTree = "<group>"; };
 		0F28297BD9C654202E87114A /* DMSans-Light.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "DMSans-Light.ttf"; sourceTree = "<group>"; };
@@ -567,6 +569,7 @@
 				E388152C9A9602205EA34963 /* FloweUITestCase.swift */,
 				EA6156CB4F1D101D5B8CD78B /* InstructorProfileEditingUITests.swift */,
 				B36038D7F8CF809375873BCC /* InstructorTabsUITests.swift */,
+				0C6A6B72111739FB381005F1 /* LocalizationUITests.swift */,
 				9DBB3E399C8BF1C8511DF1B7 /* MessagingUITests.swift */,
 				AFDF4C194342D5593C21006F /* ModerationUITests.swift */,
 				23BC35F24816C68247C04B36 /* OnboardingUITests.swift */,
@@ -749,6 +752,7 @@
 				80100DE4455F8F8024B6B638 /* FloweUITestCase.swift in Sources */,
 				78A8DB4E680912E9FC05F9E6 /* InstructorProfileEditingUITests.swift in Sources */,
 				AB05550DCEF4EEF50E9E57E9 /* InstructorTabsUITests.swift in Sources */,
+				12FFB71BB54063CD1880C95F /* LocalizationUITests.swift in Sources */,
 				0DE9C9395490F9BEF5BE04C2 /* MessagingUITests.swift in Sources */,
 				E27756B746E4147C60B17397 /* ModerationUITests.swift in Sources */,
 				8CD6F7076188FCB80948E77E /* OnboardingUITests.swift in Sources */,

@@ -103,7 +103,7 @@ struct BookingsView: View {
                 Button {
                     tab = t
                 } label: {
-                    Text(t.label)
+                    Text(LocalizedStringKey(t.label))
                         .font(FloweFont.sans(12, .medium))
                         .foregroundStyle(tab == t ? Color.floweInk : Color.floweMuted)
                         .frame(maxWidth: .infinity)

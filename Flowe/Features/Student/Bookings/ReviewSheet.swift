@@ -32,7 +32,7 @@ struct ReviewSheet: View {
                 } header: {
                     Text("How was your session with \(instructorName)?")
                 } footer: {
-                    Text(rating == 0 ? "Tap a star to rate." : Self.ratingLabel(rating))
+                    Text(LocalizedStringKey(rating == 0 ? "Tap a star to rate." : Self.ratingLabel(rating)))
                 }
 
                 Section {
@@ -50,7 +50,7 @@ struct ReviewSheet: View {
                     Button {
                         submit()
                     } label: {
-                        Text(isEditing ? "Update Review" : "Post Review")
+                        Text(LocalizedStringKey(isEditing ? "Update Review" : "Post Review"))
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .disabled(rating == 0)

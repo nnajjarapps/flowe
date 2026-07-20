@@ -36,8 +36,8 @@ class FloweUITestCase: XCTestCase {
     /// Launch straight into a role's tab shell.
     /// - Parameter seeded: when true, the store is populated with sample data (visible/boosted
     ///   instructors, posts, bookings) so populated states can be asserted.
-    func launch(as role: Role, seeded: Bool = false) {
-        app.launchArguments = defaults(loggedIn: true, role: role, seeded: seeded)
+    func launch(as role: Role, seeded: Bool = false, language: String = "en") {
+        app.launchArguments = defaults(loggedIn: true, role: role, seeded: seeded, language: language)
         app.launch()
         // The first launch of a run pays for app install plus SwiftData/CloudKit setup, which can
         // take far longer than a warm one. Absorb that here so each test's own waits start from a
@@ -45,7 +45,7 @@ class FloweUITestCase: XCTestCase {
         _ = app.tabBars.firstMatch.waitForExistence(timeout: 90)
     }
 
-    private func defaults(loggedIn: Bool, role: Role?, seeded: Bool) -> [String] {
+    private func defaults(loggedIn: Bool, role: Role?, seeded: Bool, language: String = "en") -> [String] {
         var args: [String] = []
         args += ["-flowe.isLoggedIn", loggedIn ? "YES" : "NO"]
         if let role { args += ["-flowe.userRole", role.rawValue] }
@@ -54,7 +54,10 @@ class FloweUITestCase: XCTestCase {
         args += ["-flowe.uiTestReset", "YES"]
         args += ["-flowe.uiTestSeed", seeded ? "YES" : "NO"]
         // Deterministic locale/currency regardless of the host machine.
-        args += ["-flowe.language", "en", "-flowe.currency", "usd"]
+        args += ["-flowe.language", language, "-flowe.currency", "usd"]
+        // The app resolves its own locale from flowe.language; mirror it into AppleLanguages so the
+        // String Catalog compiles/loads that language for this launch.
+        args += ["-AppleLanguages", "(\(language))"]
         return args
     }
 
