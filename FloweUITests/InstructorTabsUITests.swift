@@ -39,6 +39,20 @@ final class InstructorTabsUITests: FloweUITestCase {
                       "Unsubscribed instructors should see the Get discovered banner")
     }
 
+    /// "Today's Schedule" must be today's accepted sessions only — it used to list every booking.
+    /// The seeded workspace dates one confirmed session today and the completed ones earlier in the
+    /// week, so exactly the confirmed one belongs on today's schedule.
+    func testTodaysScheduleShowsOnlyTodaysSessions() {
+        launch(as: .instructor, seeded: true)
+        XCTAssertTrue(waitForAnyText(["TODAY'S SCHEDULE"], timeout: timeout), "Schedule section missing")
+        // Sara's confirmed session is dated today; the completed sessions are earlier in the week and
+        // must not appear on today's schedule.
+        XCTAssertTrue(waitForAnyText(["Sara Kim"], timeout: 10),
+                      "Today's confirmed session should be on the schedule")
+        XCTAssertNil(anyStaticText(["Jordan Lee"]),
+                     "A session from another day must not appear on today's schedule")
+    }
+
     func testDashboardEmptyScheduleState() {
         launch(as: .instructor, seeded: false)
         XCTAssertTrue(waitForAnyText(["No sessions today"]),

@@ -47,6 +47,15 @@ enum FloweWeek {
         return "\(localized(first, template: "MMMd")) – \(localized(last, template: "MMMd"))"
     }
 
+    /// The stored `Booking.date` string for a date ("Mon, Jul 7"), matching what the booking flow
+    /// writes (see `MockDataStore.formatDay`). Language-neutral so it compares across users.
+    static func bookingDateString(for date: Date) -> String {
+        english(date, format: "EEE, MMM d")
+    }
+
+    /// Today's stored booking-date string — used to filter "today's" sessions.
+    static var todayBookingDate: String { bookingDateString(for: Date()) }
+
     // MARK: - Formatting
 
     /// Region-aware: `setLocalizedDateFormatFromTemplate` reorders fields for the device locale.

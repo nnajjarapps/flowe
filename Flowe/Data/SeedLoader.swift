@@ -77,18 +77,26 @@ enum SeedLoader {
 
         // Incoming bookings addressed to this instructor. Invisible to a seeded *student* — their
         // `myBookings` only matches their own studentID — and the source of every analytics number.
-        struct Incoming { let student: (id: String, name: String); let type, status: String }
+        // Dates are drawn from the real current week so they land on the right calendar day, and the
+        // confirmed session is dated *today* so "Today's Schedule" isn't empty in the demo.
+        let week = FloweWeek.current()
+        func dateString(dayOffset: Int) -> String {
+            let day = week[min(max(dayOffset, 0), week.count - 1)]
+            return FloweWeek.bookingDateString(for: day.date)
+        }
+        struct Incoming { let student: (id: String, name: String); let type, status: String; let offset: Int; let time: String }
         let mia = (id: "seed-student-mia", name: "Mia Tanaka")
         let feed: [Incoming] = [
-            Incoming(student: mia, type: "Private", status: "completed"),
-            Incoming(student: mia, type: "Reformer", status: "completed"),   // repeat student
-            Incoming(student: ("seed-student-jordan", "Jordan Lee"), type: "Duet", status: "completed"),
-            Incoming(student: ("seed-student-sara", "Sara Kim"), type: "Private", status: "confirmed"),
-            Incoming(student: ("seed-student-alex", "Alex Rivera"), type: "Private", status: "pending"),
+            Incoming(student: mia, type: "Private", status: "completed", offset: 1, time: "9:00 AM"),
+            Incoming(student: mia, type: "Reformer", status: "completed", offset: 3, time: "10:00 AM"),  // repeat student
+            Incoming(student: ("seed-student-jordan", "Jordan Lee"), type: "Duet", status: "completed", offset: 2, time: "5:00 PM"),
+            Incoming(student: ("seed-student-sara", "Sara Kim"), type: "Private", status: "confirmed", offset: 0, time: "8:00 AM"),   // today
+            Incoming(student: ("seed-student-alex", "Alex Rivera"), type: "Private", status: "pending", offset: 0, time: "6:00 PM"),
         ]
         for (i, b) in feed.enumerated() {
             context.insert(Booking(
-                legacyId: 500 + i, instructorId: meId, date: "Thu, Jul 10", time: "9:00 AM",
+                legacyId: 500 + i, instructorId: meId,
+                date: dateString(dayOffset: b.offset), time: b.time,
                 type: b.type, duration: "55 min",
                 status: BookingStatus(rawValue: b.status) ?? .completed, order: i,
                 remoteID: "seed-incoming-\(i)", instructorOwnerID: owner,

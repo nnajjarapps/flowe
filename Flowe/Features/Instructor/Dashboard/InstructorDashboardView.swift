@@ -13,10 +13,13 @@ struct InstructorDashboardView: View {
     @State private var showEditProfile = false
     @State private var showPaywall = false
 
-    /// Sessions students have booked with this instructor, newest first. Declined and cancelled
-    /// requests drop off the schedule.
+    /// Accepted sessions scheduled for today — not the whole book of business. Pending requests
+    /// live in their own section; declined and cancelled ones drop off entirely.
     private var todaysSessions: [Booking] {
-        data.incomingBookings.filter { $0.status != .cancelled }
+        data.incomingBookings.filter {
+            $0.status != .cancelled && $0.status != .pending
+                && $0.date == FloweWeek.todayBookingDate
+        }
     }
 
     /// Requests still awaiting an accept/decline.
