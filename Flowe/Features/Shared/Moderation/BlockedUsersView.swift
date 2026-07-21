@@ -13,8 +13,7 @@ struct BlockedUsersView: View {
                     EmptyStateView(
                         icon: "hand.raised",
                         title: "No blocked users",
-                        message: "People you block won't be able to reach you here, and you won't "
-                               + "see their messages or profile."
+                        message: "People you block won't be able to reach you here, and you won't see their messages or profile."
                     )
                 } else {
                     List {

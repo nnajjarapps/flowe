@@ -4,9 +4,11 @@ import SwiftUI
 /// Used across screens when there's no real data yet (pilot/beta).
 struct EmptyStateView: View {
     let icon: String
-    let title: String
-    let message: String
-    var actionTitle: String? = nil
+    // LocalizedStringKey, not String: `Text(someString)` does not localize, and Xcode's string
+    // extraction cannot see literals passed into a String parameter.
+    let title: LocalizedStringKey
+    let message: LocalizedStringKey
+    var actionTitle: LocalizedStringKey? = nil
     var action: (() -> Void)? = nil
 
     var body: some View {

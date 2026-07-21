@@ -374,8 +374,9 @@ struct InstructorProfileView: View {
             EmptyStateView(
                 icon: "star",
                 title: "No reviews yet",
-                message: "After a session, students can review it from their Bookings tab. "
-                       + "Their reviews will show up here."
+                // One literal, not a `+` concatenation — a concatenation is an expression, so it
+                // can't be a LocalizedStringKey and would never be extracted.
+                message: "After a session, students can review it from their Bookings tab. Their reviews will show up here."
             )
         } else {
             VStack(alignment: .leading, spacing: 14) {

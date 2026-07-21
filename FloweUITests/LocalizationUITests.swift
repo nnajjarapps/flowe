@@ -60,6 +60,35 @@ final class LocalizationUITests: FloweUITestCase {
                       "Dashboard quick actions should be translated")
     }
 
+    // MARK: - Empty states
+
+    /// `EmptyStateView` took `String` parameters, so `Text(title)` used SwiftUI's non-localizing
+    /// initializer and Xcode's extractor never saw the call-site literals. Every empty state in the
+    /// app stayed English — and an empty state is exactly what a new user sees first.
+    func testEmptyStatesAreTranslated() {
+        launch(as: .student, seeded: false, language: "es")
+        XCTAssertTrue(waitForAnyText(["Aún no hay instructores"], timeout: 20),
+                      "The Discover empty state should be translated")
+        XCTAssertNil(anyStaticText(["No instructors yet"]),
+                     "The English empty state should not remain")
+    }
+
+    func testBookingsEmptyStateIsTranslated() {
+        launch(as: .student, seeded: false, language: "fr")
+        selectTab("Réservations")
+        XCTAssertTrue(waitForAnyText(["Pas encore de séances"], timeout: 20),
+                      "The Bookings empty state should be translated")
+    }
+
+    /// Section headers came through `SectionHeader(text: String)` — same non-localizing path.
+    func testSectionHeadersAreTranslated() {
+        launch(as: .instructor, language: "es")
+        XCTAssertTrue(scrollToText(["AGENDA DE HOY"]),
+                      "Section headers should be translated")
+        XCTAssertNil(anyStaticText(["TODAY'S SCHEDULE"]),
+                     "The English section header should not remain")
+    }
+
     // MARK: - Arabic / RTL
 
     func testArabicSwitchesLanguage() {

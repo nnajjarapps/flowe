@@ -22,7 +22,7 @@ struct NewMessageSheet: View {
         return people.filter { $0.displayName.lowercased().contains(q) }
     }
 
-    private var emptyMessage: String {
+    private var emptyMessage: LocalizedStringKey {
         session.authState == .instructor
             ? "Students who book a session with you will appear here."
             : "Instructors you can book will appear here."

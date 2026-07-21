@@ -31,7 +31,7 @@ struct AvailabilityView: View {
 
                     HStack {
                         Image(systemName: "info.circle")
-                        Text("\(selected.count) day\(selected.count == 1 ? "" : "s") open per week")
+                        Text("\(selected.count) days open per week")
                     }
                     .font(FloweFont.mono(11))
                     .foregroundStyle(Color.floweMuted)

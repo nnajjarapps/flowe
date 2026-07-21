@@ -3,7 +3,7 @@ import SwiftUI
 // MARK: - Section header (uppercase mono meta label)
 
 struct SectionHeader: View {
-    let text: String
+    let text: LocalizedStringKey
     var color: Color = .floweMuted
 
     var body: some View {
@@ -68,7 +68,7 @@ struct StatusBadge: View {
 
 struct StatTile: View {
     let value: String
-    let label: String
+    let label: LocalizedStringKey
     var accent: Color = .flowePinkDeep
 
     var body: some View {
@@ -94,7 +94,7 @@ struct StatTile: View {
 // MARK: - Full-width pink gradient CTA
 
 struct GradientButton: View {
-    let title: String
+    let title: LocalizedStringKey
     var enabled: Bool = true
     let action: () -> Void
 

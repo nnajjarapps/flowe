@@ -24,7 +24,10 @@ struct DiscoverView: View {
         return data.featuredInstructor
     }
 
-    private var listLabel: String {
+    /// A `LocalizedStringKey` rather than a composed `String`, so the pattern
+    /// ("%@ · %lld INSTRUCTORS") is extracted and can be translated — and reordered, since other
+    /// languages won't want the count in this position.
+    private var listLabel: LocalizedStringKey {
         let prefix = filter == "All" ? "NEAR YOU" : filter.uppercased()
         return "\(prefix) · \(filteredInstructors.count) INSTRUCTORS"
     }

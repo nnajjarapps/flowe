@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct PrimaryButton: View {
-    let title: String
+    let title: LocalizedStringKey
     let action: () -> Void
 
     @GestureState private var isPressed = false

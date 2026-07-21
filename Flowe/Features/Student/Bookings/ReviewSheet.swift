@@ -88,7 +88,7 @@ struct ReviewSheet: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("review.star.\(star)")
-                .accessibilityLabel("\(star) star\(star == 1 ? "" : "s")")
+                .accessibilityLabel(Text("\(star) stars"))
             }
         }
     }

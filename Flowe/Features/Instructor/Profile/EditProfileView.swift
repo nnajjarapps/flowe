@@ -181,14 +181,14 @@ struct EditProfileView: View {
 
     // MARK: - Pieces
 
-    private func field<Content: View>(title: String, @ViewBuilder _ content: () -> Content) -> some View {
+    private func field<Content: View>(title: LocalizedStringKey, @ViewBuilder _ content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             SectionHeader(text: title)
             content()
         }
     }
 
-    private func textBox(_ text: Binding<String>, placeholder: String) -> some View {
+    private func textBox(_ text: Binding<String>, placeholder: LocalizedStringKey) -> some View {
         TextField("", text: text, prompt: Text(placeholder).foregroundColor(Color.floweMuted))
             .font(FloweFont.sans(14))
             .foregroundStyle(Color.floweInk)

@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct FloatingLabelField: View {
-    let title: String
+    let title: LocalizedStringKey
     @Binding var text: String
     var isSecure: Bool = false
 

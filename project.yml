@@ -26,6 +26,10 @@ settings:
     SWIFT_STRICT_CONCURRENCY: complete
     CODE_SIGN_STYLE: Automatic
     DEVELOPMENT_TEAM: UYY2KBNZYQ
+    # Extract localizable strings into Localizable.xcstrings at compile time. Without this the
+    # catalog only grew when someone happened to build in Xcode.app, so CLI and CI builds silently
+    # let new UI strings drift out of the catalog and ship untranslated.
+    SWIFT_EMIT_LOC_STRINGS: YES
   configs:
     Debug:
       DEBUG_INFORMATION_FORMAT: dwarf
