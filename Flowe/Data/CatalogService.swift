@@ -11,6 +11,7 @@ struct CatalogListing {
     let specialties: [String]
     let sessionTypes: [String]
     let available: [String]
+    let hours: [String]
     let rating: Double
     let reviews: Int
     let img: String
@@ -30,6 +31,7 @@ struct CatalogListing {
         specialties = record["specialties"] as? [String] ?? []
         sessionTypes = record["sessionTypes"] as? [String] ?? []
         available = record["available"] as? [String] ?? []
+        hours = record["hours"] as? [String] ?? []
         rating = record["rating"] as? Double ?? 0
         reviews = record["reviews"] as? Int ?? 0
         img = record["img"] as? String ?? ""
@@ -66,6 +68,7 @@ final class CatalogService {
         record["specialties"] = instructor.specialties
         record["sessionTypes"] = instructor.sessionTypes
         record["available"] = instructor.available
+        record["hours"] = instructor.hours
         record["rating"] = instructor.rating
         record["reviews"] = instructor.reviews
         record["img"] = instructor.img

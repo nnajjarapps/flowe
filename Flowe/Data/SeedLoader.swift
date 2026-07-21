@@ -73,6 +73,11 @@ enum SeedLoader {
             available: ["Mon", "Wed", "Fri"], bio: "Reformer-focused sessions for every level.",
             order: meId, ownerID: owner
         )
+        // Explicit per-day hours: mornings Mon/Wed, evenings Fri. Without these the listing would
+        // exercise the legacy "day open, hours unset" fallback instead of the real path.
+        me.setHours(["8:00 AM", "9:00 AM", "10:00 AM"], on: "Mon")
+        me.setHours(["9:00 AM", "10:00 AM", "11:00 AM"], on: "Wed")
+        me.setHours(["5:00 PM", "6:00 PM"], on: "Fri")
         context.insert(me)
 
         // Incoming bookings addressed to this instructor. Invisible to a seeded *student* — their

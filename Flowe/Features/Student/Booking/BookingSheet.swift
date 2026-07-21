@@ -202,9 +202,15 @@ struct BookingSheet: View {
 
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
                 ForEach(FloweWeek.current()) { d in
-                    let avail = instructor.available.contains(d.matchWeekday)
+                    let avail = instructor.isBookable(on: d.matchWeekday)
                     let sel = day == d.pickerValue
-                    Button { if avail { day = d.pickerValue } } label: {
+                    Button {
+                        guard avail else { return }
+                        // Changing the day can invalidate an already-picked time — Tuesday
+                        // 9am may not exist on Thursday.
+                        if day != d.pickerValue { time = "" }
+                        day = d.pickerValue
+                    } label: {
                         VStack(spacing: 2) {
                             (d.isToday ? Text("Today") : Text(verbatim: d.displayWeekday))
                                 .font(FloweFont.mono(10))
@@ -236,6 +242,12 @@ struct BookingSheet: View {
 
     // MARK: - Step 2
 
+    /// The instructor's bookable hours on the chosen day — not the full house slate. An instructor
+    /// who teaches Tuesday mornings only should not appear bookable at 6pm.
+    private var availableTimes: [String] {
+        instructor.hours(on: String(day.prefix(3)))
+    }
+
     private var stepTimeType: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
@@ -251,8 +263,15 @@ struct BookingSheet: View {
                 .foregroundStyle(Color.floweMuted)
                 .padding(.bottom, 12)
 
+            if availableTimes.isEmpty {
+                Text("No times left on this day. Try another one.")
+                    .font(FloweFont.sans(13))
+                    .foregroundStyle(Color.floweMuted)
+                    .padding(.bottom, 16)
+            }
+
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
-                ForEach(FloweConstants.times, id: \.self) { t in
+                ForEach(availableTimes, id: \.self) { t in
                     let sel = time == t
                     Button { time = t } label: {
                         Text(t)

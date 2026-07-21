@@ -795,7 +795,8 @@ final class MockDataStore {
 
     private func apply(_ l: CatalogListing, to ins: Instructor) {
         ins.name = l.name; ins.city = l.city; ins.bio = l.bio; ins.price = l.price
-        ins.specialties = l.specialties; ins.sessionTypes = l.sessionTypes; ins.available = l.available
+        ins.specialties = l.specialties; ins.sessionTypes = l.sessionTypes
+        ins.available = l.available; ins.hours = l.hours
         ins.rating = l.rating; ins.reviews = l.reviews; ins.img = l.img; ins.cert = l.cert
         ins.visibilityRaw = l.visibility
         ins.visibilityVerifiedAt = Date()

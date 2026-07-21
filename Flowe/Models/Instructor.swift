@@ -29,6 +29,11 @@ final class Instructor {
     /// External storage keeps the blob out of the SQLite row.
     @Attribute(.externalStorage) var photo: Data?
     var available: [String] = []
+    /// Bookable hours, one `"Mon|9:00 AM"` token per slot. A flat `[String]` rather than a nested
+    /// type because this has to survive both SwiftData and a public-database `CKRecord`, neither of
+    /// which stores a dictionary. Kept alongside `available` rather than replacing it: `available`
+    /// is what the feed and the catalog already publish, and it stays derived from these on save.
+    var hours: [String] = []
     var bio: String?
     var order: Int = 0              // stable display order
     var ownerID: String?           // the signed-in instructor who owns/edits this listing
@@ -54,6 +59,7 @@ final class Instructor {
         cert: String = "",
         img: String = "",
         available: [String] = [],
+        hours: [String] = [],
         bio: String? = nil,
         order: Int = 0,
         ownerID: String? = nil
@@ -71,10 +77,45 @@ final class Instructor {
         self.cert = cert
         self.img = img
         self.available = available
+        self.hours = hours
         self.bio = bio
         self.order = order
         self.ownerID = ownerID
     }
 
     var firstName: String { name.split(separator: " ").first.map(String.init) ?? name }
+
+    // MARK: - Bookable hours
+
+    private static let separator = "|"
+
+    /// Bookable times on a weekday, in chronological order.
+    ///
+    /// A day with no stored hours falls back to the standard slate. Listings created before
+    /// per-day hours existed have `available` days but no `hours`, and returning nothing for them
+    /// would silently make every one of them unbookable.
+    func hours(on day: String) -> [String] {
+        // `self.hours` throughout: a bare `hours` here is ambiguous with this method.
+        let stored = self.hours.compactMap { token -> String? in
+            let parts = token.components(separatedBy: Self.separator)
+            guard parts.count == 2, parts[0] == day else { return nil }
+            return parts[1]
+        }
+        guard stored.isEmpty else { return FloweConstants.times.filter(stored.contains) }
+        return available.contains(day) ? FloweConstants.times : []
+    }
+
+    /// Replace one day's hours, leaving the other days untouched.
+    func setHours(_ times: [String], on day: String) {
+        let others = self.hours.filter { !$0.hasPrefix(day + Self.separator) }
+        self.hours = others + times.map { day + Self.separator + $0 }
+    }
+
+    /// Whether this day can be booked at all.
+    func isBookable(on day: String) -> Bool { !hours(on: day).isEmpty }
+
+    /// Days with at least one bookable hour — what `available` is kept in sync with.
+    var bookableDays: [String] {
+        FloweConstants.weekdays.filter(isBookable(on:))
+    }
 }

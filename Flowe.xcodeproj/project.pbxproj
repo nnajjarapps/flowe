@@ -10,6 +10,7 @@
 		0090B8F0D20E644F666A5511 /* DMSans-LightItalic.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D599E204E351EBA66AFCC9B7 /* DMSans-LightItalic.ttf */; };
 		04DF42D3F8F09485B0167B07 /* CalendarComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = D924C099B8699B291D7C43DA /* CalendarComponents.swift */; };
 		073E425562DDD8F043790E0E /* InstructorBarChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65268B66DE3AFF92DA3C484D /* InstructorBarChart.swift */; };
+		08E2C7B98955AD5EF394590C /* AvailabilityUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21FFCFE292F97E9CB1A3BCDF /* AvailabilityUITests.swift */; };
 		0DE9C9395490F9BEF5BE04C2 /* MessagingUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DBB3E399C8BF1C8511DF1B7 /* MessagingUITests.swift */; };
 		0F346C6CD319E875C3D3EAF4 /* MockDataStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7363600B48D9D0491D076A9 /* MockDataStore.swift */; };
 		11CDDA2ABFDB2E6D4700B209 /* FloweConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06D1617BBCF38F203A11C316 /* FloweConstants.swift */; };
@@ -155,6 +156,7 @@
 		1DA7831F38CF5EE21BF1DD69 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		206335F390E5CC2B31825A47 /* ConversationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationView.swift; sourceTree = "<group>"; };
 		20A872F7B6C9D27EEC6EBBDD /* FlowGradients.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowGradients.swift; sourceTree = "<group>"; };
+		21FFCFE292F97E9CB1A3BCDF /* AvailabilityUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvailabilityUITests.swift; sourceTree = "<group>"; };
 		23BC35F24816C68247C04B36 /* OnboardingUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingUITests.swift; sourceTree = "<group>"; };
 		2900A4121599897991E4CAC5 /* Flowe.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Flowe.entitlements; sourceTree = "<group>"; };
 		2FA0573290F70741DFB0929C /* DMSans-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "DMSans-Medium.ttf"; sourceTree = "<group>"; };
@@ -568,6 +570,7 @@
 			isa = PBXGroup;
 			children = (
 				9D9DC7CE9663E57AFACB3D10 /* AccountDeletionUITests.swift */,
+				21FFCFE292F97E9CB1A3BCDF /* AvailabilityUITests.swift */,
 				75EABC10430200F40133C4BA /* BookingFlowUITests.swift */,
 				E388152C9A9602205EA34963 /* FloweUITestCase.swift */,
 				EA6156CB4F1D101D5B8CD78B /* InstructorProfileEditingUITests.swift */,
@@ -751,6 +754,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				EF02E1D3FD1998804128264B /* AccountDeletionUITests.swift in Sources */,
+				08E2C7B98955AD5EF394590C /* AvailabilityUITests.swift in Sources */,
 				E9524FB6F9B00D029F560401 /* BookingFlowUITests.swift in Sources */,
 				80100DE4455F8F8024B6B638 /* FloweUITestCase.swift in Sources */,
 				78A8DB4E680912E9FC05F9E6 /* InstructorProfileEditingUITests.swift in Sources */,
