@@ -64,6 +64,26 @@ final class AccountDeletionService {
         ) else { return false }
         ids += written
 
+        // Community posts I wrote, and their likes and replies. Likes and comments I left on
+        // *other* people's posts go too — they carry my name and my id.
+        guard let myPosts = await recordIDs(
+            ofType: CommunityService.postRecordType,
+            matching: NSPredicate(format: "authorID == %@", ownerID)
+        ) else { return false }
+        ids += myPosts
+
+        guard let myLikes = await recordIDs(
+            ofType: CommunityService.likeRecordType,
+            matching: NSPredicate(format: "authorID == %@", ownerID)
+        ) else { return false }
+        ids += myLikes
+
+        guard let myComments = await recordIDs(
+            ofType: CommunityService.commentRecordType,
+            matching: NSPredicate(format: "authorID == %@", ownerID)
+        ) else { return false }
+        ids += myComments
+
         // My instructor listing, whose recordName *is* the owner id. Absent for students.
         ids.append(CKRecord.ID(recordName: ownerID))
 

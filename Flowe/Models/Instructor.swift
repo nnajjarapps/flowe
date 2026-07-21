@@ -28,6 +28,14 @@ final class Instructor {
     /// catalog as a `CKAsset`; `img` stays the fallback for seeded listings that have no upload.
     /// External storage keeps the blob out of the SQLite row.
     @Attribute(.externalStorage) var photo: Data?
+    /// Photograph of the certificate itself, downscaled by `ProfileImage.prepareDocument`. Backs up
+    /// the free-text `cert` claim; Flowe still verifies nothing, so it is presented as the
+    /// instructor's own evidence rather than as a Flowe check.
+    @Attribute(.externalStorage) var certPhoto: Data?
+    /// `PaymentMethod` raw ids the instructor accepts. Flowe processes no payments in this release,
+    /// so a student needs this before booking, not after. `[String]` because neither SwiftData's
+    /// CloudKit mirror nor a `CKRecord` field stores a richer type.
+    var paymentMethods: [String] = []
     var available: [String] = []
     /// Bookable hours, one `"Mon|9:00 AM"` token per slot. A flat `[String]` rather than a nested
     /// type because this has to survive both SwiftData and a public-database `CKRecord`, neither of
@@ -58,6 +66,7 @@ final class Instructor {
         sessionTypes: [String] = [],
         cert: String = "",
         img: String = "",
+        paymentMethods: [String] = [],
         available: [String] = [],
         hours: [String] = [],
         bio: String? = nil,
@@ -76,6 +85,7 @@ final class Instructor {
         self.sessionTypes = sessionTypes
         self.cert = cert
         self.img = img
+        self.paymentMethods = paymentMethods
         self.available = available
         self.hours = hours
         self.bio = bio

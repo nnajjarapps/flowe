@@ -2,8 +2,16 @@ import SwiftUI
 
 /// Community tab: a header, a horizontal Stories strip of the top instructors,
 /// and the scrolling feed of posts.
+///
+/// The feed is shared — posts live in the CloudKit public database (see `CommunityService`) and are
+/// cached locally so the tab still renders offline.
 struct CommunityView: View {
     @Environment(MockDataStore.self) private var data
+
+    @State private var showCompose = false
+
+    /// Blocked authors are already filtered out here, so an empty feed really is empty.
+    private var feed: [FeedPost] { data.visiblePosts }
 
     var body: some View {
         ScrollView {
@@ -15,15 +23,17 @@ struct CommunityView: View {
                 }
 
                 // Feed
-                if data.posts.isEmpty {
+                if feed.isEmpty {
                     EmptyStateView(
                         icon: "bubble.left.and.bubble.right",
                         title: "Nothing here yet",
-                        message: "Reviews, tips and check-ins from the community will show up here."
+                        message: "Reviews, tips and check-ins from the community will show up here.",
+                        actionTitle: "Write the first post",
+                        action: { showCompose = true }
                     )
                     .padding(.top, 80)
                 } else {
-                    ForEach(data.posts) { post in
+                    ForEach(feed) { post in
                         PostRowView(post: post)
                         Divider().overlay(Color.floweBorder)
                     }
@@ -34,7 +44,14 @@ struct CommunityView: View {
         .safeAreaInset(edge: .top, spacing: 0) {
             header
         }
-        .task { await data.syncCatalog() }
+        .refreshable { await data.syncCommunity() }
+        .task {
+            await data.syncCatalog()
+            await data.syncCommunity()
+        }
+        .sheet(isPresented: $showCompose) {
+            ComposePostSheet()
+        }
     }
 
     private var header: some View {
@@ -46,6 +63,7 @@ struct CommunityView: View {
             Spacer()
 
             Button {
+                showCompose = true
             } label: {
                 Image(systemName: "plus")
                     .font(.system(size: 16, weight: .medium))
@@ -54,6 +72,8 @@ struct CommunityView: View {
                     .background(FlowGradients.gradDark)
                     .clipShape(Circle())
             }
+            .accessibilityIdentifier("community.compose")
+            .accessibilityLabel(Text("New Post"))
         }
         .padding(.horizontal, 20)
         .padding(.top, 12)

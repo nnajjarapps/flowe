@@ -13,6 +13,7 @@ final class MockDataStore {
 
     private(set) var instructors: [Instructor] = []
     private(set) var posts: [FeedPost] = []
+    private(set) var postComments: [PostComment] = []
     private(set) var bookings: [Booking] = []
     private(set) var messages: [Message] = []
     private(set) var blocked: [BlockedUser] = []
@@ -24,6 +25,7 @@ final class MockDataStore {
     private let deletionService = AccountDeletionService()
     private let reportService = ReportService()
     private let reviewService = ReviewService()
+    private let communityService = CommunityService()
     /// Suppresses public-catalog network calls (previews + UI tests).
     private let isPreview: Bool
 
@@ -44,6 +46,7 @@ final class MockDataStore {
     private static func deleteAll(_ context: ModelContext) {
         try? context.delete(model: Instructor.self)
         try? context.delete(model: FeedPost.self)
+        try? context.delete(model: PostComment.self)
         try? context.delete(model: Booking.self)
         try? context.delete(model: Message.self)
         try? context.delete(model: BlockedUser.self)
@@ -58,7 +61,13 @@ final class MockDataStore {
 
     func refresh() {
         instructors = fetch(sortBy: \Instructor.order)
-        posts       = fetch(sortBy: \FeedPost.order)
+        // Newest first: the feed is a timeline, and a shared feed has no meaningful local `order`.
+        posts       = (try? context.fetch(
+            FetchDescriptor<FeedPost>(sortBy: [SortDescriptor(\.createdAt, order: .reverse)])
+        )) ?? []
+        postComments = (try? context.fetch(
+            FetchDescriptor<PostComment>(sortBy: [SortDescriptor(\.createdAt, order: .forward)])
+        )) ?? []
         bookings    = fetch(sortBy: \Booking.order)
         messages    = (try? context.fetch(
             FetchDescriptor<Message>(sortBy: [SortDescriptor(\.sentAt, order: .forward)])
@@ -730,17 +739,408 @@ final class MockDataStore {
         return true
     }
 
-    // MARK: - Like / save toggles
+    // MARK: - Community feed
 
-    func toggleLike(_ post: FeedPost) {
-        post.liked.toggle()
-        post.likes += post.liked ? 1 : -1
+    /// The feed as this reader should see it: blocked authors gone (Guideline 1.2 — a block has to
+    /// cover posts, not just messages), and posts on their way out already hidden.
+    var visiblePosts: [FeedPost] {
+        posts.filter { !isBlocked($0.ownerID) && !$0.pendingDelete }
+    }
+
+    /// Whether the signed-in user wrote this post — the only person allowed to delete it, and the
+    /// one person who shouldn't be offered a Report button for it.
+    func isMine(_ post: FeedPost) -> Bool {
+        guard let currentUserID, let author = post.ownerID else { return false }
+        return author == currentUserID
+    }
+
+    func isMine(_ comment: PostComment) -> Bool {
+        guard let currentUserID else { return false }
+        return comment.authorID == currentUserID
+    }
+
+    /// Instructors this user has actually had a session with. A shout-out or a check-in names an
+    /// instructor, and letting anyone name anyone would make the feed a place to fabricate
+    /// endorsements — the same failure the booking-anchored review system exists to avoid.
+    var postableInstructors: [Counterpart] {
+        // Completed only, matching `canReview`. Any-booking would include requests the instructor
+        // *declined*, which is precisely the fabricated endorsement this is meant to prevent: a
+        // student could be turned down and still publish a post naming that instructor.
+        let booked = Set(
+            myBookings
+                .filter { $0.status == .completed }
+                .compactMap(\.instructorOwnerID)
+        )
+        let people = instructors.compactMap { listing -> Counterpart? in
+            guard let id = listing.ownerID, booked.contains(id), !isBlocked(id) else { return nil }
+            return Counterpart(id: id, name: listing.name, avatarID: listing.img)
+        }
+        return dedupe(people)
+    }
+
+    /// Post types this user can currently write. Without a session behind them, only a tip.
+    var availablePostTypes: [PostType] {
+        postableInstructors.isEmpty ? [.tip] : [.tip, .checkin, .review]
+    }
+
+    /// The author's uploaded profile photo, if they have a listing. `FeedPost.userImg` only ever
+    /// carries an Unsplash id from seeded reference listings, so without this every row in a
+    /// shipping build falls back to the gradient placeholder.
+    func authorPhoto(for post: FeedPost) -> Data? {
+        guard let authorID = post.ownerID else { return nil }
+        return instructors.first { $0.ownerID == authorID }?.photo
+    }
+
+    /// Replies on a post, oldest first, minus blocked authors.
+    func comments(for post: FeedPost) -> [PostComment] {
+        guard let remoteID = post.remoteID else { return [] }
+        return postComments
+            .filter { $0.postID == remoteID && !isBlocked($0.authorID) }
+            .sorted { $0.createdAt < $1.createdAt }
+    }
+
+    /// Write a post and publish it. `instructorName` is required for the types that name one.
+    func addPost(type: PostType, instructorName: String?, text: String) {
+        guard let me = currentUserID else { return }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let named = type.needsInstructor ? instructorName : nil
+
+        let post = FeedPost(
+            legacyId: (posts.map(\.legacyId).max() ?? 0) + 1,
+            type: type,
+            user: currentUserName,
+            // An instructor writing a tip gets their listing photo on the row; a student has none.
+            userImg: currentInstructor?.img ?? "",
+            instructor: named,
+            text: trimmed,
+            ownerID: me,
+            // Marked pending up front: if the app dies before the upload finishes, the next sync
+            // retries it rather than losing what the user wrote.
+            pendingUpload: true
+        )
+        context.insert(post)
+        save()
+
+        guard !isPreview else { return }
+        Task { await upload(post) }
+    }
+
+    private func upload(_ post: FeedPost) async {
+        guard let authorID = post.ownerID else { return }
+        let remoteID = await communityService.publish(
+            authorID: authorID,
+            authorName: post.user,
+            type: post.type.rawValue,
+            instructorName: post.instructor ?? "",
+            rating: post.rating ?? 0,
+            text: post.text,
+            createdAt: post.createdAt
+        )
+        post.remoteID = remoteID
+        post.pendingUpload = remoteID == nil
+        save()
+
+        // The user may have deleted this post while the publish was in flight. Withdraw it now
+        // rather than leaving it world-readable until the next sync.
+        if post.pendingDelete, let remoteID {
+            if await communityService.deletePost(id: remoteID) { deleteLocally(post) }
+            save()
+        }
+    }
+
+    /// Delete the user's own post. Permitted because they are the record's `_creator`; the public
+    /// database enforces that, so there is no client-side check to bypass.
+    func deletePost(_ post: FeedPost) {
+        guard isMine(post) else { return }
+        guard !isPreview else { return deleteLocally(post) }
+
+        // A nil remoteID does NOT mean "never published": it is also nil for the whole duration of
+        // the publish round-trip, which is longest offline. Deleting locally in that window would
+        // destroy the row while `upload` is still suspended, the record would land on the server
+        // anyway, and the next sync would re-insert a post the user was told had been withdrawn.
+        // Mark it and let the flush retry once an id exists.
+        post.pendingDelete = true
+        save()
+        guard let remoteID = post.remoteID else { return }
+        Task {
+            if await communityService.deletePost(id: remoteID) { deleteLocally(post) }
+            save()
+        }
+    }
+
+    private func deleteLocally(_ post: FeedPost) {
+        if let remoteID = post.remoteID {
+            for comment in postComments where comment.postID == remoteID { context.delete(comment) }
+        }
+        context.delete(post)
         save()
     }
 
+    /// Toggle this reader's like.
+    ///
+    /// The count is not a field anyone shares write access to — it is the number of `CommunityLike`
+    /// records the post has, and this user only ever creates or deletes their own (see
+    /// `CommunityService`). The local numbers move immediately so the tap feels answered, and the
+    /// next sync replaces them with what the server actually holds.
+    func toggleLike(_ post: FeedPost) {
+        post.liked.toggle()
+        post.likes = max(0, post.likes + (post.liked ? 1 : -1))
+        post.pendingLike = true
+        save()
+
+        guard !isPreview else {
+            post.pendingLike = false   // seeded/preview post — there is nothing to deliver
+            save()
+            return
+        }
+        // A real post has no remoteID while it is still uploading or was written offline. Leaving
+        // `pendingLike` set keeps it in the flush queue; clearing it here would drop the like
+        // silently and the next engagement refresh would reset the heart.
+        guard let remoteID = post.remoteID, let me = currentUserID else { return }
+        Task {
+            let delivered = await communityService.setLike(post.liked, postID: remoteID, authorID: me)
+            post.pendingLike = !delivered
+            save()
+        }
+    }
+
+    /// A bookmark is one reader's private shelf — it stays local by design and is never published.
     func toggleSave(_ post: FeedPost) {
         post.saved.toggle()
         save()
+    }
+
+    /// Reply to a post.
+    func addComment(to post: FeedPost, text: String) {
+        guard let me = currentUserID, let postID = post.remoteID else { return }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        let comment = PostComment(
+            postID: postID,
+            authorID: me,
+            authorName: currentUserName,
+            text: trimmed,
+            pendingUpload: true
+        )
+        context.insert(comment)
+        recountComments(postID: postID)
+
+        guard !isPreview else { return }
+        Task { await upload(comment) }
+    }
+
+    private func upload(_ comment: PostComment) async {
+        let remoteID = await communityService.addComment(
+            postID: comment.postID,
+            authorID: comment.authorID,
+            authorName: comment.authorName,
+            text: comment.text,
+            createdAt: comment.createdAt
+        )
+        comment.remoteID = remoteID
+        comment.pendingUpload = remoteID == nil
+        save()
+
+        if comment.pendingDelete, let remoteID {
+            if await communityService.deleteComment(id: remoteID) {
+                let postID = comment.postID
+                context.delete(comment)
+                recountComments(postID: postID)
+            }
+        }
+    }
+
+    /// Delete the user's own reply.
+    func deleteComment(_ comment: PostComment) {
+        guard isMine(comment) else { return }
+        let postID = comment.postID
+        guard !isPreview else {
+            context.delete(comment)
+            recountComments(postID: postID)
+            return
+        }
+        // Same in-flight window as `deletePost`: a nil remoteID may just mean the publish hasn't
+        // returned yet, so mark rather than destroy and let the flush withdraw it.
+        comment.pendingDelete = true
+        save()
+        guard let remoteID = comment.remoteID else { return }
+        Task {
+            guard await communityService.deleteComment(id: remoteID) else { return }
+            context.delete(comment)
+            recountComments(postID: postID)
+        }
+    }
+
+    private func recountComments(postID: String) {
+        save()
+        if let post = posts.first(where: { $0.remoteID == postID }) {
+            post.comments = comments(for: post).count
+            save()
+        }
+    }
+
+    // MARK: - Community sync
+
+    /// Pull the shared feed, cache it locally so the tab works offline, then refresh the engagement
+    /// counts that live in their own records.
+    func syncCommunity() async {
+        guard !isPreview else { return }
+        await flushPendingCommunityWrites()
+        mergePosts(await communityService.fetchRecentPosts())
+        await refreshEngagement()
+    }
+
+    /// Refresh one post's replies without touching the post list.
+    ///
+    /// The comments sheet cannot call `syncCommunity`: that prunes cached posts, including the very
+    /// post the sheet is displaying, and reading a deleted SwiftData model traps at runtime.
+    func syncComments(for post: FeedPost) async {
+        guard !isPreview, let remoteID = post.remoteID else { return }
+        await flushPendingCommunityWrites()
+        guard let remote = await communityService.fetchComments(postIDs: [remoteID]) else { return }
+        mergeComments(remote, for: [remoteID])
+    }
+
+    /// Re-send anything that never reached the server: a post written offline, a like taken while
+    /// the network was down, a deletion the server never confirmed.
+    private func flushPendingCommunityWrites() async {
+        for post in posts where post.pendingUpload && post.remoteID == nil {
+            await upload(post)
+        }
+        for post in posts where post.pendingDelete {
+            guard let remoteID = post.remoteID else { continue }
+            if await communityService.deletePost(id: remoteID) { deleteLocally(post) }
+        }
+        save()
+        for post in posts where post.pendingLike {
+            guard let remoteID = post.remoteID, let me = currentUserID else { continue }
+            post.pendingLike = !(await communityService.setLike(
+                post.liked, postID: remoteID, authorID: me
+            ))
+        }
+        for comment in postComments where comment.pendingUpload && comment.remoteID == nil {
+            await upload(comment)
+        }
+        for comment in postComments where comment.pendingDelete {
+            guard let remoteID = comment.remoteID else { continue }
+            if await communityService.deleteComment(id: remoteID) {
+                let postID = comment.postID
+                context.delete(comment)
+                recountComments(postID: postID)
+            }
+        }
+        save()
+    }
+
+    private func mergePosts(_ remote: [RemotePost]) {
+        guard !remote.isEmpty else { return }
+        let known = Set(posts.compactMap(\.remoteID))
+        var nextId = posts.map(\.legacyId).max() ?? 0
+
+        for entry in remote where !known.contains(entry.id) {
+            nextId += 1
+            context.insert(FeedPost(
+                legacyId: nextId,
+                type: PostType(rawValue: entry.type) ?? .tip,
+                user: entry.authorName,
+                // An author who is also an instructor has a listing photo; a student doesn't.
+                userImg: instructors.first { $0.ownerID == entry.authorID }?.img ?? "",
+                instructor: entry.instructorName.isEmpty ? nil : entry.instructorName,
+                rating: entry.rating > 0 ? entry.rating : nil,
+                text: entry.text,
+                ownerID: entry.authorID,
+                remoteID: entry.id,
+                createdAt: entry.createdAt
+            ))
+        }
+        prunePosts(against: remote)
+        save()
+    }
+
+    /// Drop cached posts their authors have since deleted.
+    ///
+    /// The fetch is capped, so only prune inside the window it actually covers — anything older
+    /// than the oldest row returned simply wasn't looked at. Very recent posts are spared too:
+    /// CloudKit is eventually consistent, and a post that hasn't propagated to the query index yet
+    /// is not a deleted post.
+    private func prunePosts(against remote: [RemotePost]) {
+        guard let oldest = remote.map(\.createdAt).min() else { return }
+        let live = Set(remote.map(\.id))
+        let settled = Date(timeIntervalSinceNow: -300)
+        for post in posts {
+            guard let remoteID = post.remoteID, !live.contains(remoteID),
+                  post.createdAt >= oldest, post.createdAt < settled else { continue }
+            deleteLocally(post)
+        }
+    }
+
+    /// Replace the cached like counts and comments with what the shared store holds.
+    private func refreshEngagement() async {
+        let ids = posts.compactMap(\.remoteID)
+        guard !ids.isEmpty, let me = currentUserID else { return }
+
+        // A nil here means the query failed, which is not the same as "nobody liked anything" —
+        // treating them alike would zero every count the moment the user went offline.
+        if let likes = await communityService.fetchLikes(postIDs: ids) {
+            let byPost = Dictionary(grouping: likes, by: \.postID)
+            for post in posts {
+                guard let remoteID = post.remoteID else { continue }
+                let rows = byPost[remoteID] ?? []
+                let mine = rows.contains { $0.authorID == me }
+                if post.pendingLike {
+                    // An undelivered tap: keep the user's own state, and keep the count consistent
+                    // with it. Overwriting the count unconditionally showed a filled heart beside a
+                    // total that excluded the very like it represents.
+                    post.likes = rows.count + (post.liked && !mine ? 1 : 0) - (!post.liked && mine ? 1 : 0)
+                } else {
+                    post.likes = rows.count
+                    post.liked = mine
+                }
+            }
+        }
+
+        if let remote = await communityService.fetchComments(postIDs: ids) {
+            mergeComments(remote, for: ids)
+        }
+        save()
+    }
+
+    private func mergeComments(_ remote: [RemoteComment], for postIDs: [String]) {
+        let known = Set(postComments.compactMap(\.remoteID))
+        for entry in remote where !known.contains(entry.id) {
+            context.insert(PostComment(
+                remoteID: entry.id,
+                postID: entry.postID,
+                authorID: entry.authorID,
+                authorName: entry.authorName,
+                text: entry.text,
+                createdAt: entry.createdAt
+            ))
+        }
+        // The fetch is the complete set for these posts, so a cached reply that isn't in it was
+        // deleted by its author and must stop being visible here. Anything still queued for upload
+        // is ours and was never in the fetch to begin with.
+        //
+        // The `settled` window matters as much as the membership test: CloudKit's public query
+        // index is eventually consistent, so a reply saved seconds ago routinely does not come back
+        // yet. Without it, sending a reply and pulling to refresh makes your own reply vanish.
+        // Same reasoning — and same window — as `prunePosts`.
+        let live = Set(remote.map(\.id))
+        let covered = Set(postIDs)
+        let settled = Date(timeIntervalSinceNow: -300)
+        for comment in postComments where covered.contains(comment.postID) && !comment.pendingUpload {
+            guard let remoteID = comment.remoteID, !live.contains(remoteID),
+                  comment.createdAt < settled else { continue }
+            context.delete(comment)
+        }
+        save()
+
+        for post in posts where post.remoteID != nil {
+            let count = comments(for: post).count
+            if post.comments != count { post.comments = count }
+        }
     }
 
     // MARK: - Instructor identity & editing
@@ -798,12 +1198,17 @@ final class MockDataStore {
         ins.specialties = l.specialties; ins.sessionTypes = l.sessionTypes
         ins.available = l.available; ins.hours = l.hours
         ins.rating = l.rating; ins.reviews = l.reviews; ins.img = l.img; ins.cert = l.cert
+        ins.paymentMethods = l.paymentMethods
         ins.visibilityRaw = l.visibility
         ins.visibilityVerifiedAt = Date()
-        // Only overwrite the cached photo when the server actually has one. A nil here usually means
+        // Only overwrite a cached image when the server actually has one. A nil here usually means
         // "this listing has no upload", but for my own listing it can also mean my photo hasn't
         // reached the server yet — and clobbering it would lose the picture the user just chose.
         if let photo = l.photo { ins.photo = photo }
+        // Assigned unconditionally, unlike `photo` above: the nil-skip there protects the owner's
+        // own not-yet-uploaded image, but for someone else's cached listing a nil means the
+        // instructor removed the certificate — and a withdrawn credential must stop being shown.
+        ins.certPhoto = l.certPhoto
     }
 
     /// The signed-in instructor's own listing (resolved by owner), if it exists.

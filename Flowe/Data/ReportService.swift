@@ -5,6 +5,8 @@ import CloudKit
 enum ReportedContent: String {
     case message                // a single chat message
     case instructorListing      // a public profile's text (bio / cert / name)
+    case communityPost          // a post in the community feed
+    case communityComment       // a reply on a community post
 }
 
 /// Why the reporter flagged it. Fixed set so reports can be triaged without reading every one.

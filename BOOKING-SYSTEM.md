@@ -171,6 +171,10 @@ Only `_creator`-owned records can go — the public database grants write to who
 | `ChatMessage` | `senderID == ownerID` |
 | `SessionBooking` | `studentID == ownerID` |
 | `SessionDecision` | `decision-<bookingID>` for every booking where `instructorID == ownerID` |
+| `SessionReview` | `studentID == ownerID` (reviews written *about* the user stay — they belong to their authors) |
+| `CommunityPost` | `authorID == ownerID` |
+| `CommunityLike` | `authorID == ownerID` (including likes left on other people's posts) |
+| `CommunityComment` | `authorID == ownerID` (including replies on other people's posts) |
 | `InstructorListing` | `recordName == ownerID` (carries the profile photo as a `CKAsset`) |
 
 `SessionDecision` carries no instructor id, so it can't be queried directly; its recordName is
@@ -284,13 +288,126 @@ Review text is screened by `ContentFilter` on submission, the same as public lis
 
 ---
 
+# Community
+
+Same constraint, same place. The feed used to be `FeedPost` rows in the `UserData` configuration,
+which SwiftData mirrors to the CloudKit **private** database — per-iCloud-account, so a post one
+user wrote could never be seen by another. A feed in the private database is not a community, it is
+a diary. Post bodies now travel through the **public** database via `CommunityService`, and
+`FeedPost` / `PostComment` are the offline cache, the same shape `Message` and `Review` take.
+
+No two-record split is needed: posts are append-only and each is written by its author, so the
+default `_creator`-write role already fits. The author can delete their own post because they are
+its creator — that is the whole mechanism behind the Delete Post action.
+
+## Why a like is a record, not a counter
+
+A public-database record is writable only by whoever created it. A `likes` integer on the post could
+therefore only ever be incremented by the post's **author**; every other reader's tap would be
+rejected, and a client that bumped its local copy anyway would be showing a number nobody else could
+see.
+
+So a like *is* a record. `CommunityLike` has recordName `like-<postID>-<readerID>`, is created by the
+reader who taps and deleted when they untap, and the count is simply how many of them a post has.
+Every write stays inside the writer's own row.
+
+The tradeoffs are accepted deliberately:
+
+- one extra query per feed refresh (`postID IN [...]`, sliced at 50 ids, cursor-followed);
+- the count is eventually consistent — it moves locally on tap and is replaced by the server's
+  answer on the next sync;
+- a failed like query returns `nil`, not `[]`, so an offline refresh keeps the last known counts
+  instead of zeroing every post.
+
+Comments work the same way (`CommunityComment`, one record per reply, creator-write).
+
+## What is *not* shared
+
+`FeedPost.saved` stays local. A bookmark is one reader's private shelf, and publishing it would tell
+everyone what you kept.
+
+## Who can post about whom
+
+`MockDataStore.postableInstructors` limits check-ins and shout-outs to instructors the user has an
+actual booking with, and the composer offers only `Tip` when that list is empty. Letting anyone name
+anyone would make the feed a place to manufacture endorsements — the exact failure anchoring reviews
+to bookings exists to prevent. Feed posts also carry **no star rating**; ratings belong to the
+booking-anchored review system.
+
+## Delivery guarantees
+
+`FeedPost.pendingUpload` / `pendingDelete` / `pendingLike` mark local state that hasn't reached the
+server, and `flushPendingCommunityWrites()` retries them at the start of every sync — a post written
+offline shows "Posting…" rather than claiming success. A post pending deletion is hidden from the
+feed immediately: a post that looks deleted while staying world-readable is the failure that matters.
+
+Sync runs on opening the Community tab, on pull-to-refresh, and when a post's replies are opened.
+
+`syncCommunity` also prunes cached posts their authors deleted, but only inside the window the
+capped fetch actually covers (nothing older than the oldest row returned) and never for posts
+younger than five minutes — CloudKit is eventually consistent, and a post that hasn't reached the
+query index yet is not a deleted post.
+
+## CloudKit Dashboard setup
+
+### `CommunityPost`
+
+| Field | Type | Index |
+|---|---|---|
+| `authorID` | String | **Queryable** |
+| `authorName` | String | — |
+| `type` | String | — |
+| `instructorName` | String | — |
+| `rating` | Int(64) | — |
+| `text` | String | — |
+| `createdAt` | Date/Time | **Queryable, Sortable** |
+
+The feed query is a `TRUEPREDICATE` sorted on `createdAt`, so the record type itself must be
+**Queryable** in the Dashboard (Record Type → Indexes → add `recordName` Queryable) in addition to
+the field indexes above. Without that the feed silently returns nothing.
+
+### `CommunityLike`
+
+| Field | Type | Index |
+|---|---|---|
+| `postID` | String | **Queryable** |
+| `authorID` | String | **Queryable** |
+| `createdAt` | Date/Time | — |
+
+### `CommunityComment`
+
+| Field | Type | Index |
+|---|---|---|
+| `postID` | String | **Queryable** |
+| `authorID` | String | **Queryable** |
+| `authorName` | String | — |
+| `text` | String | — |
+| `createdAt` | Date/Time | **Queryable, Sortable** |
+
+All three use the default security role (`_world` read, `_creator` write) — the feed is public by
+design, and creator-write is what makes author-only delete work.
+
+## Known limitations
+
+- **Like counts are query-bounded.** Each slice follows its cursor, but a viral post plus a large
+  feed still means a lot of like records fetched per refresh. A denormalised counter needs either a
+  server or a world-writable record type; neither is acceptable here yet.
+- **No pagination.** The feed is the 100 most recent posts, full stop.
+- **Orphaned engagement.** Deleting a post removes the post, and account deletion removes that
+  user's own likes and comments, but likes and comments *other* people left on a deleted post stay
+  in the public database, unreachable and owned by their creators. They are invisible — nothing
+  queries a postID that no longer exists — but they are not cleaned up.
+- **Public-DB readability**, as everywhere else here: post and comment bodies are readable by any
+  authenticated app user.
+
+---
+
 # Moderation (Guideline 1.2)
 
 An app hosting user-generated content must filter it, let users report it, let users block abusive
-accounts, and publish a contact route. Flowe's user content is **chat messages** and the
-**instructor listing text** (name, city, bio, certification) — the latter broadcast to every
-student. Community posts are seed-only today, with no compose UI, so they aren't user content yet;
-when a composer lands it must be screened too.
+accounts, and publish a contact route. Flowe's user content is **community posts and replies**,
+**chat messages**, and the **instructor listing text** (name, city, bio, certification) — the first
+and last broadcast to every student.
 
 ## Blocking
 
@@ -299,11 +416,11 @@ and follows the user across their own devices. It is deliberately never publishe
 store: a block is one person's decision, and "A blocked B" in a world-readable database leaks
 exactly what a blocker wants kept quiet.
 
-A block therefore hides the other person on the blocker's side — messages, listing, and any route
-to start a new conversation (`conversations`, `thread(with:)`, `visibleInstructors`,
-`addressBook`). Without a server there is nothing to stop the blocked person *writing*; their
-messages still reach the public database and simply never surface. Reversible from
-Settings › Safety › Blocked users.
+A block therefore hides the other person on the blocker's side — messages, listing, community posts
+and replies, and any route to start a new conversation (`conversations`, `thread(with:)`,
+`visibleInstructors`, `addressBook`, `visiblePosts`, `comments(for:)`). Without a server there is
+nothing to stop the blocked person *writing*; their posts and messages still reach the public
+database and simply never surface. Reversible from Settings › Safety › Blocked users.
 
 ## Reporting
 
@@ -318,7 +435,7 @@ deleted before anyone looks at it.
 | `reporterID` | String | — |
 | `reportedID` | String | **Queryable** |
 | `reportedName` | String | — |
-| `contentType` | String | **Queryable** |
+| `contentType` | String | **Queryable** — `message`, `instructorListing`, `communityPost`, `communityComment` |
 | `contentID` | String | — |
 | `reason` | String | **Queryable** |
 | `snapshot` | String | — |
@@ -331,9 +448,10 @@ world-readable report would let the reported person discover who flagged them.
 
 ## Filtering
 
-`ContentFilter` screens listing fields on save, rejecting slurs and sexual terms (matched on word
-boundaries, so "Scunthorpe" and "class" are fine) and contact details (email / phone patterns,
-which route students off-platform and are the usual scam shape).
+`ContentFilter` screens listing fields on save, and community posts and replies on publish,
+rejecting slurs and sexual terms (matched on word boundaries, so "Scunthorpe" and "class" are fine)
+and contact details (email / phone patterns, which route students off-platform and are the usual
+scam shape).
 
 It deliberately does **not** screen private messages. The guideline targets content posted to the
 app, and silently screening one person's private correspondence with another is a different and
@@ -358,5 +476,6 @@ moderation is a human reviewing the reports.
 - **No automated coverage of the remote sweep.** `AccountDeletionUITests` runs offline like every
   other UI test, so it exercises the local wipe and the sign-out but never `AccountDeletionService`.
   Verifying the CloudKit sweep needs a real iCloud account.
-- **Community posts are local-only** and so are covered by the local wipe. When feed bodies move to
-  the public database they must be added to the sweep.
+- **Community engagement outlives the post it was on.** Deleting a post doesn't cascade to the
+  likes and comments other people left on it; they become unreachable rather than removed. See the
+  Community section's limitations.

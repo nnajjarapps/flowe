@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct BookingSheet: View {
     let instructor: Instructor
@@ -14,6 +15,10 @@ struct BookingSheet: View {
     @State private var booked = false
     @State private var showReport = false
     @State private var confirmBlock = false
+    @State private var showCertificate = false
+
+    /// Payment methods we know how to render, in canonical order.
+    private var methods: [String] { PaymentMethod.known(instructor.paymentMethods) }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -48,6 +53,7 @@ struct BookingSheet: View {
                     .joined(separator: " · ")
             )
         }
+        .fullScreenCover(isPresented: $showCertificate) { certificateViewer }
         .confirmationDialog("Block \(instructor.firstName)?",
                             isPresented: $confirmBlock, titleVisibility: .visible) {
             Button("Block", role: .destructive) {
@@ -167,8 +173,135 @@ struct BookingSheet: View {
             }
             .padding(.bottom, 20)
 
+            certificationBlock
+            paymentBlock
+
             GradientButton(title: "Book a Session · \(settings.money(instructor.price))") { step = 1 }
         }
+    }
+
+    // MARK: - Certification
+
+    private var hasCertification: Bool { !instructor.cert.isEmpty || instructor.certPhoto != nil }
+
+    /// The instructor's own certification claim — text, and the certificate photo if they uploaded
+    /// one. The disclaimer travels with it: a photo makes the claim look official, and Flowe checks
+    /// none of it.
+    @ViewBuilder
+    private var certificationBlock: some View {
+        if hasCertification {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("CERTIFICATION")
+                    .font(FloweFont.mono(11))
+                    .foregroundStyle(Color.floweMuted)
+
+                if !instructor.cert.isEmpty {
+                    Text(instructor.cert)
+                        .font(FloweFont.sans(13))
+                        .foregroundStyle(Color.floweInk)
+                }
+
+                if let data = instructor.certPhoto, let image = UIImage(data: data) {
+                    Button { showCertificate = true } label: {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(maxWidth: .infinity, maxHeight: 160)
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.floweBorder, lineWidth: 1))
+                            .overlay(alignment: .bottomTrailing) {
+                                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(.white)
+                                    .frame(width: 26, height: 26)
+                                    .background(.ultraThinMaterial, in: Circle())
+                                    .padding(8)
+                            }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("booking.certPhoto")
+                }
+
+                Text("Flowe doesn't verify certifications.")
+                    .font(FloweFont.mono(10))
+                    .foregroundStyle(Color.floweMuted)
+            }
+            .padding(.bottom, 20)
+        }
+    }
+
+    /// Full-screen look at the certificate — the credential and its date are often small print.
+    private var certificateViewer: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            VStack(spacing: 12) {
+                Spacer(minLength: 0)
+                if let data = instructor.certPhoto, let image = UIImage(data: data) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFit()
+                }
+                Spacer(minLength: 0)
+                // The disclaimer follows the certificate everywhere it is shown, including here,
+                // where the photo fills the screen and reads most like an endorsement.
+                Text("Flowe doesn't verify certifications.")
+                    .font(FloweFont.mono(10))
+                    .foregroundStyle(.white.opacity(0.7))
+            }
+            .padding(20)
+
+            VStack {
+                HStack {
+                    Spacer()
+                    Button { showCertificate = false } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 32, height: 32)
+                            .background(.ultraThinMaterial, in: Circle())
+                    }
+                    .accessibilityIdentifier("booking.certPhotoClose")
+                }
+                Spacer()
+            }
+            .padding(16)
+        }
+    }
+
+    // MARK: - Payment
+
+    /// How the student will actually pay. Flowe collects nothing, so this belongs before the
+    /// booking button rather than in the fine print afterwards.
+    private var paymentBlock: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("PAYMENT")
+                .font(FloweFont.mono(11))
+                .foregroundStyle(Color.floweMuted)
+
+            if methods.isEmpty {
+                // No empty row: an instructor who never picked a method still has to be paid, so
+                // say what the student should actually do.
+                Text("\(instructor.firstName) hasn't listed how they take payment — ask them before your session.")
+                    .font(FloweFont.sans(13))
+                    .foregroundStyle(Color.floweInk)
+            } else {
+                FlowLayout(spacing: 6) {
+                    ForEach(methods, id: \.self) { method in
+                        Text(PaymentMethod.label(method))
+                            .font(FloweFont.mono(11))
+                            .foregroundStyle(Color.flowePinkDeep)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(Color.flowePink.opacity(0.12), in: Capsule())
+                    }
+                }
+                Text("Flowe doesn't process payments — you pay \(instructor.firstName) directly.")
+                    .font(FloweFont.mono(10))
+                    .foregroundStyle(Color.floweMuted)
+            }
+        }
+        .accessibilityIdentifier("booking.payment")
+        .padding(.bottom, 20)
     }
 
     private func statCol(_ value: String, _ label: String) -> some View {
@@ -387,6 +520,27 @@ struct BookingSheet: View {
                     .foregroundStyle(Color.floweMuted)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.top, 6)
+
+                // Repeated here rather than left on the intro step: this is the screen the student
+                // leaves with, and it is the last chance to say how the money changes hands.
+                if !methods.isEmpty {
+                    HStack(spacing: 6) {
+                        Text("Pay by")
+                            .font(FloweFont.mono(10))
+                            .foregroundStyle(Color.floweMuted)
+                        ForEach(methods, id: \.self) { method in
+                            Text(PaymentMethod.label(method))
+                                .font(FloweFont.mono(10))
+                                .foregroundStyle(Color.flowePinkDeep)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.flowePink.opacity(0.12), in: Capsule())
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.top, 8)
+                    .accessibilityIdentifier("booking.confirmPayment")
+                }
             }
             .padding(16)
             .floweCard()

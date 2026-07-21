@@ -20,6 +20,10 @@ struct CatalogListing {
     let updatedAt: Date
     /// Uploaded profile photo, if the instructor set one.
     let photo: Data?
+    /// Uploaded photo of the certificate itself, if the instructor set one.
+    let certPhoto: Data?
+    /// `PaymentMethod` raw ids — how this instructor takes payment offline.
+    let paymentMethods: [String]
 
     init?(record: CKRecord) {
         guard let name = record["name"] as? String else { return nil }
@@ -36,10 +40,12 @@ struct CatalogListing {
         reviews = record["reviews"] as? Int ?? 0
         img = record["img"] as? String ?? ""
         cert = record["cert"] as? String ?? ""
+        paymentMethods = record["paymentMethods"] as? [String] ?? []
         visibility = record["visibility"] as? Int ?? 0
         updatedAt = record["updatedAt"] as? Date ?? .distantPast
         // CloudKit stages an asset as a local file; read it now, before the temp copy is reclaimed.
         photo = (record["photo"] as? CKAsset)?.fileURL.flatMap { try? Data(contentsOf: $0) }
+        certPhoto = (record["certPhoto"] as? CKAsset)?.fileURL.flatMap { try? Data(contentsOf: $0) }
     }
 }
 
@@ -73,13 +79,19 @@ final class CatalogService {
         record["reviews"] = instructor.reviews
         record["img"] = instructor.img
         record["cert"] = instructor.cert
+        record["paymentMethods"] = instructor.paymentMethods
         record["visibility"] = instructor.visibilityRaw
         record["updatedAt"] = Date()
 
-        // A CKAsset is uploaded from a file, so the photo has to be staged on disk for the save.
-        let staged = instructor.photo.flatMap(Self.stageAsset)
+        // A CKAsset is uploaded from a file, so each image has to be staged on disk for the save.
+        let staged = instructor.photo.flatMap { Self.stageAsset($0, name: "listing-photo") }
+        let stagedCert = instructor.certPhoto.flatMap { Self.stageAsset($0, name: "listing-cert") }
         record["photo"] = staged.map { CKAsset(fileURL: $0) }
-        defer { staged.map { try? FileManager.default.removeItem(at: $0) } }
+        record["certPhoto"] = stagedCert.map { CKAsset(fileURL: $0) }
+        defer {
+            staged.map { try? FileManager.default.removeItem(at: $0) }
+            stagedCert.map { try? FileManager.default.removeItem(at: $0) }
+        }
 
         do {
             _ = try await database.save(record)
@@ -88,10 +100,13 @@ final class CatalogService {
             if let server = error.userInfo[CKRecordChangedErrorServerRecordKey] as? CKRecord {
                 server["visibility"] = instructor.visibilityRaw
                 server["price"] = instructor.price
+                server["paymentMethods"] = instructor.paymentMethods
                 server["updatedAt"] = Date()
-                // The staged file outlives this block (`defer` fires on return), so the retry can
-                // reuse it — otherwise a conflicting save would silently drop the new photo.
+                // The staged files outlive this block (`defer` fires on return), so the retry can
+                // reuse them — otherwise a conflicting save would silently drop the new images.
+                // Both assets are re-applied, including a nil, so a removal survives the conflict.
                 server["photo"] = staged.map { CKAsset(fileURL: $0) }
+                server["certPhoto"] = stagedCert.map { CKAsset(fileURL: $0) }
                 _ = try? await database.save(server)
             }
         } catch {
@@ -117,11 +132,11 @@ final class CatalogService {
     }
 
     #if CLOUDKIT_ENABLED
-    /// Write photo bytes to a temp file so `CKAsset` can upload them. Returns nil if the write
-    /// fails, which simply means this save carries no photo rather than failing outright.
-    private static func stageAsset(_ data: Data) -> URL? {
+    /// Write image bytes to a temp file so `CKAsset` can upload them. Returns nil if the write
+    /// fails, which simply means this save carries no image rather than failing outright.
+    private static func stageAsset(_ data: Data, name: String) -> URL? {
         let url = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("listing-photo-\(UUID().uuidString).jpg")
+            .appendingPathComponent("\(name)-\(UUID().uuidString).jpg")
         do {
             try data.write(to: url)
             return url

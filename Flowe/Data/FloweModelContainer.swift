@@ -6,8 +6,10 @@ import SwiftData
 /// Two configurations in one container:
 /// - **Reference** (`Instructor`) — always local (`.none`). A read-only catalog seeded per device;
 ///   kept off CloudKit because SwiftData can't mirror a public DB and we don't want per-device dupes.
-/// - **UserData** (`FeedPost`, `Booking`) — user-owned. Local today; mirrored to the CloudKit
-///   **private** database when the app is built with `CLOUDKIT_ENABLED` (Phase B, paid account).
+/// - **UserData** (`FeedPost`, `Booking`, …) — user-owned. Mirrored to the CloudKit **private**
+///   database when the app is built with `CLOUDKIT_ENABLED`. Anything two users must both see —
+///   bookings, messages, reviews, community posts — additionally travels through the *public*
+///   database as raw `CKRecord`; the models here are that shared state's offline cache.
 ///
 /// iOS 17's `ModelConfiguration(cloudKitDatabase:)` supports only `.private` / `.none` — there is no
 /// public/shared option — which is exactly why the split above is shaped this way.
@@ -28,15 +30,16 @@ enum FloweModelContainer {
 
         let userData = ModelConfiguration(
             "UserData",
-            schema: Schema([FeedPost.self, Booking.self, Message.self, BlockedUser.self, Review.self]),
+            schema: Schema([FeedPost.self, PostComment.self, Booking.self, Message.self,
+                            BlockedUser.self, Review.self]),
             isStoredInMemoryOnly: inMemory,
             cloudKitDatabase: userDataCloudKitDatabase(inMemory: inMemory)
         )
 
         do {
             return try ModelContainer(
-                for: Instructor.self, FeedPost.self, Booking.self, Message.self, BlockedUser.self,
-                     Review.self,
+                for: Instructor.self, FeedPost.self, PostComment.self, Booking.self, Message.self,
+                     BlockedUser.self, Review.self,
                 configurations: reference, userData
             )
         } catch {

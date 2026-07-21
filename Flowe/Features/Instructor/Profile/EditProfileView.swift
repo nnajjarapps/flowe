@@ -1,5 +1,6 @@
 import SwiftUI
 import PhotosUI
+import UIKit
 
 /// Editor for the instructor's public listing — photo, name, city, bio, rate, experience,
 /// certification, specialties and session types. Persists to the instructor's SwiftData record and
@@ -22,10 +23,15 @@ struct EditProfileView: View {
     @State private var cert = ""
     @State private var specialties: Set<String> = []
     @State private var sessionTypes: Set<String> = []
+    @State private var paymentMethods: Set<String> = []
 
     @State private var photo: Data?
     @State private var pickerItem: PhotosPickerItem?
     @State private var isLoadingPhoto = false
+
+    @State private var certPhoto: Data?
+    @State private var certPickerItem: PhotosPickerItem?
+    @State private var isLoadingCert = false
 
     @State private var loaded = false
     /// Non-nil when the content filter rejected a field on save.
@@ -94,6 +100,7 @@ struct EditProfileView: View {
                             Text("Shown on your public profile. Flowe doesn't verify certifications.")
                                 .font(FloweFont.sans(11))
                                 .foregroundStyle(Color.floweMuted)
+                            certPhotoField
                         }
                     }
 
@@ -103,6 +110,17 @@ struct EditProfileView: View {
 
                     field(title: "SESSION TYPES") {
                         chipGrid(allSessionTypes, selection: $sessionTypes)
+                    }
+
+                    field(title: "HOW YOU TAKE PAYMENT") {
+                        VStack(alignment: .leading, spacing: 6) {
+                            FlowLayout(spacing: 8, lineSpacing: 8) {
+                                ForEach(PaymentMethod.all, id: \.self) { paymentChip($0) }
+                            }
+                            Text("Flowe doesn't collect session fees — students pay you directly, so they need to know how.")
+                                .font(FloweFont.sans(11))
+                                .foregroundStyle(Color.floweMuted)
+                        }
                     }
                 }
                 .padding(20)
@@ -124,6 +142,7 @@ struct EditProfileView: View {
         }
         .onAppear(perform: load)
         .task(id: pickerItem) { await loadPickedPhoto() }
+        .task(id: certPickerItem) { await loadPickedCert() }
         .alert("Check your profile",
                isPresented: .init(get: { filterMessage != nil },
                                   set: { if !$0 { filterMessage = nil } })) {
@@ -179,6 +198,63 @@ struct EditProfileView: View {
         photo = prepared
     }
 
+    // MARK: - Certificate photo
+
+    /// A picture of the certificate, sitting under the free-text claim it backs up. Rendered wide
+    /// and uncropped — it is a document, not an avatar, and the awarding body and date live at its
+    /// edges.
+    private var certPhotoField: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let certPhoto, let image = UIImage(data: certPhoto) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: .infinity, maxHeight: 180)
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.floweBorder, lineWidth: 1))
+                    .overlay {
+                        if isLoadingCert {
+                            RoundedRectangle(cornerRadius: 14).fill(.black.opacity(0.35))
+                            ProgressView().tint(.white)
+                        }
+                    }
+                    .accessibilityIdentifier("editProfile.certPhotoPreview")
+            } else if isLoadingCert {
+                ProgressView().tint(Color.flowePinkDeep)
+            }
+
+            HStack(spacing: 16) {
+                PhotosPicker(selection: $certPickerItem, matching: .images, photoLibrary: .shared()) {
+                    Text(certPhoto == nil ? "Add Certificate Photo" : "Change Certificate Photo")
+                        .font(FloweFont.sans(13, .medium))
+                        .foregroundStyle(Color.flowePinkDeep)
+                }
+                .accessibilityIdentifier("editProfile.certPhotoPicker")
+
+                if certPhoto != nil {
+                    Button("Remove") {
+                        certPhoto = nil
+                        certPickerItem = nil
+                    }
+                    .font(FloweFont.sans(13))
+                    .tint(Color.floweMuted)
+                    .accessibilityIdentifier("editProfile.certPhotoRemove")
+                }
+            }
+            .padding(.top, 2)
+        }
+    }
+
+    private func loadPickedCert() async {
+        guard let certPickerItem else { return }
+        isLoadingCert = true
+        defer { isLoadingCert = false }
+        // Downscaled without the square crop `prepare` applies — see `ProfileImage.prepareDocument`.
+        guard let raw = try? await certPickerItem.loadTransferable(type: Data.self),
+              let prepared = ProfileImage.prepareDocument(raw) else { return }
+        certPhoto = prepared
+    }
+
     // MARK: - Pieces
 
     private func field<Content: View>(title: LocalizedStringKey, @ViewBuilder _ content: () -> Content) -> some View {
@@ -224,6 +300,26 @@ struct EditProfileView: View {
         .buttonStyle(.plain)
     }
 
+    /// Same pill as `chip`, but keyed on a stable `PaymentMethod` id while showing a localized name.
+    private func paymentChip(_ id: String) -> some View {
+        let isOn = paymentMethods.contains(id)
+        return Button {
+            if isOn { paymentMethods.remove(id) } else { paymentMethods.insert(id) }
+        } label: {
+            Text(PaymentMethod.label(id))
+                .font(FloweFont.sans(13, .medium))
+                .foregroundStyle(isOn ? .white : Color.flowePinkDeep)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background {
+                    if isOn { Capsule().fill(FlowGradients.gradDark) }
+                    else { Capsule().fill(Color.flowePink.opacity(0.10)) }
+                }
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("editProfile.payment.\(id)")
+    }
+
     // MARK: - Load / save
 
     private func load() {
@@ -236,7 +332,9 @@ struct EditProfileView: View {
         cert = me.cert
         specialties = Set(me.specialties)
         sessionTypes = Set(me.sessionTypes)
+        paymentMethods = Set(PaymentMethod.known(me.paymentMethods))
         photo = me.photo
+        certPhoto = me.certPhoto
         loaded = true
     }
 
@@ -257,7 +355,9 @@ struct EditProfileView: View {
         // Filter through the canonical lists so stored order stays stable rather than set order.
         me.specialties = allSpecialties.filter { specialties.contains($0) }
         me.sessionTypes = allSessionTypes.filter { sessionTypes.contains($0) }
+        me.paymentMethods = PaymentMethod.all.filter { paymentMethods.contains($0) }
         me.photo = photo
+        me.certPhoto = certPhoto
         data.commit()
         dismiss()
     }

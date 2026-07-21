@@ -4,7 +4,8 @@ import Observation
 // MARK: - Currency
 
 enum Currency: String, CaseIterable, Identifiable {
-    case usd, eur, gbp, cad, aud, aed, inr, jpy
+    // ISO 4217 codes — `ils` is the shekel ("NIS" is a colloquial name Foundation does not accept).
+    case usd, eur, gbp, cad, aud, aed, inr, jpy, ils
 
     var id: String { rawValue }
     var code: String { rawValue.uppercased() }
@@ -20,6 +21,7 @@ enum Currency: String, CaseIterable, Identifiable {
         case .aed: return 3.67
         case .inr: return 83
         case .jpy: return 149
+        case .ils: return 3.7
         }
     }
 
@@ -33,6 +35,7 @@ enum Currency: String, CaseIterable, Identifiable {
         case .aed: return "UAE Dirham"
         case .inr: return "Indian Rupee"
         case .jpy: return "Japanese Yen"
+        case .ils: return "Israeli New Shekel"
         }
     }
 }

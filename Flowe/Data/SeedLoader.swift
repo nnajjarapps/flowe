@@ -29,7 +29,10 @@ enum SeedLoader {
                 legacyId: seed.id, type: PostType(rawValue: seed.type) ?? .tip, user: seed.user,
                 userImg: seed.userImg, instructor: seed.instructor, instImg: seed.instImg,
                 time: seed.time, rating: seed.rating, text: seed.text, likes: seed.likes,
-                comments: seed.comments, saved: seed.saved, liked: seed.liked, order: i
+                comments: seed.comments, saved: seed.saved, liked: seed.liked, order: i,
+                // The feed is ordered by `createdAt` now that posts are shared, so seeded rows need
+                // one — spaced an hour apart so they keep the order the JSON lists them in.
+                createdAt: Date(timeIntervalSinceNow: -Double(i + 1) * 3600)
             )
         }
 

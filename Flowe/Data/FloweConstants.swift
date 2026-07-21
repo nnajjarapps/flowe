@@ -23,6 +23,38 @@ enum FloweConstants {
 
 }
 
+/// How an instructor accepts money. Flowe collects nothing for sessions in this release — the
+/// student settles up with the instructor directly — so this is the only signal a student has about
+/// how they will actually pay.
+///
+/// The raw ids are stable storage/wire values (SwiftData `[String]` + a public-database `CKRecord`
+/// field), never shown to anyone; only `label` is user-facing and localized. Deliberately not a
+/// static on `Instructor`: referencing a static member of a `@Model` type from a View's
+/// stored-property initializer miscompiles, and the diagnostic surfaces in an unrelated file.
+enum PaymentMethod {
+    static let cash = "cash"
+    /// The Israeli peer-to-peer transfer app (Bank Hapoalim); near-universal locally and the
+    /// realistic alternative to cash for an ILS-priced session.
+    static let bit = "bit"
+
+    /// Canonical order — what the editor offers and the order listings are rendered in.
+    static let all = [cash, bit]
+
+    /// Display name. `LocalizedStringResource` rather than `LocalizedStringKey` so this stays a
+    /// Foundation type usable from the data layer, while still localizing in `Text`.
+    static func label(_ id: String) -> LocalizedStringResource {
+        switch id {
+        case cash: return "Cash"
+        case bit: return "Bit"
+        default: return "Other"
+        }
+    }
+
+    /// Only the ids we know how to render, in canonical order — a listing published by a future
+    /// build with an unknown method must not put a mystery chip in front of a student.
+    static func known(_ ids: [String]) -> [String] { all.filter(ids.contains) }
+}
+
 /// Small profile-screen models (Figma inlines these).
 struct Achievement: Identifiable {
     let id = UUID()
