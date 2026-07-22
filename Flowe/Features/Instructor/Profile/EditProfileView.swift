@@ -11,6 +11,7 @@ import UIKit
 struct EditProfileView: View {
     @Environment(MockDataStore.self) private var data
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
 
     private let allSpecialties = ["Mat", "Reformer", "Barre", "Tower", "Prenatal", "Rehab"]
     private let allSessionTypes = ["Private", "Duet", "Group", "Online"]
@@ -37,6 +38,19 @@ struct EditProfileView: View {
     /// Non-nil when the content filter rejected a field on save.
     @State private var filterMessage: String?
 
+    // MARK: Teaching location
+    //
+    // Set by the instructor, on purpose, with the result shown before it is saved. Nothing here
+    // runs on its own: no fix is taken unless the button below is tapped.
+    @State private var location = LocationService()
+    /// The area that will be published — already snapped to ~1 km by `LocationService`.
+    @State private var teachingArea: CoarseLocation?
+    /// Reverse-geocoded name for `teachingArea`, when we managed to resolve one this session.
+    @State private var areaName = ""
+    @State private var isLocating = false
+    /// Shown when a requested fix didn't arrive — a nudge, not a failure the form blocks on.
+    @State private var locationFailed = false
+
     /// An empty rate is allowed — it means "not set yet", and the profile nudges for it. Only a
     /// nonsense value blocks saving, so a new instructor can save a photo and bio before pricing.
     private var priceIsValid: Bool { priceText.isEmpty || (Int(priceText).map { $0 > 0 } ?? false) }
@@ -56,6 +70,10 @@ struct EditProfileView: View {
                     field(title: "CITY") {
                         textBox($city, placeholder: "Where you teach")
                             .accessibilityIdentifier("editProfile.city")
+                    }
+
+                    field(title: "TEACHING AREA") {
+                        locationField
                     }
 
                     field(title: "BIO") {
@@ -255,6 +273,130 @@ struct EditProfileView: View {
         certPhoto = prepared
     }
 
+    // MARK: - Teaching area
+
+    /// Lets the instructor attach an approximate location to their listing so students can see how
+    /// far away they are.
+    ///
+    /// The whole section is written around one fact: a lot of Pilates instructors teach out of their
+    /// own home, and the catalog is readable by every user of the app. So the instructor is told the
+    /// precision before they tap, shown the exact pair of numbers that will be published afterwards,
+    /// and can take it back down in one tap. Nothing is captured in the background.
+    private var locationField: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let teachingArea {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "mappin.and.ellipse")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Color.flowePinkDeep)
+                        // Place names and coordinates are data, not UI copy — never translated.
+                        Text(verbatim: resolvedAreaName)
+                            .font(FloweFont.sans(14))
+                            .foregroundStyle(Color.floweInk)
+                    }
+                    Text(verbatim: teachingArea.displayText)
+                        .font(FloweFont.mono(11))
+                        .foregroundStyle(Color.floweMuted)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+                .boxed()
+                .accessibilityIdentifier("editProfile.locationSummary")
+
+                Text("Students see roughly a 1 km area around this point — never your exact address.")
+                    .font(FloweFont.sans(11))
+                    .foregroundStyle(Color.floweMuted)
+
+                HStack(spacing: 16) {
+                    locationButton(title: "Update Area")
+                    Button("Remove") {
+                        self.teachingArea = nil
+                        areaName = ""
+                        locationFailed = false
+                    }
+                    .font(FloweFont.sans(13))
+                    .tint(Color.floweMuted)
+                    .accessibilityIdentifier("editProfile.locationRemove")
+                }
+            } else {
+                Text("Add your area so students nearby can see how far you are. Flowe publishes a point rounded to about 1 km — the neighbourhood, never the address.")
+                    .font(FloweFont.sans(11))
+                    .foregroundStyle(Color.floweMuted)
+                locationButton(title: "Use My Current Location")
+            }
+
+            if location.isDenied {
+                HStack(spacing: 6) {
+                    Text("Location access is off. Your city above still works — turn it on in Settings to add an area.")
+                        .font(FloweFont.sans(11))
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 8)
+                    Button("Settings") {
+                        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+                        openURL(url)
+                    }
+                    .font(FloweFont.sans(11, .medium))
+                    .tint(Color.flowePinkDeep)
+                    .accessibilityIdentifier("editProfile.locationSettings")
+                }
+                .foregroundStyle(Color.floweMuted)
+            } else if locationFailed {
+                Text("Couldn't find your location. Try again, or just type your city above.")
+                    .font(FloweFont.sans(11))
+                    .foregroundStyle(Color.floweMuted)
+            }
+        }
+    }
+
+    /// The name shown above the coordinates: whatever we reverse-geocoded this session, falling back
+    /// to the city the instructor typed, and to the coordinates themselves if there is neither.
+    private var resolvedAreaName: String {
+        if !areaName.isEmpty { return areaName }
+        if !city.trimmed.isEmpty { return city.trimmed }
+        return teachingArea?.displayText ?? ""
+    }
+
+    private func locationButton(title: LocalizedStringKey) -> some View {
+        Button {
+            Task { await captureArea() }
+        } label: {
+            HStack(spacing: 6) {
+                if isLocating {
+                    ProgressView().controlSize(.mini).tint(Color.flowePinkDeep)
+                } else {
+                    Image(systemName: "location").font(.system(size: 11))
+                }
+                Text(title).font(FloweFont.sans(13, .medium))
+            }
+            .foregroundStyle(Color.flowePinkDeep)
+        }
+        .buttonStyle(.plain)
+        .disabled(isLocating)
+        .accessibilityIdentifier("editProfile.locationCapture")
+    }
+
+    private func captureArea() async {
+        isLocating = true
+        locationFailed = false
+        defer { isLocating = false }
+
+        // Already coarsened by the service — the precise fix never leaves it, so there is nothing
+        // here that could accidentally be saved at street precision.
+        guard let area = await location.requestCoarseLocation() else {
+            locationFailed = !location.isDenied   // a refusal is a choice, not a failure to report
+            return
+        }
+        teachingArea = area
+        // Geocoding runs on the rounded point, so even this lookup can't leak the exact one.
+        guard let resolved = await location.areaName(for: area) else { return }
+        areaName = resolved
+        // Only fills a blank city. Overwriting would clobber something more specific than a
+        // geocoder returns — "Tel Aviv · Florentin", a studio name — that the instructor chose.
+        if city.trimmed.isEmpty { city = resolved }
+    }
+
     // MARK: - Pieces
 
     private func field<Content: View>(title: LocalizedStringKey, @ViewBuilder _ content: () -> Content) -> some View {
@@ -335,6 +477,9 @@ struct EditProfileView: View {
         paymentMethods = Set(PaymentMethod.known(me.paymentMethods))
         photo = me.photo
         certPhoto = me.certPhoto
+        // No reverse-geocode on open: the name falls back to the city field, and a network lookup
+        // nobody asked for is the wrong thing to do when a screen appears.
+        teachingArea = me.coarseLocation
         loaded = true
     }
 
@@ -358,6 +503,9 @@ struct EditProfileView: View {
         me.paymentMethods = PaymentMethod.all.filter { paymentMethods.contains($0) }
         me.photo = photo
         me.certPhoto = certPhoto
+        // nil clears both fields and removes the keys from the public record — Remove has to be a
+        // real withdrawal, not a value that lingers on other people's devices.
+        me.setCoarseLocation(teachingArea)
         data.commit()
         dismiss()
     }

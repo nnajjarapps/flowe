@@ -87,9 +87,22 @@ final class AccountDeletionService {
         // My instructor listing, whose recordName *is* the owner id. Absent for students.
         ids.append(CKRecord.ID(recordName: ownerID))
 
-        return await delete(dedupe(ids))
+        guard await delete(dedupe(ids)) else { return false }
+
+        // Standing push subscriptions are as much "my data" as the records are, and they outlive
+        // them: CloudKit keeps a subscription until it is deleted, so a deleted account whose
+        // subscriptions stayed would keep receiving Flowe alerts about other people's activity —
+        // proof, to the user, that the deletion they were promised didn't happen.
+        //
+        // Deliberately after the sweep and behind its success: an account that survives a failed
+        // deletion must keep working, notifications included.
+        await PushService.shared.tearDown()
+        return true
         #else
-        return true   // nothing was ever published
+        // Nothing was ever published, but a device that once registered subscriptions still has
+        // them; teardown is cheap and self-guarding.
+        await PushService.shared.tearDown()
+        return true
         #endif
     }
 

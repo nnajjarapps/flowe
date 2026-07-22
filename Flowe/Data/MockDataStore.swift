@@ -1200,6 +1200,11 @@ final class MockDataStore {
         ins.rating = l.rating; ins.reviews = l.reviews; ins.img = l.img; ins.cert = l.cert
         ins.paymentMethods = l.paymentMethods
         ins.visibilityRaw = l.visibility
+        // Assigned unconditionally, nil included: an instructor who removed their teaching area must
+        // stop being placed on the map on everyone else's device. Re-snapped on the way in by
+        // `setCoarseLocation`, so a row published at finer precision by any other client still only
+        // resolves to a ~1 km cell here.
+        ins.setCoarseLocation(CoarseLocation(snappingLatitude: l.latitude, longitude: l.longitude))
         ins.visibilityVerifiedAt = Date()
         // Only overwrite a cached image when the server actually has one. A nil here usually means
         // "this listing has no upload", but for my own listing it can also mean my photo hasn't

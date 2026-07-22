@@ -43,6 +43,17 @@ final class Instructor {
     /// is what the feed and the catalog already publish, and it stays derived from these on save.
     var hours: [String] = []
     var bio: String?
+    /// Where this instructor teaches, **coarsened to roughly a kilometre** — see `CoarseLocation`.
+    /// Optional rather than a 0/0 sentinel so "hasn't set one" is a distinct, unambiguous state:
+    /// (0, 0) is a real coordinate, and a listing that quietly claimed it would sort as "nearest"
+    /// for anyone in the Gulf of Guinea and absurd for everyone else.
+    ///
+    /// Write these only through `setCoarseLocation(_:)`. Plain `var` because a `@Model` property has
+    /// to stay a plain settable stored property; the real guarantee is upstream — `LocationService`
+    /// never hands anyone a precise coordinate, and `CoarseLocation` cannot be constructed without
+    /// snapping, so there is no exact fix anywhere in the app to assign here.
+    var latitude: Double?
+    var longitude: Double?
     var order: Int = 0              // stable display order
     var ownerID: String?           // the signed-in instructor who owns/edits this listing
     var visibilityRaw: Int = 0     // InstructorVisibility — driven by the owner's subscription
@@ -94,6 +105,22 @@ final class Instructor {
     }
 
     var firstName: String { name.split(separator: " ").first.map(String.init) ?? name }
+
+    // MARK: - Teaching location
+
+    /// The published area, re-snapped on read. Re-snapping costs nothing and means a row written by
+    /// an older build, a future build, or a tampered client can still only ever resolve to the
+    /// centre of a ~1 km cell.
+    var coarseLocation: CoarseLocation? {
+        CoarseLocation(snappingLatitude: latitude, longitude: longitude)
+    }
+
+    /// Set or clear the teaching area. Passing nil is how an instructor takes their location back
+    /// down — the fields are cleared locally and the catalog record's keys are removed on publish.
+    func setCoarseLocation(_ location: CoarseLocation?) {
+        latitude = location?.latitude
+        longitude = location?.longitude
+    }
 
     // MARK: - Bookable hours
 

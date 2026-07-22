@@ -39,6 +39,10 @@ struct RemoteReview {
 final class ReviewService {
     static let recordType = "SessionReview"
 
+    /// The field a review addresses by — the instructor it is about, who is never its author.
+    /// Shared with `PushService` so the query and the subscription predicate can't drift apart.
+    static let recipientField = "instructorID"
+
     private static let pageSize = 400
 
     #if CLOUDKIT_ENABLED

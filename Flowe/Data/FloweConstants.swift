@@ -23,6 +23,32 @@ enum FloweConstants {
 
 }
 
+/// How the distance between a student and an instructor is written.
+///
+/// **Kilometres, everywhere.** Flowe has no existing distance convention, prices are in ILS and the
+/// first market is metric, so a single unit beats a locale-derived one that would flip English users
+/// in Tel Aviv to miles. The numeral itself is formatted with a fixed Western locale for exactly the
+/// reason `AppSettings.money` does it: an Arabic UI should still read "~2.4 km", not switch digit
+/// systems mid-row.
+///
+/// Every figure is prefixed "~" and nothing below a kilometre is quantified, because the underlying
+/// coordinate is snapped to a ~1 km grid (see `CoarseLocation`). Printing "0.3 km" from a value with
+/// ±0.8 km of designed-in error would be a lie about how well we know where an instructor is.
+enum FloweDistance {
+    private static let numberLocale = Locale(identifier: "en_US")
+
+    static func label(metres: Double) -> LocalizedStringResource {
+        guard metres.isFinite, metres >= 1000 else { return "Under 1 km" }
+        let km = metres / 1000
+        // One decimal while it still means something, whole kilometres past ten.
+        let digits = km < 10 ? 1 : 0
+        let value = km.formatted(
+            .number.precision(.fractionLength(digits)).rounded(rule: .toNearestOrEven).locale(numberLocale)
+        )
+        return "~\(value) km"
+    }
+}
+
 /// How an instructor accepts money. Flowe collects nothing for sessions in this release — the
 /// student settles up with the instructor directly — so this is the only signal a student has about
 /// how they will actually pay.

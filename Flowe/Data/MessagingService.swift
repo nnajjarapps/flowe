@@ -41,6 +41,11 @@ struct RemoteMessage {
 final class MessagingService {
     static let recordType = "ChatMessage"
 
+    /// The field a message addresses its reader by — never the sender, so a `CKQuerySubscription`
+    /// on it can't notify someone about their own message. Shared with `PushService` so the query
+    /// and the subscription predicate can't drift apart.
+    static let recipientField = "recipientID"
+
     private static let fetchLimit = 400
 
     #if CLOUDKIT_ENABLED

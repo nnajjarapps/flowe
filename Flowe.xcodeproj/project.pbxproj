@@ -65,6 +65,7 @@
 		8CD6F7076188FCB80948E77E /* OnboardingUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23BC35F24816C68247C04B36 /* OnboardingUITests.swift */; };
 		8CD86B4F2A0C8A3F1544DCDE /* Message.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB36077D528099D817B27E2B /* Message.swift */; };
 		8F005CECFE7C6E453C28CD31 /* NotificationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB385017BADE1E22104629B2 /* NotificationSettingsView.swift */; };
+		90660FA320B2EEA8A91CEC1A /* PushService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8089C1D2681596AF48101FD3 /* PushService.swift */; };
 		9088BE8675CAE227464F994B /* StudentTabsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DBB42D00526892D939DC9F1 /* StudentTabsUITests.swift */; };
 		94FA958AC3A40CC2D5011435 /* AppSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = D095FAA6B074F1AF2221AE6A /* AppSession.swift */; };
 		958A6D29014C8C1A506A1995 /* SeedLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63D62E1B399B329D0B6C2B62 /* SeedLoader.swift */; };
@@ -100,6 +101,7 @@
 		C42DB4FDEF5E04C3E9F9FA6D /* FilterChipsBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D324CCEA79663B5D1A47DE4 /* FilterChipsBar.swift */; };
 		C4AD3CD466AEE186EDBD677A /* FloweModelContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72C3E59E33D98698F840ADCF /* FloweModelContainer.swift */; };
 		C8C84412A42E23C7073E9C3C /* ReportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 649FBC87C5167A90BDDBF19B /* ReportService.swift */; };
+		CBFB8B8FCECB055D0CD20613 /* LocationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 489CC61A3C045B16825417BC /* LocationService.swift */; };
 		CF622EEBD2BC486D9A84998C /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15B1DE12827C5A88561BD697 /* SettingsView.swift */; };
 		D25960D86785C7A62A7E889F /* BookingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76B4EA7D7447F4834D4A1344 /* BookingService.swift */; };
 		D366C3A2F61CAD85483EF88D /* FeedPost.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8FDF5E6BF0F2C754325BF04 /* FeedPost.swift */; };
@@ -169,6 +171,7 @@
 		46559409C5E1FF78691423E5 /* Fraunces-Italic.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Fraunces-Italic.ttf"; sourceTree = "<group>"; };
 		47F7F9C91070000E55C3A28A /* BlockedUsersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockedUsersView.swift; sourceTree = "<group>"; };
 		47F8623B33C1E3994C637742 /* View+Flowe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "View+Flowe.swift"; sourceTree = "<group>"; };
+		489CC61A3C045B16825417BC /* LocationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationService.swift; sourceTree = "<group>"; };
 		4D02AD586357897327237E1F /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
 		53D4A66081820E0198BE9382 /* posts.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = posts.json; sourceTree = "<group>"; };
 		540B00E56D89BF2B030B5185 /* InstructorProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstructorProfileView.swift; sourceTree = "<group>"; };
@@ -201,6 +204,7 @@
 		7C215EA6CA9B6C406E13E338 /* DMSans-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "DMSans-Regular.ttf"; sourceTree = "<group>"; };
 		7F25A7337CFD62358334F757 /* User.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = User.swift; sourceTree = "<group>"; };
 		7F5C862793134F2194515695 /* FeaturedHeroCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeaturedHeroCard.swift; sourceTree = "<group>"; };
+		8089C1D2681596AF48101FD3 /* PushService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushService.swift; sourceTree = "<group>"; };
 		809064CB2D2B53C56BDBAFB0 /* AccountDeletionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountDeletionService.swift; sourceTree = "<group>"; };
 		8834262674B21339DCB9CC33 /* FlowApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowApp.swift; sourceTree = "<group>"; };
 		8AD8385BD6E748B58CBA04BD /* Flowe.storekit */ = {isa = PBXFileReference; path = Flowe.storekit; sourceTree = "<group>"; };
@@ -327,8 +331,10 @@
 				72C3E59E33D98698F840ADCF /* FloweModelContainer.swift */,
 				DB7FD826615D7BA62DCE05B3 /* FloweWeek.swift */,
 				5C9867A521AD55E8C878C940 /* KeychainStore.swift */,
+				489CC61A3C045B16825417BC /* LocationService.swift */,
 				0AEA61C0D5A07FA6156A5B5F /* MessagingService.swift */,
 				A7363600B48D9D0491D076A9 /* MockDataStore.swift */,
+				8089C1D2681596AF48101FD3 /* PushService.swift */,
 				649FBC87C5167A90BDDBF19B /* ReportService.swift */,
 				0CE4F79CAA257F95E8F9B243 /* ReviewService.swift */,
 				63D62E1B399B329D0B6C2B62 /* SeedLoader.swift */,
@@ -835,6 +841,7 @@
 				FC96FF052010A41027421DDF /* InstructorSettingsView.swift in Sources */,
 				3B5ACC010BC814AAD54EF6E8 /* InstructorTabView.swift in Sources */,
 				608B13B7ACC18F54705EFA14 /* KeychainStore.swift in Sources */,
+				CBFB8B8FCECB055D0CD20613 /* LocationService.swift in Sources */,
 				4EDC58F56C1F076CE1C54553 /* LoginView.swift in Sources */,
 				8CD86B4F2A0C8A3F1544DCDE /* Message.swift in Sources */,
 				DFD748F681DCD84E0CD8BFE4 /* MessageBubble.swift in Sources */,
@@ -851,6 +858,7 @@
 				73C750F9D9D807EAD4A2DD6F /* PrimaryButton.swift in Sources */,
 				A25C3733272650C54089C8BE /* ProfileImage.swift in Sources */,
 				3569E85932969520E8E9FC32 /* ProfileView.swift in Sources */,
+				90660FA320B2EEA8A91CEC1A /* PushService.swift in Sources */,
 				9A44D9B9B707452DFE04029F /* QuickActionsGrid.swift in Sources */,
 				B99AFAFB4749D0B2361C2BEE /* RemoteImage.swift in Sources */,
 				C8C84412A42E23C7073E9C3C /* ReportService.swift in Sources */,

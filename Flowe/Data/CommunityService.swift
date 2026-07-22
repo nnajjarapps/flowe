@@ -90,6 +90,10 @@ final class CommunityService {
     static let likeRecordType = "CommunityLike"
     static let commentRecordType = "CommunityComment"
 
+    /// The field a comment names the person to alert by — the post's author, and empty when that is
+    /// the commenter themselves (see `replyTarget`). Shared with `PushService`.
+    static let replyTargetField = "replyTargetID"
+
     /// How much feed is worth carrying on a phone. Also bounds the `IN` lists the engagement
     /// queries build, which CloudKit will reject if they grow without limit.
     private static let feedLimit = 100
@@ -220,6 +224,7 @@ final class CommunityService {
         record["authorName"] = authorName
         record["text"] = text
         record["createdAt"] = createdAt
+        record["replyTargetID"] = await replyTarget(postID: postID, commenterID: authorID)
         do {
             let saved = try await database.save(record)
             return saved.recordID.recordName
@@ -250,6 +255,31 @@ final class CommunityService {
         return nil
         #endif
     }
+
+    // MARK: - Push subscriptions
+
+    #if CLOUDKIT_ENABLED
+
+    /// Who should be told about this reply — the post's author, denormalised onto the comment.
+    ///
+    /// A `CKQuerySubscription` predicate can only test fields on the record that changed, and a
+    /// comment otherwise names only its own author. Without this field "someone replied to your
+    /// post" is undeliverable: the alternative would be a subscription per post the user owns,
+    /// re-created every time they post.
+    ///
+    /// Empty when the commenter *is* the author. A pure-equality predicate (`replyTargetID == me`)
+    /// then matches nobody, so replying to your own post can never notify you — self-notification is
+    /// prevented by the data rather than by a `!=` clause, which query subscriptions handle far less
+    /// reliably than plain equality.
+    ///
+    /// A failed lookup yields an empty string: the reply still posts, it just goes unannounced.
+    private func replyTarget(postID: String, commenterID: String) async -> String {
+        let post = try? await database.record(for: CKRecord.ID(recordName: postID))
+        guard let authorID = post?["authorID"] as? String, authorID != commenterID else { return "" }
+        return authorID
+    }
+
+    #endif
 
     // MARK: - Shared plumbing
 

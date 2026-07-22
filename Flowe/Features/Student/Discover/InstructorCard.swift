@@ -4,6 +4,10 @@ import SwiftUI
 struct InstructorCard: View {
     @Environment(AppSettings.self) private var settings
     let instructor: Instructor
+    /// Metres from this device to the instructor's published area, measured on device by
+    /// `LocationService`. Nil whenever either side has no location — which is the common case, and
+    /// simply means the row shows a city and nothing else.
+    var distanceMetres: Double? = nil
     let action: () -> Void
 
     var body: some View {
@@ -39,8 +43,19 @@ struct InstructorCard: View {
                     HStack(spacing: 4) {
                         Image(systemName: "mappin")
                             .font(.system(size: 10))
+                        // `city` is what the instructor typed about themselves — never localized.
                         Text(instructor.city)
                             .font(FloweFont.sans(11))
+                            .lineLimit(1)
+                        if let distanceMetres {
+                            if !instructor.city.isEmpty {
+                                Text(verbatim: "·").font(FloweFont.sans(11))
+                            }
+                            Text(FloweDistance.label(metres: distanceMetres))
+                                .font(FloweFont.mono(11))
+                                .foregroundStyle(Color.flowePinkDeep)
+                                .layoutPriority(1)
+                        }
                     }
                     .foregroundStyle(Color.floweMuted)
                     .padding(.bottom, 8)

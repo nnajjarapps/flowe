@@ -24,6 +24,10 @@ struct CatalogListing {
     let certPhoto: Data?
     /// `PaymentMethod` raw ids — how this instructor takes payment offline.
     let paymentMethods: [String]
+    /// Coarse teaching area, ~1 km grid (see `CoarseLocation`). Nil when the instructor hasn't set
+    /// one — which is most of them, and never a reason to hide a listing.
+    let latitude: Double?
+    let longitude: Double?
 
     init?(record: CKRecord) {
         guard let name = record["name"] as? String else { return nil }
@@ -43,6 +47,8 @@ struct CatalogListing {
         paymentMethods = record["paymentMethods"] as? [String] ?? []
         visibility = record["visibility"] as? Int ?? 0
         updatedAt = record["updatedAt"] as? Date ?? .distantPast
+        latitude = record["latitude"] as? Double
+        longitude = record["longitude"] as? Double
         // CloudKit stages an asset as a local file; read it now, before the temp copy is reclaimed.
         photo = (record["photo"] as? CKAsset)?.fileURL.flatMap { try? Data(contentsOf: $0) }
         certPhoto = (record["certPhoto"] as? CKAsset)?.fileURL.flatMap { try? Data(contentsOf: $0) }
@@ -82,6 +88,13 @@ final class CatalogService {
         record["paymentMethods"] = instructor.paymentMethods
         record["visibility"] = instructor.visibilityRaw
         record["updatedAt"] = Date()
+        // Coarse only. Snapped again on the way out — `Instructor.coarseLocation` is the single
+        // place a coordinate becomes publishable, and this record is world-readable to every
+        // authenticated user of the app. Assigning nil removes the key, which is how "remove my
+        // location" actually reaches other people's devices.
+        let area = instructor.coarseLocation
+        record["latitude"] = area?.latitude
+        record["longitude"] = area?.longitude
 
         // A CKAsset is uploaded from a file, so each image has to be staged on disk for the save.
         let staged = instructor.photo.flatMap { Self.stageAsset($0, name: "listing-photo") }
@@ -102,6 +115,10 @@ final class CatalogService {
                 server["price"] = instructor.price
                 server["paymentMethods"] = instructor.paymentMethods
                 server["updatedAt"] = Date()
+                // Re-applied including a nil, for the same reason the assets are: a conflicting
+                // save must not resurrect a location the instructor has just removed.
+                server["latitude"] = area?.latitude
+                server["longitude"] = area?.longitude
                 // The staged files outlive this block (`defer` fires on return), so the retry can
                 // reuse them — otherwise a conflicting save would silently drop the new images.
                 // Both assets are re-applied, including a nil, so a removal survives the conflict.

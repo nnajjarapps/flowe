@@ -64,6 +64,13 @@ final class BookingService {
     static let bookingRecordType = "SessionBooking"
     static let decisionRecordType = "SessionDecision"
 
+    /// The field each record type addresses its *recipient* by — the person the record is news for,
+    /// who is never the person who wrote it. `PushService` builds its subscription predicates from
+    /// these, so renaming a field breaks the query and the notification together instead of leaving
+    /// a subscription that silently never fires.
+    static let bookingRecipientField = "instructorID"
+    static let decisionRecipientField = "studentID"
+
     /// CloudKit rejects an unbounded query; a pilot instructor is nowhere near this.
     private static let fetchLimit = 200
 
@@ -133,11 +140,31 @@ final class BookingService {
         record["bookingID"] = bookingID
         record["confirmed"] = confirmed ? 1 : 0
         record["respondedAt"] = Date()
+        // The student this answer is *for*, copied off the booking.
+        //
+        // A `CKQuerySubscription` predicate can only test fields on the record that changed, so
+        // without this the student has no way to be notified that their request was answered —
+        // `SessionDecision` otherwise identifies the booking and nobody else. Only written when the
+        // lookup succeeds, so a failed fetch on a re-answer can't blank out a value already there.
+        if let studentID = await studentID(forBooking: bookingID) {
+            record["studentID"] = studentID
+        }
         return (try? await database.save(record)) != nil
         #else
         return false
         #endif
     }
+
+    // MARK: - Push subscriptions
+
+    #if CLOUDKIT_ENABLED
+    /// Who made a booking. Used to address the decision record so a query subscription can find it
+    /// (see `respond`); nil when the booking can't be read, which is not fatal to the decision.
+    private func studentID(forBooking bookingID: String) async -> String? {
+        let record = try? await database.record(for: CKRecord.ID(recordName: bookingID))
+        return record?["studentID"] as? String
+    }
+    #endif
 
     // MARK: - Reads
 
