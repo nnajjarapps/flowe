@@ -58,6 +58,12 @@ final class Instructor {
     var ownerID: String?           // the signed-in instructor who owns/edits this listing
     var visibilityRaw: Int = 0     // InstructorVisibility — driven by the owner's subscription
     var visibilityVerifiedAt: Date? // last time the owner's device confirmed the subscription
+    /// Listing edits that never reached the public catalog, retried on the next sync.
+    ///
+    /// Matters most for a *removal*: clearing a teaching area or a certificate locally while the
+    /// save fails would otherwise leave that data world-readable indefinitely, since nothing else
+    /// re-publishes an instructor's own listing.
+    var pendingPublish: Bool = false
 
     var visibility: InstructorVisibility {
         get { InstructorVisibility(rawValue: visibilityRaw) ?? .none }

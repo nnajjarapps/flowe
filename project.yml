@@ -82,7 +82,10 @@ targets:
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         UIRequiresFullScreen: true
-        NSLocationWhenInUseUsageDescription: "Flowe uses your location to show nearby instructors."
+        # Covers BOTH paths, because one dialog is all iOS shows and it is what the user
+        # actually consents to: students use it on-device only, but an instructor's becomes
+        # part of their public listing. Omitting the second half made the prompt misleading.
+        NSLocationWhenInUseUsageDescription: "Flowe uses your location to show instructors near you. If you teach on Flowe, the approximate area you choose is shown on your public profile so students can find you — never your exact address."
         NSPhotoLibraryUsageDescription: "Flowe uses your photo library so you can share images in posts."
         UIBackgroundModes:
           - remote-notification

@@ -740,3 +740,18 @@ only ever be wrong.
   nothing moves a stale `confirmed` booking to `completed`, so a session read months later would
   otherwise resolve to next year's same date and promise a reminder for something that already
   happened. Bookings are made inside the coming week, so the bound costs nothing real.
+
+## Notification language: a known limitation
+
+Remote alert text is composed **by iOS on the receiving device**, from the localization keys in
+`CKNotificationInfo`. iOS resolves those against the app bundle's preferred localization — i.e. the
+device language — and has no way to know about Flowe's in-app language override (`AppSettings.language`,
+which reaches SwiftUI `Text` via `.environment(\.locale,)` and nothing else).
+
+So a user whose device is English but who has set Flowe to Arabic sees an Arabic app and English
+push alerts. This cannot be fixed from the app: influencing remote alert text requires a
+Notification Service Extension that rewrites the payload before display. Local notifications
+(session reminders) have the same shape today for consistency.
+
+Worth doing if the in-app language picker turns out to be widely used. If most users simply run
+their device in their own language — likely — the mismatch never appears.

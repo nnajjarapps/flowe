@@ -101,6 +101,14 @@ final class LocationService {
     /// read it, so nothing outside this file can persist, publish or log it.
     @ObservationIgnored private var precise: CLLocation?
     @ObservationIgnored private var fixWaiters: [CheckedContinuation<Void, Never>] = []
+    /// Bumped on every new fix request, so a watchdog can tell whether the request it was armed for
+    /// is still the one in flight. Without it, an earlier request's timer fires 20s later and
+    /// resumes a *newer* request seconds after it started — which returns the previous coordinate
+    /// as if it were fresh, and publishes the position the user was trying to replace.
+    @ObservationIgnored private var fixGeneration = 0
+    /// The generation whose request actually produced a fix. Compared against `fixGeneration` so a
+    /// timed-out request reports failure instead of silently handing back the previous coordinate.
+    @ObservationIgnored private var landedGeneration = -1
     @ObservationIgnored private var authWaiters: [CheckedContinuation<Void, Never>] = []
 
     private let manager = CLLocationManager()
@@ -141,13 +149,11 @@ final class LocationService {
         guard await ensureAuthorization() else { return false }
         if isLocating {
             // A second caller joins the in-flight request rather than queueing another GPS session.
-            await waitForFix()
-            return hasFix
+            return await waitForFix()
         }
         isLocating = true
         manager.requestLocation()
-        await waitForFix()
-        return hasFix
+        return await waitForFix()
     }
 
     /// A fix reduced to something publishable. The precise coordinate is snapped *here*, inside the
@@ -213,6 +219,7 @@ final class LocationService {
         if let fix, fix.accuracy >= 0 {
             precise = CLLocation(latitude: fix.latitude, longitude: fix.longitude)
             hasFix = true
+            landedGeneration = fixGeneration
         }
         isLocating = false
         resumeFixWaiters()
@@ -230,18 +237,26 @@ final class LocationService {
         }
     }
 
-    private func waitForFix() async {
+    /// Returns whether *this* request produced a fix — not merely whether one has ever been seen.
+    /// A timeout that reported the stale `hasFix` would let `requestCoarseLocation` snap and
+    /// publish the coordinate the user was trying to replace.
+    private func waitForFix() async -> Bool {
+        fixGeneration &+= 1
+        let generation = fixGeneration
         await withCheckedContinuation { continuation in
             fixWaiters.append(continuation)
             Task { [weak self] in
                 try? await Task.sleep(nanoseconds: 20 * NSEC_PER_SEC)
-                self?.timeOutFix()
+                self?.timeOutFix(generation: generation)
             }
         }
+        return landedGeneration == generation
     }
 
-    private func timeOutFix() {
-        guard !fixWaiters.isEmpty else { return }
+    private func timeOutFix(generation: Int) {
+        // Only the request this watchdog was armed for. A stale timer must not cut short a request
+        // that started after it.
+        guard generation == fixGeneration, !fixWaiters.isEmpty else { return }
         isLocating = false
         resumeFixWaiters()
     }

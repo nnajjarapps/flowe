@@ -312,6 +312,7 @@ final class MockDataStore {
     /// cache the result locally so the UI works offline.
     func syncBookings(asInstructor: Bool) async {
         guard !isPreview, let currentUserID else { return }
+        if asInstructor { await flushPendingListing() }
         await flushPendingWrites()
         let remote = asInstructor
             ? await bookingService.fetchForInstructor(ownerID: currentUserID)
@@ -1160,8 +1161,27 @@ final class MockDataStore {
     }
 
     private func publishMyListing() {
-        guard !isPreview, let me = currentInstructor else { return }
-        Task { await catalog.publish(me) }
+        guard let me = currentInstructor else { return }
+        // Marked before the attempt so a crash or a kill mid-publish still retries.
+        me.pendingPublish = true
+        save()
+        guard !isPreview else { return }
+        Task {
+            if await catalog.publish(me) {
+                me.pendingPublish = false
+                save()
+            }
+        }
+    }
+
+    /// Re-publish a listing whose last save never landed. Called from the instructor's own syncs,
+    /// because `syncCatalog` is student-side only and would never reach this.
+    func flushPendingListing() async {
+        guard !isPreview, let me = currentInstructor, me.pendingPublish else { return }
+        if await catalog.publish(me) {
+            me.pendingPublish = false
+            save()
+        }
     }
 
     // MARK: - Public catalog sync (cross-device instructor discovery)

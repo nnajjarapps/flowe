@@ -67,9 +67,10 @@ final class CatalogService {
     #endif
 
     /// Upsert the instructor's own listing into the public catalog.
-    func publish(_ instructor: Instructor) async {
+    @discardableResult
+    func publish(_ instructor: Instructor) async -> Bool {
         #if CLOUDKIT_ENABLED
-        guard let ownerID = instructor.ownerID, !instructor.name.isEmpty else { return }
+        guard let ownerID = instructor.ownerID, !instructor.name.isEmpty else { return false }
         let id = CKRecord.ID(recordName: ownerID)
         let record = (try? await database.record(for: id)) ?? CKRecord(recordType: Self.recordType, recordID: id)
 
@@ -108,6 +109,7 @@ final class CatalogService {
 
         do {
             _ = try await database.save(record)
+            return true
         } catch let error as CKError where error.code == .serverRecordChanged {
             // Last-writer-wins: take the server record, re-apply our fields, retry once.
             if let server = error.userInfo[CKRecordChangedErrorServerRecordKey] as? CKRecord {
@@ -124,11 +126,15 @@ final class CatalogService {
                 // Both assets are re-applied, including a nil, so a removal survives the conflict.
                 server["photo"] = staged.map { CKAsset(fileURL: $0) }
                 server["certPhoto"] = stagedCert.map { CKAsset(fileURL: $0) }
-                _ = try? await database.save(server)
+                return (try? await database.save(server)) != nil
             }
+            return false
         } catch {
             // Offline / not signed into iCloud / schema not deployed — non-fatal.
+            return false
         }
+        #else
+        return false
         #endif
     }
 

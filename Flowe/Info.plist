@@ -28,7 +28,7 @@
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Flowe uses your location to show nearby instructors.</string>
+	<string>Flowe uses your location to show instructors near you. If you teach on Flowe, the approximate area you choose is shown on your public profile so students can find you — never your exact address.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Flowe uses your photo library so you can share images in posts.</string>
 	<key>NSUbiquitousContainers</key>

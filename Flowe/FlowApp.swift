@@ -142,6 +142,12 @@ struct FlowApp: App {
                     await data.syncBookings(asInstructor: isInstructor)
                     await data.syncMessages()
 
+                    // Re-arm APNs on every sign-in, not just at launch. `tearDown` unregisters the
+                    // device token, and signing back in without relaunching would otherwise leave
+                    // subscriptions recreated server-side with nothing to deliver to — the app
+                    // never backgrounds, so the scenePhase path doesn't cover it either.
+                    await PushService.shared.activate()
+
                     await PushService.shared.refreshSubscriptions(
                         ownerID: session.ownerID, isInstructor: isInstructor
                     )
