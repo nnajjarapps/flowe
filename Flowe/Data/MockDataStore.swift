@@ -18,6 +18,7 @@ final class MockDataStore {
     private(set) var messages: [Message] = []
     private(set) var blocked: [BlockedUser] = []
     private(set) var reviews: [Review] = []
+    private(set) var events: [CommunityEvent] = []
 
     private let catalog = CatalogService()
     private let bookingService = BookingService()
@@ -26,6 +27,7 @@ final class MockDataStore {
     private let reportService = ReportService()
     private let reviewService = ReviewService()
     private let communityService = CommunityService()
+    private let eventService = EventService()
     /// Suppresses public-catalog network calls (previews + UI tests).
     private let isPreview: Bool
 
@@ -51,6 +53,7 @@ final class MockDataStore {
         try? context.delete(model: Message.self)
         try? context.delete(model: BlockedUser.self)
         try? context.delete(model: Review.self)
+        try? context.delete(model: CommunityEvent.self)
         try? context.save()
     }
 
@@ -77,6 +80,11 @@ final class MockDataStore {
         )) ?? []
         reviews     = (try? context.fetch(
             FetchDescriptor<Review>(sortBy: [SortDescriptor(\.createdAt, order: .reverse)])
+        )) ?? []
+        // Earliest-starting first: the events list is a chronological schedule, and the store never
+        // relies on a local `order` for shared records.
+        events      = (try? context.fetch(
+            FetchDescriptor<CommunityEvent>(sortBy: [SortDescriptor(\.startsAt, order: .forward)])
         )) ?? []
     }
 
@@ -1174,6 +1182,476 @@ final class MockDataStore {
             let count = comments(for: post).count
             if post.comments != count { post.comments = count }
         }
+    }
+
+    // MARK: - Events
+
+    /// The outcome of the most recent join attempt, surfaced by the events list / detail as an alert
+    /// and cleared once shown. `.missedOut` is a lost race; `.notSent` is a failed write.
+    enum JoinOutcome: Equatable {
+        case missedOut(title: String)
+        case notSent(title: String)
+    }
+
+    /// Set by `join` and by the sync reconciliation, consumed + cleared by `EventsListView` /
+    /// `EventDetailView`.
+    var lastJoinOutcome: JoinOutcome?
+
+    /// The events a student should see: blocked organizers gone, deletions already hidden, and a
+    /// cancelled event hidden from everyone *except* someone who joined it — they keep seeing it wear
+    /// a "Cancelled" badge, which is the only way they learn of the cancellation (there is no push).
+    var visibleEvents: [CommunityEvent] {
+        events.filter { !isBlocked($0.organizerID) && !$0.pendingDelete && (!$0.cancelled || $0.joined) }
+    }
+
+    /// The signed-in organizer's own events. Upcoming first (soonest-first), then past
+    /// (most-recent-first) — an organizer manages what's next before what's already happened.
+    var myEvents: [CommunityEvent] {
+        guard let me = currentUserID else { return [] }
+        let now = Date()
+        return events.filter { $0.organizerID == me }.sorted {
+            let lUpcoming = $0.endsAt >= now
+            let rUpcoming = $1.endsAt >= now
+            if lUpcoming != rUpcoming { return lUpcoming }
+            return lUpcoming ? $0.startsAt < $1.startsAt : $0.startsAt > $1.startsAt
+        }
+    }
+
+    /// Whether the signed-in user organized this event — the only person allowed to edit, cancel or
+    /// delete it, and the one who sees the attendee roster.
+    func isMine(_ event: CommunityEvent) -> Bool {
+        guard let currentUserID, let organizer = event.organizerID else { return false }
+        return organizer == currentUserID
+    }
+
+    /// The organizer's cached public listing, if they have one — the source for their avatar and, in
+    /// the detail sheet, a tappable route to their profile. A lapsed or student organizer has none.
+    func organizerListing(for event: CommunityEvent) -> Instructor? {
+        guard let organizerID = event.organizerID else { return nil }
+        return instructors.first { $0.ownerID == organizerID }
+    }
+
+    /// The organizer's uploaded profile photo, if they have a listing — otherwise the card falls back
+    /// to the gradient avatar. The event record itself carries no organizer image.
+    func organizerPhoto(for event: CommunityEvent) -> Data? {
+        organizerListing(for: event)?.photo
+    }
+
+    /// Create an event. Instructor-only in the UI; the store just needs a signed-in owner.
+    func addEvent(title: String,
+                  about: String,
+                  location: String,
+                  startsAt: Date,
+                  durationMinutes: Int,
+                  capacity: Int,
+                  price: Int?,
+                  image: Data?) {
+        guard let me = currentUserID else { return }
+
+        let event = CommunityEvent(
+            legacyId: (events.map(\.legacyId).max() ?? 0) + 1,
+            organizerID: me,
+            organizerName: currentUserName,
+            title: title,
+            about: about,
+            location: location,
+            startsAt: startsAt,
+            durationMinutes: durationMinutes,
+            capacity: capacity,
+            price: price,
+            highlight: image,
+            // Set true only once the asset actually stages, in `uploadEvent` — never from `image`.
+            hasHighlight: false,
+            // Marked pending up front: if the app dies before the upload finishes, the next sync
+            // retries it rather than losing the event.
+            pendingUpload: true
+        )
+        context.insert(event)
+
+        guard !isPreview else {
+            // No shared store to reach in previews/tests; leaving the flag set would strand the row
+            // under a permanent "not sent yet".
+            event.pendingUpload = false
+            save()
+            return
+        }
+        save()
+        Task { await uploadEvent(event) }
+    }
+
+    /// Edit an event's organizer-written fields. The deterministic `localID` makes the re-publish an
+    /// upsert onto the same record.
+    func updateEvent(_ event: CommunityEvent,
+                     title: String,
+                     about: String,
+                     location: String,
+                     startsAt: Date,
+                     durationMinutes: Int,
+                     capacity: Int,
+                     price: Int?,
+                     image: Data?) {
+        guard isMine(event) else { return }
+        event.title = title
+        event.about = about
+        event.location = location
+        event.startsAt = startsAt
+        event.durationMinutes = durationMinutes
+        event.capacity = capacity
+        event.price = price
+        event.highlight = image
+        event.updatedAt = Date()
+        event.pendingUpload = true
+
+        guard !isPreview else {
+            event.pendingUpload = false
+            save()
+            return
+        }
+        save()
+        Task { await uploadEvent(event) }
+    }
+
+    /// Cancel an event: mark it, and let the next upsert carry `cancelled` to everyone. A typo'd date
+    /// is an edit; this is the deliberate "call it off" path, and it stays visible to joiners.
+    func cancelEvent(_ event: CommunityEvent) {
+        guard isMine(event) else { return }
+        event.cancelled = true
+        event.updatedAt = Date()
+        event.pendingUpload = true
+
+        guard !isPreview else {
+            event.pendingUpload = false
+            save()
+            return
+        }
+        save()
+        Task { await uploadEvent(event) }
+    }
+
+    /// Delete the organizer's own event. Registrations other students left on it stay owned by their
+    /// creators in the public DB (the orphan class documented in `BOOKING-SYSTEM.md`).
+    func deleteEvent(_ event: CommunityEvent) {
+        guard isMine(event) else { return }
+        guard !isPreview else { return deleteEventLocally(event) }
+
+        // A nil remoteID does NOT mean "never published": it is also nil for the whole publish
+        // round-trip. Deleting locally in that window would destroy the row while `uploadEvent` is
+        // still suspended, the record would land on the server anyway, and the next sync would
+        // re-insert an event the organizer was told had been withdrawn. Mark it and let the flush
+        // (or the in-flight upload) withdraw it once an id exists.
+        event.pendingDelete = true
+        save()
+        guard let remoteID = event.remoteID else { return }
+        Task {
+            if await eventService.deleteEvent(id: remoteID) { deleteEventLocally(event) }
+            save()
+        }
+    }
+
+    private func deleteEventLocally(_ event: CommunityEvent) {
+        context.delete(event)
+        save()
+    }
+
+    /// Push a locally-created/edited/cancelled event to the shared store, flagging it for retry if it
+    /// fails. Doubles as create, edit and cancel because `upsert` is deterministic on `localID`.
+    private func uploadEvent(_ event: CommunityEvent) async {
+        guard let organizerID = event.organizerID else { return }
+        let remoteID = await eventService.upsert(
+            localID: event.localID,
+            organizerID: organizerID,
+            organizerName: event.organizerName,
+            title: event.title,
+            about: event.about,
+            location: event.location,
+            startsAt: event.startsAt,
+            durationMinutes: event.durationMinutes,
+            capacity: event.capacity,
+            price: event.price,
+            cancelled: event.cancelled,
+            createdAt: event.createdAt,
+            highlight: event.highlight
+        )
+        event.remoteID = remoteID
+        // Derive `hasHighlight` from the delivered result, not `highlight != nil`: a delivered event
+        // that carried bytes staged its asset, and one that never reached the server carries nothing
+        // anyone else can see yet.
+        event.hasHighlight = remoteID != nil && event.highlight != nil
+        event.pendingUpload = remoteID == nil
+        save()
+
+        // The organizer may have deleted the event while the publish was in flight. Withdraw it now
+        // rather than leaving it world-readable until the next sync.
+        if event.pendingDelete, let remoteID {
+            if await eventService.deleteEvent(id: remoteID) { deleteEventLocally(event) }
+            save()
+        }
+    }
+
+    /// Join an event. The capacity check here is a client pre-check, explicitly *not* trusted — two
+    /// students can both pass it and both write, which the post-write re-check resolves.
+    func join(_ event: CommunityEvent) {
+        guard let me = currentUserID, let remoteID = event.remoteID else { return }
+        // A nil remoteID is the in-flight publish window; only the organizer sees such an event and
+        // the rail shows "not sent yet", so there is nothing to join yet.
+        guard case .open = event.status else { return }
+
+        // Optimistic local move so the tap feels answered.
+        event.joined = true
+        // nil stays nil — bumping to 1 would assert a total on evidence never gathered.
+        if let c = event.attendees { event.attendees = c + 1 }
+        event.pendingJoin = true
+        save()
+
+        guard !isPreview else {
+            event.pendingJoin = false
+            save()
+            return
+        }
+        Task {
+            let delivered = await eventService.setRegistration(
+                true, eventID: remoteID, studentID: me, studentName: currentUserName,
+                eventTitle: event.title, organizerID: event.organizerID ?? ""
+            )
+            event.pendingJoin = !delivered
+            if delivered {
+                // Post-write re-check over this one id: the same reconciliation the sync uses, which
+                // withdraws my own record and tells me if I lost the race for the last spot.
+                await refreshAttendance(for: event)
+            } else {
+                // Not a lost race — the write itself didn't land. It stays queued (pendingJoin) and
+                // the flush retries; tell the user plainly rather than showing a false success.
+                lastJoinOutcome = .notSent(title: event.title)
+                save()
+            }
+        }
+    }
+
+    /// Leave an event, withdrawing this student's own registration record.
+    func leave(_ event: CommunityEvent) {
+        guard let me = currentUserID, let remoteID = event.remoteID else { return }
+        event.joined = false
+        if let c = event.attendees { event.attendees = max(0, c - 1) }
+        event.pendingJoin = true
+        save()
+
+        guard !isPreview else {
+            event.pendingJoin = false
+            save()
+            return
+        }
+        Task {
+            // `setRegistration(false, …)` tolerates a record that is already gone.
+            event.pendingJoin = !(await eventService.setRegistration(
+                false, eventID: remoteID, studentID: me, studentName: currentUserName,
+                eventTitle: event.title, organizerID: event.organizerID ?? ""
+            ))
+            save()
+        }
+    }
+
+    // MARK: - Event sync
+
+    /// Pull the shared events, cache them so the tab works offline, reconcile attendance from the
+    /// registration records, then fetch any missing highlight photos.
+    func syncEvents(asOrganizer: Bool) async {
+        guard !isPreview, let me = currentUserID else { return }
+        await flushPendingEventWrites()
+
+        // The 6-hour grace keeps a class that started an hour ago from vanishing while people are in
+        // it. Only this (whole-window) merge prunes — see `mergeEvents(_:prune:)`.
+        mergeEvents(await eventService.fetchUpcoming(since: Date(timeIntervalSinceNow: -6 * 3600)))
+        if asOrganizer {
+            // An organizer also keeps their past events, which the upcoming window excludes. Merge
+            // without pruning: pruning against this narrow (mine-only) set would wipe every other
+            // instructor's events from the cache.
+            mergeEvents(await eventService.fetchMine(organizerID: me), prune: false)
+        }
+
+        await refreshAttendance()
+        await fetchMissingHighlights()
+    }
+
+    /// Refresh one event's attendance without touching the event list.
+    ///
+    /// The detail sheet cannot call `syncEvents`: that prunes cached events, including the very event
+    /// the sheet is displaying, and reading a deleted SwiftData model traps at runtime (the same trap
+    /// `syncComments` avoids for the comments sheet).
+    func syncAttendance(for event: CommunityEvent) async {
+        guard !isPreview, event.remoteID != nil else { return }
+        await refreshAttendance(for: event)
+    }
+
+    /// Re-send anything that never reached the server: an event created offline, a join taken while
+    /// the network was down, a deletion the server never confirmed.
+    private func flushPendingEventWrites() async {
+        for event in events where event.pendingUpload && event.remoteID == nil {
+            await uploadEvent(event)
+        }
+        for event in events where event.pendingDelete {
+            guard let remoteID = event.remoteID else { continue }
+            if await eventService.deleteEvent(id: remoteID) { deleteEventLocally(event) }
+        }
+        save()
+        for event in events where event.pendingJoin {
+            guard let remoteID = event.remoteID, let me = currentUserID else { continue }
+            // The desired state is `joined`, so re-send exactly that — a queued join or a queued
+            // leave, whichever the user last chose.
+            event.pendingJoin = !(await eventService.setRegistration(
+                event.joined, eventID: remoteID, studentID: me, studentName: currentUserName,
+                eventTitle: event.title, organizerID: event.organizerID ?? ""
+            ))
+        }
+        save()
+    }
+
+    private func mergeEvents(_ remote: [RemoteEvent], prune: Bool = true) {
+        guard !remote.isEmpty else { return }
+        // An event can arrive both from the public fetch and from the private SwiftData mirror, keyed
+        // differently there (a delivered remoteID vs the deterministic `event-<localID>`), so a row
+        // is "known" under either name and is never inserted twice.
+        let known = Set(events.compactMap(\.remoteID))
+            .union(events.map { "event-\($0.localID.uuidString)" })
+        var nextId = events.map(\.legacyId).max() ?? 0
+
+        for entry in remote {
+            if let existing = events.first(where: {
+                $0.remoteID == entry.id || "event-\($0.localID.uuidString)" == entry.id
+            }) {
+                // A pending event is my own undelivered edit — the server copy is stale, so don't
+                // clobber my fields with it. Reader state (joined/attendees/pendingJoin) is never
+                // touched here; it comes from the registration query.
+                if !existing.pendingUpload { apply(entry, to: existing) }
+                if existing.remoteID == nil { existing.remoteID = entry.id }
+            } else if !known.contains(entry.id) {
+                nextId += 1
+                let event = CommunityEvent(legacyId: nextId, remoteID: entry.id)
+                apply(entry, to: event)
+                context.insert(event)
+            }
+        }
+        if prune { pruneEvents(against: remote) }
+        save()
+    }
+
+    /// Copy a fetched event's organizer-written fields onto the cache. Deliberately does not touch
+    /// `joined` / `attendees` / `pendingJoin` — those are this reader's own state, resolved by the
+    /// registration query, not carried on the event record.
+    private func apply(_ r: RemoteEvent, to event: CommunityEvent) {
+        event.organizerID = r.organizerID
+        event.organizerName = r.organizerName
+        event.title = r.title
+        event.about = r.about
+        event.location = r.location
+        event.startsAt = r.startsAt
+        event.durationMinutes = r.durationMinutes
+        event.capacity = r.capacity
+        event.price = r.price
+        event.cancelled = r.cancelled
+        event.hasHighlight = r.hasHighlight
+        event.createdAt = r.createdAt
+        event.updatedAt = r.updatedAt
+    }
+
+    /// Drop cached events their organizers have since deleted.
+    ///
+    /// The fetch is capped and time-bounded, so only prune inside the window it actually covers —
+    /// anything older than the oldest row returned simply wasn't looked at. Very recent events are
+    /// spared (CloudKit's query index is eventually consistent), as is anything I've joined or that
+    /// is still queued for a write of mine. Same reasoning and window as `prunePosts`.
+    private func pruneEvents(against remote: [RemoteEvent]) {
+        // A failed query returns []; pruning against it would wipe the whole cache.
+        guard let oldest = remote.map(\.startsAt).min() else { return }
+        let live = Set(remote.map(\.id))
+        let settled = Date(timeIntervalSinceNow: -300)
+        for event in events {
+            guard let remoteID = event.remoteID, !live.contains(remoteID),
+                  event.startsAt >= oldest, event.createdAt < settled,
+                  !event.joined, !event.pendingUpload, !event.pendingJoin else { continue }
+            deleteEventLocally(event)
+        }
+    }
+
+    /// Reconcile attendance for every cached event from the registration records.
+    private func refreshAttendance() async {
+        await reconcileAttendance(eventIDs: events.compactMap(\.remoteID), subjects: events)
+    }
+
+    /// The narrow, non-pruning per-event refresh the detail sheet and the post-write join re-check
+    /// call.
+    private func refreshAttendance(for event: CommunityEvent) async {
+        guard let remoteID = event.remoteID else { return }
+        await reconcileAttendance(eventIDs: [remoteID], subjects: [event])
+    }
+
+    /// The shared reconciliation. For each subject: count its registrations, compute the deterministic
+    /// admitted set, and settle this reader's own state. Because `admitted` is total over the
+    /// server-assigned join time, every device computes the identical set, so exactly one racer
+    /// withdraws — the outside student is told and their record removed.
+    private func reconcileAttendance(eventIDs: [String], subjects: [CommunityEvent]) async {
+        guard !eventIDs.isEmpty, let me = currentUserID else { return }
+        // nil means the query failed — NOT "nobody joined". Conflating them would zero every count
+        // offline and could withdraw a genuine registration on no evidence.
+        guard let rows = await eventService.fetchRegistrations(eventIDs: eventIDs) else { return }
+        let byEvent = Dictionary(grouping: rows, by: \.eventID)
+
+        var toWithdraw: [CommunityEvent] = []
+        var lost: [CommunityEvent] = []
+
+        for event in subjects {
+            guard let remoteID = event.remoteID else { continue }
+            let mineRows = byEvent[remoteID] ?? []
+            let admitted = EventService.admitted(mineRows, capacity: event.capacity)
+            let mine = admitted.contains(me)
+            if event.pendingJoin {
+                // An undelivered join/leave: keep the user's own desired state and keep the count
+                // consistent with it, the same correction `refreshEngagement` makes for a pending like.
+                event.attendees = mineRows.count
+                    + (event.joined && !mine ? 1 : 0)
+                    - (!event.joined && mine ? 1 : 0)
+            } else {
+                let wasJoined = event.joined
+                // The TRUE count, not the admitted count — `spotsLeft` clamps at 0 anyway, and the
+                // organizer must see the overflow.
+                event.attendees = mineRows.count
+                event.joined = mine
+                if wasJoined && !mine { lost.append(event) }                        // I was in, now I'm not
+                if !mine, mineRows.contains(where: { $0.studentID == me }) {         // holding a losing record
+                    toWithdraw.append(event)
+                }
+            }
+        }
+
+        // Withdraw my own losing registration (the only record I may delete), then surface the loss.
+        for event in toWithdraw {
+            guard let remoteID = event.remoteID else { continue }
+            _ = await eventService.setRegistration(
+                false, eventID: remoteID, studentID: me, studentName: currentUserName,
+                eventTitle: event.title, organizerID: event.organizerID ?? ""
+            )
+        }
+        for event in lost { lastJoinOutcome = .missedOut(title: event.title) }
+        save()
+    }
+
+    /// Download the highlight photos of events that have one but haven't got it yet.
+    ///
+    /// Separate from `mergeEvents` because the list query deliberately doesn't carry assets (see
+    /// `EventService.eventMetadataKeys`). Capped per pass; the rest arrive on later syncs, and a
+    /// photo already cached is never fetched twice.
+    private func fetchMissingHighlights() async {
+        let wanted = events
+            .filter { $0.hasHighlight && $0.highlight == nil && !$0.pendingDelete }
+            .compactMap(\.remoteID)
+        guard !wanted.isEmpty else { return }
+
+        let images = await eventService.fetchHighlights(eventIDs: wanted)
+        guard !images.isEmpty else { return }
+        for event in events {
+            guard let remoteID = event.remoteID, let data = images[remoteID] else { continue }
+            event.highlight = data
+        }
+        save()
     }
 
     // MARK: - Instructor identity & editing

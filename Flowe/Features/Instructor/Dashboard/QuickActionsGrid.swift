@@ -1,7 +1,19 @@
 import SwiftUI
 
 enum QuickActionKind {
-    case availability, messages, earnings, editProfile
+    case availability, messages, earnings, editProfile, createEvent
+
+    /// Stable, non-localized token for the tile's accessibilityIdentifier (`dashboard.action.<id>`),
+    /// so a UI test can tap a tile without matching translated text.
+    var id: String {
+        switch self {
+        case .availability: return "availability"
+        case .messages:     return "messages"
+        case .earnings:     return "earnings"
+        case .editProfile:  return "editProfile"
+        case .createEvent:  return "createEvent"
+        }
+    }
 }
 
 /// A single quick-action model (SF Symbol + label + tint).
@@ -16,7 +28,8 @@ struct QuickAction: Identifiable {
         QuickAction(kind: .availability, systemIcon: "calendar.badge.plus", title: "Add availability", subtitle: "Open new slots"),
         QuickAction(kind: .messages, systemIcon: "bubble.left.and.bubble.right.fill", title: "Message students", subtitle: "Chat with students"),
         QuickAction(kind: .earnings, systemIcon: "chart.line.uptrend.xyaxis", title: "View earnings", subtitle: "This month"),
-        QuickAction(kind: .editProfile, systemIcon: "person.crop.circle.badge.checkmark", title: "Edit profile", subtitle: "Bio & rates")
+        QuickAction(kind: .editProfile, systemIcon: "person.crop.circle.badge.checkmark", title: "Edit profile", subtitle: "Bio & rates"),
+        QuickAction(kind: .createEvent, systemIcon: "sparkles", title: "Host an event", subtitle: "Class or workshop")
     ]
 }
 
@@ -38,6 +51,7 @@ struct QuickActionsGrid: View {
                     QuickActionTile(action: action)
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("dashboard.action.\(action.kind.id)")
             }
         }
     }

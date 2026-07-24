@@ -7,6 +7,7 @@ enum ReportedContent: String {
     case instructorListing      // a public profile's text (bio / cert / name)
     case communityPost          // a post in the community feed
     case communityComment       // a reply on a community post
+    case communityEvent         // an instructor-hosted event (its text is screened; its photo isn't)
 }
 
 /// Why the reporter flagged it. Fixed set so reports can be triaged without reading every one.

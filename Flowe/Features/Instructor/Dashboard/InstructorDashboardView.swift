@@ -12,6 +12,8 @@ struct InstructorDashboardView: View {
     @State private var showAvailability = false
     @State private var showEditProfile = false
     @State private var showPaywall = false
+    @State private var showComposeEvent = false
+    @State private var selectedEvent: CommunityEvent?
 
     /// Accepted sessions scheduled for today — not the whole book of business. Pending requests
     /// live in their own section; declined and cancelled ones drop off entirely.
@@ -92,16 +94,35 @@ struct InstructorDashboardView: View {
                     SectionHeader(text: "QUICK ACTIONS")
                     QuickActionsGrid(onTap: handle)
                 }
+
+                // Omitted entirely when the organizer has no events — a "YOUR EVENTS" header over
+                // nothing reads as broken.
+                if !data.myEvents.isEmpty {
+                    VStack(alignment: .leading, spacing: FlowSpacing.md) {
+                        SectionHeader(text: "YOUR EVENTS")
+                        ForEach(data.myEvents) { event in
+                            EventCardView(event: event, style: .compact) { selectedEvent = event }
+                        }
+                    }
+                }
             }
             .padding(.horizontal, FlowSpacing.xl)
             .padding(.top, FlowSpacing.sm)
             .padding(.bottom, FlowSpacing.xxxl)
         }
         .background(Color.flowWhite.ignoresSafeArea())
-        .refreshable { await data.syncBookings(asInstructor: true) }
+        .task { await data.syncEvents(asOrganizer: true) }
+        .refreshable {
+            await data.syncBookings(asInstructor: true)
+            await data.syncEvents(asOrganizer: true)
+        }
         .sheet(isPresented: $showAvailability) { AvailabilityView() }
         .sheet(isPresented: $showEditProfile) { EditProfileView() }
         .sheet(isPresented: $showPaywall) { PaywallView() }
+        .sheet(isPresented: $showComposeEvent) { ComposeEventSheet() }
+        .sheet(item: $selectedEvent) { event in
+            EventDetailView(event: event)
+        }
     }
 
     /// Promo shown until the instructor subscribes — they're hidden from the feed until they do.
@@ -136,6 +157,12 @@ struct InstructorDashboardView: View {
         case .messages:     router.openMessages()
         case .earnings:     router.openEarnings()
         case .editProfile:  showEditProfile = true
+        // Hosting an event broadcasts to students. An instructor students can't even find in Discover
+        // shouldn't broadcast, and that subscription is the only money Flowe takes — so an ineligible
+        // organizer meets the paywall instead of the composer. (Deliberately *not* symmetric: a lapsed
+        // organizer's existing events stay visible so a joined student never watches the class vanish.)
+        case .createEvent:
+            if subscription.isVisible { showComposeEvent = true } else { showPaywall = true }
         }
     }
 

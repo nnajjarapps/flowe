@@ -53,6 +53,7 @@
 		608B13B7ACC18F54705EFA14 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C9867A521AD55E8C878C940 /* KeychainStore.swift */; };
 		670955E4E0AD11CB9D0CD922 /* ReviewsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D82A11EAF8AA7B75DFFDFD1 /* ReviewsUITests.swift */; };
 		A1C0FFEE0001COMMUNITY001 /* CommunityUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C0FFEE0002COMMUNITY002 /* CommunityUITests.swift */; };
+		A1C0FFEE0001EVENTSUI0001 /* EventsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C0FFEE0002EVENTSUI0002 /* EventsUITests.swift */; };
 		6E4EBF835A2231B680429E5E /* FeaturedHeroCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F5C862793134F2194515695 /* FeaturedHeroCard.swift */; };
 		73C750F9D9D807EAD4A2DD6F /* PrimaryButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = F31A42A348DDC6B4F180F617 /* PrimaryButton.swift */; };
 		73DF171F35C47E63F5526C7F /* Booking.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9B8DD81B48D4AD3BC2545FF /* Booking.swift */; };
@@ -63,6 +64,10 @@
 		80100DE4455F8F8024B6B638 /* FloweUITestCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = E388152C9A9602205EA34963 /* FloweUITestCase.swift */; };
 		8B7232D19B5F6A1CE1E7F245 /* CalendarModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60B3922DB1CB825C3570DB99 /* CalendarModels.swift */; };
 		8BFA1E13242E616172AE5E18 /* ComposePostSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98E804FD895C2BD2449702AE /* ComposePostSheet.swift */; };
+		9D9B1348B900A774F88C4945 /* EventsListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3773BB1AF562846661FAD9C5 /* EventsListView.swift */; };
+		5FB2EC02BDD57F070285C155 /* EventCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEC6196717CD5E7E436334E4 /* EventCardView.swift */; };
+		A894E80974E9B024A18E4211 /* EventDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9D094FE777972560E0CC472 /* EventDetailView.swift */; };
+		B8CF19EAA961AFBE3E0B12D4 /* ComposeEventSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = D27D093768FBA1C5BED0A4E9 /* ComposeEventSheet.swift */; };
 		8CD6F7076188FCB80948E77E /* OnboardingUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23BC35F24816C68247C04B36 /* OnboardingUITests.swift */; };
 		8CD86B4F2A0C8A3F1544DCDE /* Message.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB36077D528099D817B27E2B /* Message.swift */; };
 		8F005CECFE7C6E453C28CD31 /* NotificationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB385017BADE1E22104629B2 /* NotificationSettingsView.swift */; };
@@ -81,6 +86,8 @@
 		A4FD8265A8D205270FAEDD66 /* SettingsAndPaywallUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F1129DAD3FC5185D2130BEF /* SettingsAndPaywallUITests.swift */; };
 		A6D68D101065C7820B5BB267 /* SubscriptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB5F301524BA50E4D3032BEA /* SubscriptionService.swift */; };
 		AADC13572C1C1817ACD45F11 /* CommunityService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE5BBB50D708E0C0822A948A /* CommunityService.swift */; };
+		DD1DB1934510C148B3A2E4C1 /* CommunityEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = C468A4245116CFB4BA83A543 /* CommunityEvent.swift */; };
+		E3457EB253E484670841834A /* EventService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6D520220F189277F969F983 /* EventService.swift */; };
 		AAE895D3AA0E84243D96DC8A /* FlowLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = E055796162D11DF1E7B8D52D /* FlowLayout.swift */; };
 		AB05550DCEF4EEF50E9E57E9 /* InstructorTabsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B36038D7F8CF809375873BCC /* InstructorTabsUITests.swift */; };
 		B029AD2888183B7786C5B22F /* Fraunces-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 9AC3550079CA887E6CF28838 /* Fraunces-Regular.ttf */; };
@@ -211,10 +218,15 @@
 		8D324CCEA79663B5D1A47DE4 /* FilterChipsBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilterChipsBar.swift; sourceTree = "<group>"; };
 		8D82A11EAF8AA7B75DFFDFD1 /* ReviewsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewsUITests.swift; sourceTree = "<group>"; };
 		A1C0FFEE0002COMMUNITY002 /* CommunityUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommunityUITests.swift; sourceTree = "<group>"; };
+		A1C0FFEE0002EVENTSUI0002 /* EventsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventsUITests.swift; sourceTree = "<group>"; };
 		914A7ECE05F8E495EF765D01 /* DMMono-Light.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "DMMono-Light.ttf"; sourceTree = "<group>"; };
 		91D1DD42C0E5A323D1D28FEB /* DisciplineTag.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisciplineTag.swift; sourceTree = "<group>"; };
 		92C935E2CA20B8E5750DEE0F /* OnboardingFlowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingFlowView.swift; sourceTree = "<group>"; };
 		98E804FD895C2BD2449702AE /* ComposePostSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposePostSheet.swift; sourceTree = "<group>"; };
+		3773BB1AF562846661FAD9C5 /* EventsListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventsListView.swift; sourceTree = "<group>"; };
+		BEC6196717CD5E7E436334E4 /* EventCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventCardView.swift; sourceTree = "<group>"; };
+		D9D094FE777972560E0CC472 /* EventDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventDetailView.swift; sourceTree = "<group>"; };
+		D27D093768FBA1C5BED0A4E9 /* ComposeEventSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposeEventSheet.swift; sourceTree = "<group>"; };
 		9AC3550079CA887E6CF28838 /* Fraunces-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Fraunces-Regular.ttf"; sourceTree = "<group>"; };
 		9D9DC7CE9663E57AFACB3D10 /* AccountDeletionUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountDeletionUITests.swift; sourceTree = "<group>"; };
 		9DBB3E399C8BF1C8511DF1B7 /* MessagingUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessagingUITests.swift; sourceTree = "<group>"; };
@@ -241,6 +253,8 @@
 		C6FD9EE5DA26FD915263821D /* EditProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditProfileView.swift; sourceTree = "<group>"; };
 		C754291E9715CD8A347C4A53 /* ReportSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportSheet.swift; sourceTree = "<group>"; };
 		CE5BBB50D708E0C0822A948A /* CommunityService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommunityService.swift; sourceTree = "<group>"; };
+		C468A4245116CFB4BA83A543 /* CommunityEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommunityEvent.swift; sourceTree = "<group>"; };
+		A6D520220F189277F969F983 /* EventService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventService.swift; sourceTree = "<group>"; };
 		D02BBF683FC16C7795428F78 /* InstructorCalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstructorCalendarView.swift; sourceTree = "<group>"; };
 		D095FAA6B074F1AF2221AE6A /* AppSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSession.swift; sourceTree = "<group>"; };
 		D3527B833A544893B28CE722 /* AppRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRouter.swift; sourceTree = "<group>"; };
@@ -300,6 +314,7 @@
 			children = (
 				F64F306B57717DC8ABC5FC15 /* BlockedUser.swift */,
 				A9B8DD81B48D4AD3BC2545FF /* Booking.swift */,
+				C468A4245116CFB4BA83A543 /* CommunityEvent.swift */,
 				F8FDF5E6BF0F2C754325BF04 /* FeedPost.swift */,
 				DA077844D989E093BABC8C4D /* Instructor.swift */,
 				EB36077D528099D817B27E2B /* Message.swift */,
@@ -329,6 +344,7 @@
 				10A50AB15C47E4490CEB456C /* CatalogService.swift */,
 				CE5BBB50D708E0C0822A948A /* CommunityService.swift */,
 				6032AC367E2365ADAFD2BF43 /* ContentFilter.swift */,
+				A6D520220F189277F969F983 /* EventService.swift */,
 				06D1617BBCF38F203A11C316 /* FloweConstants.swift */,
 				72C3E59E33D98698F840ADCF /* FloweModelContainer.swift */,
 				DB7FD826615D7BA62DCE05B3 /* FloweWeek.swift */,
@@ -564,6 +580,9 @@
 				98E804FD895C2BD2449702AE /* ComposePostSheet.swift */,
 				E0A7EB42A69984DC5F8C8532 /* PostCommentsSheet.swift */,
 				72D6B8E3948B89E8B171AF07 /* PostRowView.swift */,
+				3773BB1AF562846661FAD9C5 /* EventsListView.swift */,
+				BEC6196717CD5E7E436334E4 /* EventCardView.swift */,
+				D9D094FE777972560E0CC472 /* EventDetailView.swift */,
 			);
 			path = Community;
 			sourceTree = "<group>";
@@ -599,6 +618,7 @@
 				23BC35F24816C68247C04B36 /* OnboardingUITests.swift */,
 				8D82A11EAF8AA7B75DFFDFD1 /* ReviewsUITests.swift */,
 				A1C0FFEE0002COMMUNITY002 /* CommunityUITests.swift */,
+				A1C0FFEE0002EVENTSUI0002 /* EventsUITests.swift */,
 				9F1129DAD3FC5185D2130BEF /* SettingsAndPaywallUITests.swift */,
 				5DBB42D00526892D939DC9F1 /* StudentTabsUITests.swift */,
 			);
@@ -623,6 +643,7 @@
 				06C30D7FCF06A724C45BDF53 /* InstructorDashboardView.swift */,
 				1CE171D2ABA3957094B2DD59 /* QuickActionsGrid.swift */,
 				FB831E5B6127A2464D0E1D52 /* SessionRow.swift */,
+				D27D093768FBA1C5BED0A4E9 /* ComposeEventSheet.swift */,
 			);
 			path = Dashboard;
 			sourceTree = "<group>";
@@ -782,6 +803,7 @@
 				8CD6F7076188FCB80948E77E /* OnboardingUITests.swift in Sources */,
 				670955E4E0AD11CB9D0CD922 /* ReviewsUITests.swift in Sources */,
 				A1C0FFEE0001COMMUNITY001 /* CommunityUITests.swift in Sources */,
+				A1C0FFEE0001EVENTSUI0001 /* EventsUITests.swift in Sources */,
 				A4FD8265A8D205270FAEDD66 /* SettingsAndPaywallUITests.swift in Sources */,
 				9088BE8675CAE227464F994B /* StudentTabsUITests.swift in Sources */,
 			);
@@ -809,8 +831,14 @@
 				3385A6C63E0E653F076E9ECE /* CatalogService.swift in Sources */,
 				F360CCFF8BACA3777ED050BB /* Color+Flowe.swift in Sources */,
 				AADC13572C1C1817ACD45F11 /* CommunityService.swift in Sources */,
+				DD1DB1934510C148B3A2E4C1 /* CommunityEvent.swift in Sources */,
+				E3457EB253E484670841834A /* EventService.swift in Sources */,
 				1C47F28F1536D627C6E96E25 /* CommunityView.swift in Sources */,
 				8BFA1E13242E616172AE5E18 /* ComposePostSheet.swift in Sources */,
+				9D9B1348B900A774F88C4945 /* EventsListView.swift in Sources */,
+				5FB2EC02BDD57F070285C155 /* EventCardView.swift in Sources */,
+				A894E80974E9B024A18E4211 /* EventDetailView.swift in Sources */,
+				B8CF19EAA961AFBE3E0B12D4 /* ComposeEventSheet.swift in Sources */,
 				B923A761680F9E8FA7B70708 /* ContentFilter.swift in Sources */,
 				45DB3B4C623193D3DCE3E722 /* ConversationView.swift in Sources */,
 				3EDD960F8F65E3919A6AD717 /* CreateAccountView.swift in Sources */,

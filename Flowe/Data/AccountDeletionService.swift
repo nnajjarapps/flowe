@@ -84,6 +84,22 @@ final class AccountDeletionService {
         ) else { return false }
         ids += myComments
 
+        // Events I organized. Registrations other students left on them stay owned by their
+        // creators and are not swept here — the same orphan class as likes on a deleted post, and
+        // documented as a known limitation rather than reached for.
+        guard let myEvents = await recordIDs(
+            ofType: EventService.eventRecordType,
+            matching: NSPredicate(format: "organizerID == %@", ownerID)
+        ) else { return false }
+        ids += myEvents
+
+        // Registrations I created joining *other* people's events — they carry my name and my id.
+        guard let myRegistrations = await recordIDs(
+            ofType: EventService.registrationRecordType,
+            matching: NSPredicate(format: "studentID == %@", ownerID)
+        ) else { return false }
+        ids += myRegistrations
+
         // My instructor listing, whose recordName *is* the owner id. Absent for students.
         ids.append(CKRecord.ID(recordName: ownerID))
 

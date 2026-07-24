@@ -26,6 +26,20 @@ extension Date {
         return f.string(from: self)
     }
 
+    var flowMonthShort: String {
+        let f = DateFormatter()
+        f.dateFormat = "MMM"
+        return f.string(from: self)
+    }
+
+    /// Weekday + full date, e.g. "Saturday, Jul 25" — the event WHEN line. Locale-templated (not a
+    /// hardcoded format) so the field order follows the reader's language rather than English.
+    var flowLongDate: String {
+        let f = DateFormatter()
+        f.setLocalizedDateFormatFromTemplate("EEEEMMMd")
+        return f.string(from: self)
+    }
+
     func adding(days: Int) -> Date {
         Calendar.current.date(byAdding: .day, value: days, to: self) ?? self
     }

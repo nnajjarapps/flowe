@@ -446,6 +446,136 @@ design, and creator-write is what makes author-only delete work.
 
 ---
 
+# Events
+
+Same constraint as the feed, one subsystem over. An instructor hosts a class, a workshop or a retreat
+and every student must see it, so the event body travels through the **public** database via
+`EventService` as a `CommunityEvent` record; the `CommunityEvent` `@Model` in the `UserData`
+configuration is the offline cache, exactly like `FeedPost`. Events surface as a second sub-tab inside
+the student Community screen; creation lives on the instructor Dashboard (a "Host an event" quick
+action), because instructors have no Community tab of their own.
+
+The one place events diverge from posts is identity. A post mints its recordName server-side and a
+duplicate is survivable — two copies of a caption. An event must never split: two copies of one
+workshop would split its attendee roster. So a `CommunityEvent` carries a client-minted `localID: UUID`
+and its public recordName is `event-<localID>`, deterministic, so a killed publish (or a re-publish
+from a second device that received the record through the private mirror) overwrites the *same* record
+instead of forking it. Editing an event is a fetch-then-mutate upsert on that same name, with a single
+`serverRecordChanged` retry; cancelling is the same write with `cancelled = 1`, so a typo'd date is an
+edit, not a cancel-everyone.
+
+## Why a registration is a record, not a counter
+
+Identical reasoning to [Why a like is a record, not a counter](#why-a-like-is-a-record-not-a-counter):
+a public record is writable only by its creator, so a student cannot decrement a `spotsLeft` or bump
+an `attendees` integer on the instructor's event record — CloudKit rejects the write, and a client
+that bumped a local copy would show a number nobody else can see.
+
+So a registration *is* a record. `EventRegistration` has recordName `reg-<eventID>-<studentID>`, is
+created by the student who joins and deleted when they leave, and the attendee count is simply how many
+of them an event has. The deterministic name means joining twice overwrites one row rather than
+inflating the count. When capacity is oversubscribed, admission is resolved client-side by seniority —
+the pure `EventService.admitted(_:capacity:)` sorts registrations by the server-assigned
+`creationDate` (unforgeable), tie-broken by studentID, and admits the first `capacity` of them. Both
+racing devices compute the identical admitted set from the identical rows, so exactly one withdraws.
+
+A failed registration query returns `nil`, not `[]`, so an offline refresh keeps the last known counts
+instead of zeroing every event — the same rule the like count follows. And `attendees` is `Int?`: nil
+means "never counted", which is not "nobody joined", so an uncounted event is never declared full.
+
+## Payments: none, same as sessions
+
+An event carries a price, and it is **displayed, not charged** — settled with the instructor directly,
+exactly like a session fee (see [Payments](#payments)). Joining is a free in-app action; there is no
+StoreKit, no service fee, no total. The only money Flowe collects remains the instructor subscription.
+Hosting an event is gated on that subscription: an instructor students can't even find in Discover
+shouldn't broadcast events to them. The gate is deliberately one-way — a *lapsed* organizer's existing
+events stay visible, so a joined student never watches the class vanish.
+
+The highlight photo follows the feed's asset pattern: downscaled by `ProfileImage.preparePost`, published
+as a `CKAsset`, excluded from the list query's `desiredKeys`, and fetched in a separate bounded pass (12
+per sync, fewer than the feed's 24 — an event hero is the whole row and the list is short). A `hasHighlight`
+Int(64) field lets a row tell "no photo" from "photo not fetched yet", set from whether the asset actually
+staged. The photo is unscreened (`ContentFilter` reads text, not pictures), which is why an event is
+reportable.
+
+## CloudKit Dashboard setup (required before events cross devices)
+
+In [CloudKit Console](https://icloud.developer.apple.com/) → container `iCloud.com.flowepilates.app` →
+Schema, create both record types, then **Deploy Schema Changes to Production**. Until then every event
+query returns nothing and every publish fails — silently, because `EventService` swallows CloudKit
+errors into neutral returns.
+
+### `CommunityEvent`
+
+| Field | Type | Index |
+|---|---|---|
+| `organizerID` | String | **Queryable** |
+| `organizerName` | String | — |
+| `title` | String | — |
+| `about` | String | — |
+| `location` | String | — |
+| `startsAt` | Date/Time | **Queryable, Sortable** |
+| `durationMinutes` | Int(64) | — |
+| `capacity` | Int(64) | — |
+| `price` | Int(64) | — |
+| `cancelled` | Int(64) | — |
+| `highlight` | Asset | — |
+| `hasHighlight` | Int(64) | — |
+| `createdAt` | Date/Time | — |
+| `updatedAt` | Date/Time | — |
+
+`organizerID` Queryable — the organizer's own-events query and the account-deletion sweep filter on it.
+`startsAt` Queryable and Sortable — the student list query filters (`startsAt >= now − 6h`) and orders on
+it. Nothing else is indexed because capacity/price/count logic is client-side over the fetched slice.
+
+### `EventRegistration`
+
+| Field | Type | Index |
+|---|---|---|
+| `eventID` | String | **Queryable** |
+| `studentID` | String | **Queryable** |
+| `studentName` | String | — |
+| `joinTargetID` | String | **Queryable** |
+| `eventTitle` | String | — |
+| `createdAt` | Date/Time | — |
+
+Both ids are stored as fields even though the recordName encodes them: a recordName is not a queryable
+field, and the count query is `eventID IN [...]` sliced at 50. `joinTargetID` — the organizer's id, or
+`""` when the organizer joins their own event so the self-notification predicate matches nobody — must be
+Queryable, and **`EventRegistration` needs Subscriptions permitted** in the Dashboard, or the "someone
+joined your event" push is accepted and never fires.
+
+Both types: default Security Role — `_world` read, `_creator` write. Creator-write is the whole
+architecture: it is why an organizer can cancel only their own event, why a student can create/delete only
+their own registration, and why a counter on the event record is impossible.
+
+## Known limitations
+
+- **No availability collision check — oversubscription by one.** There is no server and no transaction,
+  so two students can both pass the client-side capacity check and both write a registration; CloudKit
+  accepts both. What is guaranteed: both records are real and neither is lost; every device computes the
+  same admitted set from the server-assigned `creationDate`; the outside student is told plainly ("This
+  event filled up") and their registration withdrawn, usually within seconds, and always by the next
+  sync. The window in which an oversubscribed event exists is bounded by how long the loser stays offline,
+  and during it the organizer sees the overflow row marked "OVER CAPACITY". This is the exact shape of the
+  session booking race above; it is an accepted, documented race, not a bug to be papered over with an
+  invented server guarantee.
+- **Orphaned registrations.** Cancelling or deleting an event does not reach into the registrations other
+  students created against it; they stay in the public database, owned by their creators, unreachable
+  (nothing queries a dead eventID). Same class as orphaned likes — invisible, not cleaned up.
+- **No student cancellation push.** A `CKQuerySubscription` predicate can only test fields on the changed
+  record, and the organizer-written event record carries no student id (there are N of them), so a
+  cancellation cannot notify the joiners directly. Mitigated structurally: a cancelled event **stays in
+  the list wearing a "Cancelled" badge for anyone who joined it**, so the student learns on next open.
+- **The roster is world-readable, not private.** Students are shown only an attendee *count*; the
+  organizer sees the names. But every `EventRegistration` is world-readable like everything in this
+  container, so hiding the roster from students is a product choice, not a security boundary.
+- **Public-DB readability**, as everywhere else: event bodies and registration fields are readable by any
+  authenticated app user.
+
+---
+
 # Moderation (Guideline 1.2)
 
 An app hosting user-generated content must filter it, let users report it, let users block abusive

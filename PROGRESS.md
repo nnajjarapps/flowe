@@ -241,6 +241,64 @@ already ruled out ("feed posts carry no star rating"). All of it is gone, along 
       is only moderated reactively, via report.
 - [ ] One photo per post — no carousel, video, cropping or filters.
 
+## Phase 14 — Community events  ✅
+Instructors host events; students browse and join them. Community becomes segmented — the existing
+post feed and a new Events sub-tab. Same public-DB shape as the feed: a `CommunityEvent` CKRecord
+read by everyone, an `EventRegistration` CKRecord written by each student who joins, with SwiftData
+`@Model`s in `UserData` as the offline cache. Full rationale in `BOOKING-SYSTEM.md § Events`.
+
+- [x] **`CommunityEvent` + `EventService`** — event bodies over the public DB as raw `CKRecord`;
+      client-minted `localID` → deterministic recordName `event-<localID>` so a re-publish overwrites
+      one record instead of forking a workshop and splitting its roster. Editable (fetch-then-mutate
+      upsert + one `serverRecordChanged` retry); `cancelled` field, so a typo is an edit not a
+      cancel-everyone.
+- [x] **A registration is a record, not a counter** — `reg-<eventID>-<studentID>`, created by the
+      joiner and deleted on leave; the attendee count is how many an event has. Creator-write makes a
+      counter on the event record impossible — same reasoning as `CommunityLike`.
+- [x] **Oversubscription handled honestly** — the shared pure `EventService.admitted(_:capacity:)`
+      resolves admission by server-assigned `creationDate` seniority, so both racers compute the same
+      set and exactly one withdraws; the loser is told plainly and their registration released.
+- [x] **No in-app payment** — price is displayed through `AppSettings.money(_:)` and settled with the
+      instructor directly. Hosting is gated on the instructor subscription (the only money Flowe takes);
+      a lapsed organizer's *existing* events stay visible.
+- [x] **Highlight photo** — `CKAsset`, downscaled by `ProfileImage.preparePost`, excluded from the list
+      query and fetched in a bounded second pass (12/sync); `hasHighlight` distinguishes "no photo" from
+      "not fetched yet".
+- [x] **Visually-led UI** — segmented Community host, a hero event card (16:9 highlight band, date
+      medallion straddling the photo/body seam, scrim, four-way photo branch), a Fraunces-over-photo
+      detail hero, a StatTile trio, scoped greying for full/ended/cancelled (photo band + price only,
+      title stays full-strength). Fullness read from one place, `event.status`.
+- [x] **Instructor creation** — a "Host an event" Dashboard quick action (no fifth tab, no reindexing)
+      → `ComposeEventSheet`, gated behind the subscription paywall; a "YOUR EVENTS" section manages them.
+- [x] **Moderation** — `ReportedContent.communityEvent`; the detail's ellipsis menu reports the event
+      (text is screened at compose via `ContentFilter`; the photo is not, which is why it's reportable).
+- [x] **Localization** — es/fr/ar authored by hand for every new key, including plural variations for
+      counted nouns (`^[%lld spot]`, `^[%lld person]`) across all six Arabic categories; the catalog was
+      diffed unit-by-unit against HEAD to prove no existing translation was dropped.
+- [x] **Tests** — `EventsUITests` covers the segmented sub-tab, the events empty state (no CTA), the
+      compose affordance being scoped to Feed, that a student is never offered creation while an
+      instructor is, and the subscription gate in front of the composer.
+
+      ⚠️ CloudKit Dashboard: create `CommunityEvent` (index `organizerID` Queryable, `startsAt`
+      Queryable+Sortable) and `EventRegistration` (index `eventID`/`studentID`/`joinTargetID` Queryable,
+      **Subscriptions permitted**), then **Deploy Schema Changes to Production** — until then every event
+      query returns nothing and every publish fails silently.
+
+Not done (deliberate, documented in `BOOKING-SYSTEM.md`):
+- [ ] No in-app payment — no StoreKit, no fee, no total; price is display-only.
+- [ ] No waitlist; no recurring events; no multi-photo, crop/filters or map/geo (`location` is a plain
+      String).
+- [ ] No server-side transactional capacity — oversubscription-by-one is an accepted, documented race.
+- [ ] No student-side "new event posted" push (would be a broadcast about every instructor's every
+      event) and no cancellation push to students (the event record carries no student id) — a cancelled
+      event instead stays badged "Cancelled" for anyone who joined.
+- [ ] Orphaned registrations on a deleted/cancelled event stay in the public DB, owned by their creators.
+- [ ] The attendee roster is world-readable (public DB); showing students only a count is a product
+      choice, not a security boundary.
+- [ ] The "someone joined your event" instructor push (severable) is **not** wired in this phase —
+      `PushService` gains no `.events` topic yet. Everything the push needs on the record side
+      (`EventRegistration.joinTargetID`, Subscriptions-permitted note) is in place for a follow-up.
+
 ## Phase 12 — Messaging (end-to-end)  ✅
 Messaging was a UI shell: `MessageListView.inbox` was a hardcoded empty array nothing wrote to, and
 `ConversationView.send()` appended to a local `@State` array, so messages vanished on dismiss and
