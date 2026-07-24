@@ -8,15 +8,19 @@ struct InstructorCalendarView: View {
 
     @State private var selectedDay = 0
 
-    /// Accepted sessions on the selected weekday. `Booking.date` reads "Thu, Jul 24", so the
-    /// weekday prefix is what matches it to a strip day.
+    /// Accepted sessions on the selected day.
     private var daySessions: [Booking] {
         sessions(on: selectedDay).filter { $0.status != .pending && $0.status != .cancelled }
     }
 
+    /// Sessions on a specific strip day, matched on the **full** stored date string, not the weekday
+    /// prefix. `Booking.date` reads "Thu, Jul 24"; matching on the "Thu" prefix alone pulled in every
+    /// other week's Thursday too — lighting the wrong day, inflating the count, and disagreeing with
+    /// the Dashboard, which matches the exact date. This mirrors that exact-match.
     private func sessions(on dayIndex: Int) -> [Booking] {
-        guard let weekday = week.first(where: { $0.id == dayIndex })?.matchWeekday else { return [] }
-        return data.incomingBookings.filter { $0.date.hasPrefix(weekday) }
+        guard let day = week.first(where: { $0.id == dayIndex }) else { return [] }
+        let dateString = FloweWeek.bookingDateString(for: day.date)
+        return data.incomingBookings.filter { $0.date == dateString }
     }
 
     /// The real current week, recomputed once per render.

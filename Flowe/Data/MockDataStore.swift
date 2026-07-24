@@ -86,6 +86,25 @@ final class MockDataStore {
         events      = (try? context.fetch(
             FetchDescriptor<CommunityEvent>(sortBy: [SortDescriptor(\.startsAt, order: .forward)])
         )) ?? []
+        applyCompletions()
+    }
+
+    /// Turn confirmed sessions whose time has passed into `.completed`.
+    ///
+    /// The sync resolver applies the identical rule to freshly-fetched bookings; this covers the
+    /// cases sync doesn't reach — a session that ends while the app is open (or offline) with no
+    /// re-sync, and a booking created locally that hasn't round-tripped. Derived purely from the
+    /// clock, so it is idempotent and self-heals on relaunch; deliberately no `save()` here (it would
+    /// recurse through `refresh`), so the change persists on the next save or recomputes next launch.
+    ///
+    /// Skipped for previews/tests: seeded data carries hand-set statuses (an explicitly `.confirmed`
+    /// session dated today) the demo and the UI suite depend on staying put.
+    private func applyCompletions() {
+        guard !isPreview else { return }
+        for booking in bookings where booking.status == .confirmed
+            && Booking.isOver(date: booking.date, time: booking.time, duration: booking.duration) {
+            booking.status = .completed
+        }
     }
 
     private func fetch<M: PersistentModel>(sortBy key: KeyPath<M, Int>) -> [M] {
@@ -362,11 +381,21 @@ final class MockDataStore {
         save()
     }
 
-    /// A booking is pending until the instructor responds; a student cancellation always wins.
-    private static func status(for booking: RemoteBooking, decision: RemoteDecision?) -> BookingStatus {
+    /// A booking is pending until the instructor responds; a student cancellation always wins; and a
+    /// confirmed session whose time has passed has been delivered → `.completed`.
+    ///
+    /// The completion step lives here, in the one resolver every sync runs, so the merge writes
+    /// `.completed` directly and a later sync can't revert it (the alternative — a local-only
+    /// transition — would be clobbered the next time this returned `.confirmed`). Nothing else in
+    /// production ever produced `.completed`, which left the Past tab, instructor earnings/sessions
+    /// and the whole review flow permanently unreachable.
+    private static func status(for booking: RemoteBooking, decision: RemoteDecision?,
+                               now: Date = Date()) -> BookingStatus {
         if booking.cancelled { return .cancelled }
         guard let decision else { return .pending }
-        return decision.confirmed ? .confirmed : .cancelled
+        guard decision.confirmed else { return .cancelled }
+        return Booking.isOver(date: booking.date, time: booking.time, duration: booking.duration, now: now)
+            ? .completed : .confirmed
     }
 
     /// "Thu Jul 10" → "Thu, Jul 10" to match the booking-card format.

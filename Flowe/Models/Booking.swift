@@ -84,4 +84,56 @@ final class Booking {
         self.studentID = studentID
         self.studentName = studentName
     }
+
+    // MARK: - Session timing (derived from the stored strings — no timestamp is stored)
+    //
+    // A booking carries only display strings (`date` "EEE, MMM d", `time` "h:mm a", `duration`
+    // "55 min"), language-neutral so they match across users (see `FloweWeek`). To decide whether a
+    // confirmed session has been delivered — the transition to `.completed` that nothing else
+    // performs — we reconstruct its absolute end time from those strings.
+
+    /// Absolute end of this session, or nil if the strings can't be parsed.
+    func sessionEnd(now: Date = Date()) -> Date? {
+        Self.sessionEnd(date: date, time: time, duration: duration, now: now)
+    }
+
+    /// Reconstruct a session's end `Date` from the stored strings.
+    ///
+    /// The date string carries **no year** — it is a shared display value, not a timestamp — so the
+    /// occurrence nearest `now` is chosen. A booking is always made within days of its session, so
+    /// the nearest calendar occurrence is the correct one, and picking the nearest of last/this/next
+    /// year keeps it right across a year boundary (a "Dec 30" seen on "Jan 2" resolves to last year).
+    static func sessionEnd(date: String, time: String, duration: String, now: Date = Date()) -> Date? {
+        // Drop the weekday ("Thu, Jul 17" → "Jul 17"): parsing it risks a strict weekday/date
+        // mismatch, and the numeric date is all that's needed.
+        let dayPart = date.split(separator: ",").last.map { $0.trimmingCharacters(in: .whitespaces) } ?? date
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "MMM d h:mm a"
+        guard let parsed = f.date(from: "\(dayPart) \(time)") else { return nil }
+
+        let cal = Calendar(identifier: .gregorian)
+        var comps = cal.dateComponents([.month, .day, .hour, .minute], from: parsed)
+        let thisYear = cal.component(.year, from: now)
+        var start: Date?
+        for year in [thisYear - 1, thisYear, thisYear + 1] {
+            comps.year = year
+            guard let candidate = cal.date(from: comps) else { continue }   // e.g. Feb 29 in a common year
+            if start == nil || abs(candidate.timeIntervalSince(now)) < abs(start!.timeIntervalSince(now)) {
+                start = candidate
+            }
+        }
+        guard let start else { return nil }
+
+        let minutes = Int(duration.prefix(while: \.isNumber)) ?? 60   // "55 min" → 55
+        return start.addingTimeInterval(TimeInterval((minutes > 0 ? minutes : 60) * 60))
+    }
+
+    /// Whether a session's end has passed — the signal that turns a `.confirmed` booking
+    /// `.completed`. Unparseable strings are treated as *not over*, so a booking we can't date stays
+    /// confirmed rather than being wrongly marked delivered.
+    static func isOver(date: String, time: String, duration: String, now: Date = Date()) -> Bool {
+        guard let end = sessionEnd(date: date, time: time, duration: duration, now: now) else { return false }
+        return end < now
+    }
 }

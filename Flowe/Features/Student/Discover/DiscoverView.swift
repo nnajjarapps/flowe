@@ -75,6 +75,10 @@ struct DiscoverView: View {
         return data.featuredInstructor
     }
 
+    /// Whether the user has narrowed the list. An empty result then means "nothing matched", which is
+    /// a different message from "the catalog is empty".
+    private var isSearchingOrFiltering: Bool { !search.isEmpty || filter != "All" }
+
     /// A `LocalizedStringKey` rather than a composed `String`, so the pattern
     /// ("%@ · %lld INSTRUCTORS") is extracted and can be translated — and reordered, since other
     /// languages won't want the count in this position.
@@ -105,14 +109,21 @@ struct DiscoverView: View {
                 }
 
                 if rows.isEmpty {
-                    EmptyStateView(
-                        icon: "person.2.slash",
-                        title: "No instructors yet",
-                        message: "Instructors near you will appear here once they join Flowe."
-                    )
-                    .padding(.horizontal, 20)
-                    .padding(.top, 40)
-                    .padding(.bottom, 24)
+                    // Only when there is nothing else on screen. When a featured instructor is shown
+                    // above, `rows` is empty because that one listing *is* the whole catalog — an
+                    // empty state under a real card would tell the user "no instructors" beside one.
+                    if featuredInstructor == nil {
+                        EmptyStateView(
+                            icon: isSearchingOrFiltering ? "magnifyingglass" : "person.2.slash",
+                            title: isSearchingOrFiltering ? "No matches" : "No instructors yet",
+                            message: isSearchingOrFiltering
+                                ? "No instructors match — try a different search or category."
+                                : "Instructors near you will appear here once they join Flowe."
+                        )
+                        .padding(.horizontal, 20)
+                        .padding(.top, 40)
+                        .padding(.bottom, 24)
+                    }
                 } else {
                     VStack(alignment: .leading, spacing: 10) {
                         SectionHeader(text: listLabel)

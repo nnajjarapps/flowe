@@ -56,8 +56,12 @@ final class StudentTabsUITests: FloweUITestCase {
         let search = app.textFields.firstMatch
         search.tap()
         search.typeText("zzzznomatch")
-        XCTAssertTrue(waitForAnyText(["No instructors yet"], timeout: 10),
-                      "A non-matching search should fall through to the empty state")
+        // A non-matching search shows the "no matches" state, NOT "No instructors yet" — the catalog
+        // isn't empty, the search just didn't match. (This assertion previously encoded that bug.)
+        XCTAssertTrue(waitForAnyText(["No matches"], timeout: 10),
+                      "A non-matching search should show the no-matches state")
+        XCTAssertNil(anyStaticText(["No instructors yet"]),
+                     "A non-matching search must not claim the catalog is empty")
     }
 
     func testDiscoverCategoryFilterChangesListHeader() {
@@ -65,8 +69,8 @@ final class StudentTabsUITests: FloweUITestCase {
         XCTAssertTrue(waitForAnyText(["GOOD MORNING"]))
         app.buttons["Reformer"].tap()
         XCTAssertTrue(waitForAnyText(["REFORMER · 1 INSTRUCTORS", "REFORMER · 2 INSTRUCTORS",
-                                      "REFORMER · 3 INSTRUCTORS", "No instructors yet"], timeout: 10),
-                      "Selecting a category should re-scope the list header")
+                                      "REFORMER · 3 INSTRUCTORS", "No matches"], timeout: 10),
+                      "Selecting a category should re-scope the list header (or show no-matches)")
     }
 
     // MARK: - Community
