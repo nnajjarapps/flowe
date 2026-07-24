@@ -78,12 +78,13 @@ final class StudentTabsUITests: FloweUITestCase {
                       "Community should show its empty state with no posts")
     }
 
-    func testCommunityShowsFeedWhenSeeded() {
+    /// Seeding populates instructors, bookings and reviews but deliberately never posts: the feed
+    /// is only ever what real people wrote. See `SeedLoader` and `CommunityUITests`.
+    func testCommunityIsEmptyEvenWhenSeeded() {
         launch(as: .student, seeded: true)
         selectTab("Community")
-        XCTAssertTrue(waitForAnyText(["Community"]), "Community header missing")
-        XCTAssertTrue(app.staticTexts["Nothing here yet"].exists == false,
-                      "Seeded posts should render instead of the empty state")
+        XCTAssertTrue(waitForAnyText(["Nothing here yet"]),
+                      "No post is ever seeded, so a seeded launch still shows the empty state")
     }
 
     // MARK: - Bookings

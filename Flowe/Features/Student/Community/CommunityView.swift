@@ -25,10 +25,10 @@ struct CommunityView: View {
                 // Feed
                 if feed.isEmpty {
                     EmptyStateView(
-                        icon: "bubble.left.and.bubble.right",
+                        icon: "camera",
                         title: "Nothing here yet",
-                        message: "Reviews, tips and check-ins from the community will show up here.",
-                        actionTitle: "Write the first post",
+                        message: "Photos, tips and check-ins from the community will show up here.",
+                        actionTitle: "Share the first post",
                         action: { showCompose = true }
                     )
                     .padding(.top, 80)

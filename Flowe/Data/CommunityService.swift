@@ -8,21 +8,23 @@ struct RemotePost {
     let authorName: String
     let type: String
     let instructorName: String
-    let rating: Int
     let text: String
     let createdAt: Date
+    /// Whether the record carries a photo. Known from the feed query, which does *not* download the
+    /// asset itself — see `CommunityService.postMetadataKeys`.
+    let hasImage: Bool
 
     init?(record: CKRecord) {
-        guard let authorID = record["authorID"] as? String,
-              let text = record["text"] as? String else { return nil }
+        // `text` is no longer required: a photo with no caption is a whole post.
+        guard let authorID = record["authorID"] as? String else { return nil }
         id = record.recordID.recordName
         self.authorID = authorID
-        self.text = text
+        text = record["text"] as? String ?? ""
         authorName = record["authorName"] as? String ?? ""
         type = record["type"] as? String ?? PostType.tip.rawValue
         instructorName = record["instructorName"] as? String ?? ""
-        rating = record["rating"] as? Int ?? 0
         createdAt = record["createdAt"] as? Date ?? .distantPast
+        hasImage = (record["hasImage"] as? Int ?? 0) == 1
     }
 }
 
@@ -101,6 +103,21 @@ final class CommunityService {
     /// CloudKit dislikes very large `IN` arrays, so engagement is fetched in slices.
     private static let idsPerQuery = 50
 
+    /// Everything on a post *except* the photo.
+    ///
+    /// The feed query asks for exactly these. Passing `desiredKeys: nil` would download every
+    /// attached `CKAsset` too — up to `feedLimit` photos, a couple of hundred kilobytes each, on
+    /// every pull-to-refresh, most of them for rows the reader will never scroll to. Photos come
+    /// afterwards from `fetchImages`, once, per post, and are cached from then on.
+    private static let postMetadataKeys = [
+        "authorID", "authorName", "type", "instructorName", "text", "createdAt", "hasImage",
+    ]
+
+    /// How many photos one sync will pull. The feed carries 100 posts; fetching every attached
+    /// photo at once is the exact cost the split above exists to avoid, so a pass takes the newest
+    /// slice and the next sync takes the next.
+    private static let imagesPerSync = 24
+
     #if CLOUDKIT_ENABLED
     private let database = CKContainer(identifier: FloweModelContainer.cloudKitContainerID).publicCloudDatabase
     #endif
@@ -112,8 +129,8 @@ final class CommunityService {
                  authorName: String,
                  type: String,
                  instructorName: String,
-                 rating: Int,
                  text: String,
+                 image: Data?,
                  createdAt: Date) async -> String? {
         #if CLOUDKIT_ENABLED
         let record = CKRecord(recordType: Self.postRecordType)
@@ -121,9 +138,19 @@ final class CommunityService {
         record["authorName"] = authorName
         record["type"] = type
         record["instructorName"] = instructorName
-        record["rating"] = rating
         record["text"] = text
         record["createdAt"] = createdAt
+
+        // A CKAsset uploads from a file, so the photo has to be staged on disk for the save and
+        // cleaned up afterwards — the same dance `CatalogService` does for listing photos.
+        let staged = image.flatMap { Self.stageAsset($0) }
+        record["image"] = staged.map { CKAsset(fileURL: $0) }
+        // Set from what actually got staged, not from `image != nil`: a photo that failed to stage
+        // is a post without one, and claiming otherwise would leave every reader's row holding
+        // space for an asset that will never arrive.
+        record["hasImage"] = staged == nil ? 0 : 1
+        defer { staged.map { try? FileManager.default.removeItem(at: $0) } }
+
         do {
             let saved = try await database.save(record)
             return saved.recordID.recordName
@@ -132,6 +159,32 @@ final class CommunityService {
         }
         #else
         return nil
+        #endif
+    }
+
+    /// Download the photos for specific posts, newest-first and capped at `imagesPerSync`.
+    ///
+    /// Keyed by record name; a post whose fetch failed is simply absent, so the caller keeps
+    /// whatever it already had rather than caching an empty image over a good one.
+    func fetchImages(postIDs: [String]) async -> [String: Data] {
+        #if CLOUDKIT_ENABLED
+        let wanted = Array(postIDs.prefix(Self.imagesPerSync))
+        guard !wanted.isEmpty else { return [:] }
+        let ids = wanted.map { CKRecord.ID(recordName: $0) }
+        guard let results = try? await database.records(for: ids, desiredKeys: ["image"]) else {
+            return [:]
+        }
+        var images: [String: Data] = [:]
+        for (id, result) in results {
+            guard let record = try? result.get(),
+                  let url = (record["image"] as? CKAsset)?.fileURL,
+                  // Read now: CloudKit reclaims the staged copy once this scope ends.
+                  let data = try? Data(contentsOf: url) else { continue }
+            images[id.recordName] = data
+        }
+        return images
+        #else
+        return [:]
         #endif
     }
 
@@ -153,7 +206,7 @@ final class CommunityService {
         query.sortDescriptors = [NSSortDescriptor(key: "createdAt", ascending: false)]
         do {
             let (matches, _) = try await database.records(
-                matching: query, desiredKeys: nil, resultsLimit: Self.feedLimit
+                matching: query, desiredKeys: Self.postMetadataKeys, resultsLimit: Self.feedLimit
             )
             return matches.compactMap { try? $0.1.get() }.compactMap(RemotePost.init)
         } catch {
@@ -318,6 +371,19 @@ final class CommunityService {
             }
         }
         return records
+    }
+
+    /// Write image bytes to a temp file so `CKAsset` can upload them. Nil simply means this post
+    /// carries no photo rather than failing the whole publish — the caption is still worth posting.
+    private static func stageAsset(_ data: Data) -> URL? {
+        let url = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("post-image-\(UUID().uuidString).jpg")
+        do {
+            try data.write(to: url)
+            return url
+        } catch {
+            return nil
+        }
     }
 
     /// A record that is already absent is the goal state, not a failure — an unlike sent twice, or

@@ -784,9 +784,10 @@ final class MockDataStore {
         postableInstructors.isEmpty ? [.tip] : [.tip, .checkin, .review]
     }
 
-    /// The author's uploaded profile photo, if they have a listing. `FeedPost.userImg` only ever
-    /// carries an Unsplash id from seeded reference listings, so without this every row in a
-    /// shipping build falls back to the gradient placeholder.
+    /// The author's uploaded profile photo, if they have a listing.
+    ///
+    /// Instructors have one; a student has no listing and so no avatar, and falls back to the
+    /// gradient placeholder. This is the only source — the post itself carries no author image.
     func authorPhoto(for post: FeedPost) -> Data? {
         guard let authorID = post.ownerID else { return nil }
         return instructors.first { $0.ownerID == authorID }?.photo
@@ -801,29 +802,39 @@ final class MockDataStore {
     }
 
     /// Write a post and publish it. `instructorName` is required for the types that name one.
-    func addPost(type: PostType, instructorName: String?, text: String) {
+    ///
+    /// A post needs a caption **or** a photo, not both: an image on its own is a complete post, and
+    /// requiring words under it would be a rule the feed doesn't need.
+    func addPost(type: PostType, instructorName: String?, text: String, image: Data? = nil) {
         guard let me = currentUserID else { return }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        guard !trimmed.isEmpty || image != nil else { return }
         let named = type.needsInstructor ? instructorName : nil
 
         let post = FeedPost(
             legacyId: (posts.map(\.legacyId).max() ?? 0) + 1,
             type: type,
             user: currentUserName,
-            // An instructor writing a tip gets their listing photo on the row; a student has none.
-            userImg: currentInstructor?.img ?? "",
             instructor: named,
             text: trimmed,
+            image: image,
+            hasImage: image != nil,
             ownerID: me,
             // Marked pending up front: if the app dies before the upload finishes, the next sync
             // retries it rather than losing what the user wrote.
             pendingUpload: true
         )
         context.insert(post)
-        save()
 
-        guard !isPreview else { return }
+        guard !isPreview else {
+            // Previews and UI tests have no shared store to reach, so the write is already as
+            // delivered as it will ever get. Leaving the flag set would strand every post under a
+            // permanent "Posting…", which reads as a stuck upload rather than as offline mode.
+            post.pendingUpload = false
+            save()
+            return
+        }
+        save()
         Task { await upload(post) }
     }
 
@@ -834,8 +845,8 @@ final class MockDataStore {
             authorName: post.user,
             type: post.type.rawValue,
             instructorName: post.instructor ?? "",
-            rating: post.rating ?? 0,
             text: post.text,
+            image: post.image,
             createdAt: post.createdAt
         )
         post.remoteID = remoteID
@@ -991,6 +1002,28 @@ final class MockDataStore {
         await flushPendingCommunityWrites()
         mergePosts(await communityService.fetchRecentPosts())
         await refreshEngagement()
+        await fetchMissingPostImages()
+    }
+
+    /// Download the photos of posts that have one but haven't got it yet.
+    ///
+    /// Separate from `mergePosts` because the feed query deliberately doesn't carry assets (see
+    /// `CommunityService.postMetadataKeys`). Newest first and capped per pass, so opening the tab
+    /// costs a bounded amount of data no matter how much of the feed has photos; the rest arrive on
+    /// later syncs. A photo already cached is never fetched twice.
+    private func fetchMissingPostImages() async {
+        let wanted = posts
+            .filter { $0.hasImage && $0.image == nil && !$0.pendingDelete }
+            .compactMap(\.remoteID)
+        guard !wanted.isEmpty else { return }
+
+        let images = await communityService.fetchImages(postIDs: wanted)
+        guard !images.isEmpty else { return }
+        for post in posts {
+            guard let remoteID = post.remoteID, let data = images[remoteID] else { continue }
+            post.image = data
+        }
+        save()
     }
 
     /// Refresh one post's replies without touching the post list.
@@ -1046,11 +1079,10 @@ final class MockDataStore {
                 legacyId: nextId,
                 type: PostType(rawValue: entry.type) ?? .tip,
                 user: entry.authorName,
-                // An author who is also an instructor has a listing photo; a student doesn't.
-                userImg: instructors.first { $0.ownerID == entry.authorID }?.img ?? "",
                 instructor: entry.instructorName.isEmpty ? nil : entry.instructorName,
-                rating: entry.rating > 0 ? entry.rating : nil,
                 text: entry.text,
+                // The photo itself arrives in a later pass — this only records that there is one.
+                hasImage: entry.hasImage,
                 ownerID: entry.authorID,
                 remoteID: entry.id,
                 createdAt: entry.createdAt

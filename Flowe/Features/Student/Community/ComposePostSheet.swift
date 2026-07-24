@@ -1,7 +1,7 @@
 import SwiftUI
+import PhotosUI
 
-/// Writes a community post. Deliberately plain: pick what kind of post it is, name the instructor
-/// if it's about one, say the thing, publish.
+/// Writes a community post: a photo, a caption, or both, plus what kind of post it is.
 ///
 /// A shout-out and a check-in name an instructor, and the picker only offers instructors this user
 /// has actually had a session with — anyone able to name anyone would make the feed a place to
@@ -16,6 +16,10 @@ struct ComposePostSheet: View {
     @State private var text = ""
     @State private var filterMessage: String?
 
+    @State private var image: Data?
+    @State private var pickerItem: PhotosPickerItem?
+    @State private var isLoadingImage = false
+
     private var types: [PostType] { data.availablePostTypes }
     private var instructors: [Counterpart] { data.postableInstructors }
 
@@ -23,8 +27,10 @@ struct ComposePostSheet: View {
         instructors.first { $0.id == instructorID } ?? instructors.first
     }
 
+    /// A photo alone is a post, and so is a caption alone — only an entirely empty one isn't.
     private var canPost: Bool {
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+        let hasText = !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        guard hasText || image != nil else { return false }
         return !type.needsInstructor || selectedInstructor != nil
     }
 
@@ -62,13 +68,25 @@ struct ComposePostSheet: View {
                 }
 
                 Section {
+                    photoRow
+                } header: {
+                    Text("Photo")
+                } footer: {
+                    Text("Optional. A photo on its own is a post — the caption can wait.")
+                }
+
+                Section {
                     TextField("What's on your mind?", text: $text, axis: .vertical)
                         .lineLimit(4...10)
                         .font(FloweFont.sans(14))
                         .accessibilityIdentifier("compose.text")
                 } footer: {
-                    Text("Your name and your post are visible to everyone on Flowe.")
+                    Text("Your name, your photo and your post are visible to everyone on Flowe.")
                 }
+            }
+            .onChange(of: pickerItem) { _, item in
+                guard let item else { return }
+                Task { await load(item) }
             }
             .tint(Color.flowePinkDeep)
             .navigationTitle("New Post")
@@ -96,13 +114,68 @@ struct ComposePostSheet: View {
         }
     }
 
+    // MARK: - Photo
+
+    @ViewBuilder
+    private var photoRow: some View {
+        if let image, let ui = UIImage(data: image) {
+            // Shown at the shape it was taken in, matching how the feed row will render it, so the
+            // author is choosing the picture they will actually see rather than a square preview.
+            Image(uiImage: ui)
+                .resizable()
+                .scaledToFit()
+                .frame(maxWidth: .infinity)
+                .frame(maxHeight: 260)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .listRowInsets(EdgeInsets())
+                .padding(.vertical, 8)
+        }
+
+        HStack(spacing: 16) {
+            PhotosPicker(selection: $pickerItem, matching: .images, photoLibrary: .shared()) {
+                Text(image == nil ? "Add Photo" : "Change Photo")
+                    .font(FloweFont.sans(13, .medium))
+                    .foregroundStyle(Color.flowePinkDeep)
+            }
+            .accessibilityIdentifier("compose.photoPicker")
+
+            if image != nil {
+                Button("Remove") {
+                    image = nil
+                    pickerItem = nil
+                }
+                .font(FloweFont.sans(13))
+                .foregroundStyle(Color.floweMuted)
+                .accessibilityIdentifier("compose.photoRemove")
+            }
+
+            if isLoadingImage {
+                Spacer()
+                ProgressView().controlSize(.small)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func load(_ item: PhotosPickerItem) async {
+        isLoadingImage = true
+        defer { isLoadingImage = false }
+        // Downscaled before it is ever stored — see `ProfileImage.preparePost`. Every one of these
+        // is an asset other people's phones download. A failed decode leaves the old choice alone.
+        guard let raw = try? await item.loadTransferable(type: Data.self),
+              let prepared = ProfileImage.preparePost(raw) else { return }
+        image = prepared
+    }
+
     private func publish() {
         // A post is public content, so it gets the same screening as a public listing or a review.
+        // The photo is not screened — nothing here can look at an image — which is why an attached
+        // one is reportable from the feed like any other content.
         if let rejection = ContentFilter.reject(text) {
             filterMessage = rejection.message
             return
         }
-        data.addPost(type: type, instructorName: selectedInstructor?.name, text: text)
+        data.addPost(type: type, instructorName: selectedInstructor?.name, text: text, image: image)
         dismiss()
     }
 }

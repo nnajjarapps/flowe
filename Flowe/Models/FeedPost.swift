@@ -39,12 +39,18 @@ final class FeedPost {
     var legacyId: Int = 0
     var type: PostType = PostType.tip
     var user: String = ""
-    var userImg: String = ""        // Unsplash photo id
     var instructor: String?
-    var instImg: String?             // Unsplash photo id
-    var time: String = ""            // seeded display string; real posts derive it from `createdAt`
-    var rating: Int?
     var text: String = ""
+    /// The attached photo, already downscaled by `ProfileImage.preparePost`. Published as a
+    /// `CKAsset`; external storage keeps the blob out of the SQLite row.
+    ///
+    /// Nil means one of two different things, which is why `hasImage` exists alongside it: this post
+    /// genuinely has no photo, or it has one this device hasn't downloaded yet.
+    @Attribute(.externalStorage) var image: Data?
+    /// Whether the shared record carries a photo, known without downloading it. The feed query
+    /// deliberately fetches every field *except* the asset (see `CommunityService`), so this is what
+    /// tells a row to reserve space and what tells the image pass which posts to go and get.
+    var hasImage: Bool = false
     var likes: Int = 0
     var comments: Int = 0
     var saved: Bool = false
@@ -72,12 +78,10 @@ final class FeedPost {
         legacyId: Int = 0,
         type: PostType = .tip,
         user: String = "",
-        userImg: String = "",
         instructor: String? = nil,
-        instImg: String? = nil,
-        time: String = "",
-        rating: Int? = nil,
         text: String = "",
+        image: Data? = nil,
+        hasImage: Bool = false,
         likes: Int = 0,
         comments: Int = 0,
         saved: Bool = false,
@@ -91,12 +95,10 @@ final class FeedPost {
         self.legacyId = legacyId
         self.type = type
         self.user = user
-        self.userImg = userImg
         self.instructor = instructor
-        self.instImg = instImg
-        self.time = time
-        self.rating = rating
         self.text = text
+        self.image = image
+        self.hasImage = hasImage
         self.likes = likes
         self.comments = comments
         self.saved = saved
@@ -117,10 +119,9 @@ final class FeedPost {
     /// The raw author name, for places that need a string rather than displayable copy.
     var authorNameOrEmpty: String { user }
 
-    /// "2H AGO" — seeded posts carry their own display string, real ones derive it.
+    /// "2H AGO", derived from when the post was actually written.
     var relativeTime: LocalizedStringResource {
-        guard time.isEmpty else { return "\(time)" }
-        return FeedPost.relativeTime(since: createdAt)
+        FeedPost.relativeTime(since: createdAt)
     }
 
     /// Shared with `PostComment`, which shows the same stamp under a reply.

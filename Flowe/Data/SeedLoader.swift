@@ -24,17 +24,10 @@ enum SeedLoader {
             return instructor
         }
 
-        seed(context, PostSeed.self, file: "posts.json", isEmpty: FeedPost.self) { seed, i in
-            FeedPost(
-                legacyId: seed.id, type: PostType(rawValue: seed.type) ?? .tip, user: seed.user,
-                userImg: seed.userImg, instructor: seed.instructor, instImg: seed.instImg,
-                time: seed.time, rating: seed.rating, text: seed.text, likes: seed.likes,
-                comments: seed.comments, saved: seed.saved, liked: seed.liked, order: i,
-                // The feed is ordered by `createdAt` now that posts are shared, so seeded rows need
-                // one — spaced an hour apart so they keep the order the JSON lists them in.
-                createdAt: Date(timeIntervalSinceNow: -Double(i + 1) * 3600)
-            )
-        }
+        // No community posts are seeded, in previews or anywhere else. The feed is only ever what
+        // real people wrote: fabricated posts meant invented authors, stock Unsplash portraits and
+        // made-up like counts rendering as though they were the community, which is exactly the
+        // impression an empty feed should not give. `CommunityView` has a real empty state.
 
         seed(context, BookingSeed.self, file: "bookings.json", isEmpty: Booking.self) { seed, i in
             Booking(
@@ -159,12 +152,6 @@ enum SeedLoader {
         let reviews, price, yearsExp, students: Int
         let specialties, sessionTypes: [String]; let cert, img: String
         let available: [String]; let bio: String?
-    }
-
-    private struct PostSeed: Decodable {
-        let id: Int; let type, user, userImg: String
-        let instructor, instImg: String?; let time: String; let rating: Int?
-        let text: String; let likes, comments: Int; let saved, liked: Bool
     }
 
     private struct BookingSeed: Decodable {

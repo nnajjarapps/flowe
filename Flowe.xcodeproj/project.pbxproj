@@ -52,8 +52,8 @@
 		5F5D5FC4AA54E7A2EA6D0819 /* Instructor.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA077844D989E093BABC8C4D /* Instructor.swift */; };
 		608B13B7ACC18F54705EFA14 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C9867A521AD55E8C878C940 /* KeychainStore.swift */; };
 		670955E4E0AD11CB9D0CD922 /* ReviewsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D82A11EAF8AA7B75DFFDFD1 /* ReviewsUITests.swift */; };
+		A1C0FFEE0001COMMUNITY001 /* CommunityUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C0FFEE0002COMMUNITY002 /* CommunityUITests.swift */; };
 		6E4EBF835A2231B680429E5E /* FeaturedHeroCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F5C862793134F2194515695 /* FeaturedHeroCard.swift */; };
-		6F87229CE6F330D32F376937 /* posts.json in Resources */ = {isa = PBXBuildFile; fileRef = 53D4A66081820E0198BE9382 /* posts.json */; };
 		73C750F9D9D807EAD4A2DD6F /* PrimaryButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = F31A42A348DDC6B4F180F617 /* PrimaryButton.swift */; };
 		73DF171F35C47E63F5526C7F /* Booking.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9B8DD81B48D4AD3BC2545FF /* Booking.swift */; };
 		784B74D6C2D1D88C929DF6C7 /* FlowGradients.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20A872F7B6C9D27EEC6EBBDD /* FlowGradients.swift */; };
@@ -174,7 +174,6 @@
 		47F8623B33C1E3994C637742 /* View+Flowe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "View+Flowe.swift"; sourceTree = "<group>"; };
 		489CC61A3C045B16825417BC /* LocationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationService.swift; sourceTree = "<group>"; };
 		4D02AD586357897327237E1F /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
-		53D4A66081820E0198BE9382 /* posts.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = posts.json; sourceTree = "<group>"; };
 		540B00E56D89BF2B030B5185 /* InstructorProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstructorProfileView.swift; sourceTree = "<group>"; };
 		56D58FFAF9A1E7107CE20E21 /* BookingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookingsView.swift; sourceTree = "<group>"; };
 		594972ECDB3299BF98B27D86 /* MessageListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageListView.swift; sourceTree = "<group>"; };
@@ -211,6 +210,7 @@
 		8AD8385BD6E748B58CBA04BD /* Flowe.storekit */ = {isa = PBXFileReference; path = Flowe.storekit; sourceTree = "<group>"; };
 		8D324CCEA79663B5D1A47DE4 /* FilterChipsBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilterChipsBar.swift; sourceTree = "<group>"; };
 		8D82A11EAF8AA7B75DFFDFD1 /* ReviewsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewsUITests.swift; sourceTree = "<group>"; };
+		A1C0FFEE0002COMMUNITY002 /* CommunityUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommunityUITests.swift; sourceTree = "<group>"; };
 		914A7ECE05F8E495EF765D01 /* DMMono-Light.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "DMMono-Light.ttf"; sourceTree = "<group>"; };
 		91D1DD42C0E5A323D1D28FEB /* DisciplineTag.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisciplineTag.swift; sourceTree = "<group>"; };
 		92C935E2CA20B8E5750DEE0F /* OnboardingFlowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingFlowView.swift; sourceTree = "<group>"; };
@@ -598,6 +598,7 @@
 				AFDF4C194342D5593C21006F /* ModerationUITests.swift */,
 				23BC35F24816C68247C04B36 /* OnboardingUITests.swift */,
 				8D82A11EAF8AA7B75DFFDFD1 /* ReviewsUITests.swift */,
+				A1C0FFEE0002COMMUNITY002 /* CommunityUITests.swift */,
 				9F1129DAD3FC5185D2130BEF /* SettingsAndPaywallUITests.swift */,
 				5DBB42D00526892D939DC9F1 /* StudentTabsUITests.swift */,
 			);
@@ -640,7 +641,6 @@
 				E24A8794C056D4128BA7AA25 /* .gitkeep */,
 				0D7CAF2291282ED6FAC4D459 /* bookings.json */,
 				AAFA6AE90A7A57AEF5C1D9A2 /* instructors.json */,
-				53D4A66081820E0198BE9382 /* posts.json */,
 			);
 			path = MockData;
 			sourceTree = "<group>";
@@ -761,7 +761,6 @@
 				F9F588829CD0FF210899133A /* Localizable.xcstrings in Resources */,
 				DC54DB3091B31BDC362B9E68 /* bookings.json in Resources */,
 				2FA2F742CE16CE6A3912BDF0 /* instructors.json in Resources */,
-				6F87229CE6F330D32F376937 /* posts.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -782,6 +781,7 @@
 				E27756B746E4147C60B17397 /* ModerationUITests.swift in Sources */,
 				8CD6F7076188FCB80948E77E /* OnboardingUITests.swift in Sources */,
 				670955E4E0AD11CB9D0CD922 /* ReviewsUITests.swift in Sources */,
+				A1C0FFEE0001COMMUNITY001 /* CommunityUITests.swift in Sources */,
 				A4FD8265A8D205270FAEDD66 /* SettingsAndPaywallUITests.swift in Sources */,
 				9088BE8675CAE227464F994B /* StudentTabsUITests.swift in Sources */,
 			);

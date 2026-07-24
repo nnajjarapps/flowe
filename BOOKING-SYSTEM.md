@@ -326,10 +326,36 @@ The tradeoffs are accepted deliberately:
 
 Comments work the same way (`CommunityComment`, one record per reply, creator-write).
 
+## Photos, and why they arrive separately
+
+A post can carry one photo, downscaled by `ProfileImage.preparePost` to a 1200px longest edge and
+published as a `CKAsset`. A photo alone is a complete post; so is a caption alone.
+
+The feed query **does not download them**. It asks for `postMetadataKeys` — every field except the
+asset — because `desiredKeys: nil` would pull up to 100 photos on every pull-to-refresh, most of
+them for rows the reader never scrolls to. Photos come afterwards, from `fetchImages`, by record id,
+newest first, capped at 24 per sync and never re-fetched once cached.
+
+That split is why `hasImage` exists as its own Int(64) field. Without it a row could not tell "this
+post has no photo" from "this post has one I haven't fetched yet" — the first should render as text,
+the second should reserve space and show a spinner, and the image pass needs to know which posts to
+go and ask for. It is set from whether the asset actually staged, not from whether the composer had
+an image, so a photo that failed to stage is honestly a post without one.
+
+Nothing screens the image. `ContentFilter` reads text and cannot look at a picture, which is why an
+attached photo is reportable from the feed like any other content — see *Moderation*.
+
 ## What is *not* shared
 
 `FeedPost.saved` stays local. A bookmark is one reader's private shelf, and publishing it would tell
 everyone what you kept.
+
+## Nothing is seeded
+
+The feed has no sample data, in previews or in UI tests. It used to ship five posts from
+`posts.json` — invented authors, stock Unsplash portraits, hand-written like counts — which rendered
+as though they were the community. Every post in the app is now one a real person wrote, and
+`CommunityView`'s empty state is what a genuinely empty feed looks like.
 
 ## Who can post about whom
 
@@ -363,13 +389,18 @@ query index yet is not a deleted post.
 | `authorName` | String | — |
 | `type` | String | — |
 | `instructorName` | String | — |
-| `rating` | Int(64) | — |
 | `text` | String | — |
+| `image` | Asset | — |
+| `hasImage` | Int(64) | — |
 | `createdAt` | Date/Time | **Queryable, Sortable** |
 
 The feed query is a `TRUEPREDICATE` sorted on `createdAt`, so the record type itself must be
 **Queryable** in the Dashboard (Record Type → Indexes → add `recordName` Queryable) in addition to
 the field indexes above. Without that the feed silently returns nothing.
+
+There is no `rating` field. Feed posts never carried a star rating in the shipping design — ratings
+belong to the booking-anchored review system — and the one that existed on the record was written
+only by the seeded sample posts, which no longer exist.
 
 ### `CommunityLike`
 
@@ -398,6 +429,14 @@ design, and creator-write is what makes author-only delete work.
   feed still means a lot of like records fetched per refresh. A denormalised counter needs either a
   server or a world-writable record type; neither is acceptable here yet.
 - **No pagination.** The feed is the 100 most recent posts, full stop.
+- **Photos trickle in.** 24 per sync, so a feed with more than that shows spinners on the older rows
+  until a later refresh. Proper lazy loading would fetch on the row appearing rather than in a
+  batch; this is bounded and simple, not clever.
+- **One photo per post.** No carousel, no video, no cropping or filters in the composer.
+- **Photos are re-decoded on every render.** `PostRowView` builds a `UIImage` from the cached bytes
+  inside `body`, so SwiftUI throws the decode away and redoes it on each evaluation. Bounded today
+  by the 24-per-sync cap and lazy rows, but a decoded-image cache keyed by `remoteID` is the fix
+  once the feed is long enough to scroll hard.
 - **Orphaned engagement.** Deleting a post removes the post, and account deletion removes that
   user's own likes and comments, but likes and comments *other* people left on a deleted post stay
   in the public database, unreachable and owned by their creators. They are invisible — nothing

@@ -15,6 +15,11 @@ enum ProfileImage {
     /// read, not glanced at: the issuing school and the year have to survive the downscale.
     static let documentMaxDimension: CGFloat = 1400
 
+    /// Longest edge of a community photo. Sized for a full-width feed row on a @3x phone (roughly
+    /// 1290 physical pixels) and no larger: every one of these is a `CKAsset` somebody else's device
+    /// downloads over cellular, so the ceiling is a bandwidth decision as much as a visual one.
+    static let postMaxDimension: CGFloat = 1200
+
     /// Downscale, square-crop and JPEG-encode. Returns nil if the data isn't a decodable image.
     static func prepare(_ data: Data) -> Data? {
         guard let image = UIImage(data: data) else { return nil }
@@ -30,6 +35,17 @@ enum ProfileImage {
     static func prepareDocument(_ data: Data) -> Data? {
         guard let image = UIImage(data: data) else { return nil }
         return downscaled(image, maxEdge: documentMaxDimension).jpegData(compressionQuality: compressionQuality)
+    }
+
+    /// Downscale and JPEG-encode a community post photo, keeping its aspect ratio.
+    ///
+    /// Aspect-preserving like `prepareDocument` rather than square like `prepare`: the feed renders
+    /// a photo at whatever shape it was taken in, and cropping here would silently discard framing
+    /// the author chose. What the row does with tall or wide images is a layout decision, made in
+    /// `PostRowView`, and it can only make it if the original proportions survive to that point.
+    static func preparePost(_ data: Data) -> Data? {
+        guard let image = UIImage(data: data) else { return nil }
+        return downscaled(image, maxEdge: postMaxDimension).jpegData(compressionQuality: compressionQuality)
     }
 
     /// Scale down so the longest edge is at most `maxEdge`, leaving smaller images untouched.

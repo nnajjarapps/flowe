@@ -209,6 +209,38 @@ Not done (deliberate, documented in `BOOKING-SYSTEM.md`):
       no email — but this should move server-side before scaling past a pilot.
 - [ ] No double-booking check: two students can request the same slot.
 
+## Phase 13 — Community: photo feed, no mock data  ✅
+The feed shipped five seeded posts from `posts.json` — invented authors, stock Unsplash portraits,
+hand-written like and comment counts — which rendered as if they were the community. Alongside them
+the model carried fields only those rows ever set: `userImg`/`instImg` (Unsplash ids), `time` (a
+display string real posts derived from `createdAt` anyway) and `rating`, which the design had
+already ruled out ("feed posts carry no star rating"). All of it is gone, along with `posts.json`.
+
+- [x] **Nothing is seeded**, in previews or UI tests. Every post is one a real person wrote, and the
+      empty state is what an empty feed honestly looks like.
+- [x] **Photos** — one per post, `PhotosPicker` → downscaled to 1200px by `ProfileImage.preparePost`
+      → `CKAsset` on `CommunityPost`. A photo alone is a post; so is a caption alone.
+- [x] **The feed query no longer downloads assets.** `desiredKeys` covers metadata only, and photos
+      come from a separate `fetchImages` pass — newest first, 24 per sync, cached once fetched.
+      Without this a pull-to-refresh pulled up to 100 photos, most never scrolled to. A `hasImage`
+      flag distinguishes "no photo" from "photo not fetched yet"; the row reserves space for the
+      second.
+- [x] **Instagram-shaped rows** — full-bleed photo, actions beneath it, inflected like count
+      (`^[n like](inflect: true)`, so never "1 likes"), author name run into the caption,
+      "View n comments", timestamp. Double-tap the photo to like, one-way so a mistimed tap can't
+      remove a like. A caption-only post sets its text larger and carries the row on its own.
+- [x] **Fixed in passing:** a post written in a preview/UI-test build stayed under "Posting…"
+      forever — `addPost` returned before the upload with `pendingUpload` still set. Previously
+      masked because the only posts in those builds were seeded ones.
+- [x] **Tests** — `CommunityUITests` (10) covers both empty states, the composer's photo picker,
+      caption-or-photo gating, posting, persistence across tabs, the like count appearing only once
+      someone has liked, and an author getting Delete rather than Report.
+      ⚠️ CloudKit Dashboard: add `image` (**Asset**) and `hasImage` (**Int(64)**) to `CommunityPost`.
+      There is no `rating` field.
+- [ ] Photo screening. `ContentFilter` reads text and cannot inspect an image, so an attached photo
+      is only moderated reactively, via report.
+- [ ] One photo per post — no carousel, video, cropping or filters.
+
 ## Phase 12 — Messaging (end-to-end)  ✅
 Messaging was a UI shell: `MessageListView.inbox` was a hardcoded empty array nothing wrote to, and
 `ConversationView.send()` appended to a local `@State` array, so messages vanished on dismiss and
