@@ -74,11 +74,18 @@ In [CloudKit Console](https://icloud.developer.apple.com/) → container `iCloud
 | Field | Type | Index |
 |---|---|---|
 | `bookingID` | String | **Queryable** |
-| `confirmed` | Int(64) | — |
+| `studentID` | String | **Queryable** |
+| `confirmed` | Int(64) | **Queryable** |
 | `respondedAt` | Date/Time | — |
 
-Both need the default Security Role: `_world` read, `_creator` write. Queries fail without the
-Queryable indexes, and the app will silently show no bookings.
+`studentID` is denormalised onto the decision by `respond` so the student's accept/decline push can
+address them; the subscription predicate is `studentID == me AND confirmed == 1` (and `== 0`), so
+**both** `studentID` and `confirmed` must be Queryable — a query-subscription needs every field it
+references indexed, or the notification silently never fires.
+
+Both types need the default Security Role: `_world` read, `_creator` write. Queries fail without the
+Queryable indexes, and the app will silently show no bookings. See `CLOUDKIT-DEPLOYMENT.md` for the
+consolidated, deploy-ordered schema across every record type.
 
 ## Known limitations
 
@@ -536,15 +543,18 @@ it. Nothing else is indexed because capacity/price/count logic is client-side ov
 | `eventID` | String | **Queryable** |
 | `studentID` | String | **Queryable** |
 | `studentName` | String | — |
-| `joinTargetID` | String | **Queryable** |
+| `joinTargetID` | String | — |
 | `eventTitle` | String | — |
 | `createdAt` | Date/Time | — |
 
 Both ids are stored as fields even though the recordName encodes them: a recordName is not a queryable
-field, and the count query is `eventID IN [...]` sliced at 50. `joinTargetID` — the organizer's id, or
-`""` when the organizer joins their own event so the self-notification predicate matches nobody — must be
-Queryable, and **`EventRegistration` needs Subscriptions permitted** in the Dashboard, or the "someone
-joined your event" push is accepted and never fires.
+field, and the count query is `eventID IN [...]` sliced at 50.
+
+`joinTargetID` — the organizer's id, `""` when the organizer joins their own event — is written in
+anticipation of a "someone joined your event" push, but **no subscription consumes it yet**: that push
+was deliberately not built (see § Push notifications). So it stays **unindexed** and
+`EventRegistration` needs **no** Subscriptions-permitted setting until that push actually ships. Index
+the field and enable subscriptions at the same time as writing the push, not before.
 
 Both types: default Security Role — `_world` read, `_creator` write. Creator-write is the whole
 architecture: it is why an organizer can cancel only their own event, why a student can create/delete only
