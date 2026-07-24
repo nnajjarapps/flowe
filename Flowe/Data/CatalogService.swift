@@ -8,6 +8,9 @@ struct CatalogListing {
     let city: String
     let bio: String?
     let price: Int
+    /// Years teaching, as the instructor declared it in Edit Profile. `0` means "not stated" — see
+    /// `Instructor.yearsExp`.
+    let yearsExp: Int
     let specialties: [String]
     let sessionTypes: [String]
     let available: [String]
@@ -36,6 +39,7 @@ struct CatalogListing {
         city = record["city"] as? String ?? ""
         bio = record["bio"] as? String
         price = record["price"] as? Int ?? 0
+        yearsExp = record["yearsExp"] as? Int ?? 0
         specialties = record["specialties"] as? [String] ?? []
         sessionTypes = record["sessionTypes"] as? [String] ?? []
         available = record["available"] as? [String] ?? []
@@ -78,6 +82,7 @@ final class CatalogService {
         record["city"] = instructor.city
         record["bio"] = instructor.bio
         record["price"] = instructor.price
+        record["yearsExp"] = instructor.yearsExp
         record["specialties"] = instructor.specialties
         record["sessionTypes"] = instructor.sessionTypes
         record["available"] = instructor.available

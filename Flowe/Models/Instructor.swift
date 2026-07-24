@@ -18,6 +18,8 @@ final class Instructor {
     var rating: Double = 0
     var reviews: Int = 0
     var price: Int = 0
+    /// Years teaching, self-declared in Edit Profile and published on the listing. `0` means "not
+    /// stated" — the field is optional there — so render it as unknown rather than as no experience.
     var yearsExp: Int = 0
     var students: Int = 0
     var specialties: [String] = []

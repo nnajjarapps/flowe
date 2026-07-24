@@ -97,7 +97,11 @@ Flowe's first profit model. See `FLOWE-IAP-PLAN.md`.
       ⚠️ You must, in the **CloudKit Dashboard**: add the `InstructorListing` record type, make
       `visibility`/`updatedAt` **queryable** + `visibility` **sortable**, set security = `_world` read /
       `_creator` write, then **Deploy schema to Production**.
-      ⚠️ Also add the `photo` field (type **Asset**, no index) for uploaded profile photos.
+      ⚠️ Also add the `photo` field (type **Asset**, no index) for uploaded profile photos, and
+      `hours` (type **String List**, no index) for per-day bookable hours — without it a student's
+      device falls back to the full time slate and can request an hour the instructor doesn't teach —
+      and `yearsExp` (type **Int(64)**, no index).
+      Full field table in `BOOKING-SYSTEM.md` → *Instructor catalog*.
 - [x] **Stable identity / Apple-only sign-in**: `ownerID` no longer falls back to `currentUser.id`,
       a fresh UUID per sign-in that orphaned every booking, message and review on logout. Email
       login verified nothing (non-empty check, no credential store), so a stable email-derived id

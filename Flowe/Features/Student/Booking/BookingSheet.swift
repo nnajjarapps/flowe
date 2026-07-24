@@ -146,7 +146,9 @@ struct BookingSheet: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 16) {
                 statCol("\(instructor.students)", "Students")
-                statCol("\(instructor.yearsExp)yrs", "Exp.")
+                // "—" rather than "0yrs" when unstated: 0 is the empty value of an optional text
+                // field, and printing it claims the instructor has no experience at all.
+                statCol(instructor.yearsExp > 0 ? "\(instructor.yearsExp)yrs" : "—", "Exp.")
                 statCol("\(instructor.reviews)", "Reviews")
             }
             .padding(.bottom, 16)

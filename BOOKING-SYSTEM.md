@@ -487,6 +487,66 @@ moderation is a human reviewing the reports.
 
 ---
 
+# Instructor catalog
+
+An instructor's public listing. Written by its owner (`recordName == ownerID`, so the default
+`_creator`-write role is sufficient), read by every student's device via `CatalogService`.
+
+## CloudKit Dashboard setup
+
+### `InstructorListing`
+
+| Field | Type | Index |
+|---|---|---|
+| `name` | String | — |
+| `city` | String | — |
+| `bio` | String | — |
+| `price` | Int(64) | — |
+| `yearsExp` | Int(64) | — |
+| `rating` | Double | — |
+| `reviews` | Int(64) | — |
+| `specialties` | String **List** | — |
+| `sessionTypes` | String **List** | — |
+| `available` | String **List** | — |
+| `hours` | String **List** | — |
+| `paymentMethods` | String **List** | — |
+| `cert` | String | — |
+| `img` | String | — |
+| `photo` | Asset | — |
+| `certPhoto` | Asset | — |
+| `visibility` | Int(64) | **Queryable + Sortable** |
+| `updatedAt` | Date/Time | **Queryable** |
+
+Security role: `_world` read, `_creator` write.
+
+Only `visibility` and `updatedAt` are indexed, because they are the only two the catalog query
+filters or orders on. Everything else is read off a record already fetched.
+
+### `available` and `hours` are one thing stored twice
+
+`hours` carries one `"Mon|9:00 AM"` token per bookable slot; `available` is the day-level view of
+the same data (`["Mon", "Wed"]`), kept in sync on save. Both are published because the feed reads
+days while the booking sheet reads slots, and re-deriving one from the other on every card render
+is work the writer can do once.
+
+Neither is a nested type for the same reason: a `CKRecord` field stores a string list, not a
+dictionary, and SwiftData's mirror won't carry one either.
+
+### `students` is not published, and is not a real number
+
+`Instructor.students` only ever comes from the seed JSON. No instructor can edit it, nothing derives
+it from bookings, and it is not on the record — so it is `0` for every real listing, forever. The
+booking sheet still renders it. Either derive it from distinct booking students or drop the stat;
+publishing the field as-is would only make a fabricated number travel further.
+
+**A missing `hours` field fails quietly and badly.** `Instructor.hours(on:)` falls back to the full
+standard slate for a listing that has days but no hours — correct for listings written before
+per-day hours existed, indistinguishable from a listing whose hours never made the round trip. The
+student is then offered every time in the slate and can request an hour the instructor does not
+teach. Add the field before relying on availability across devices.
+
+---
+
 # Location
 
 "Near you" used to mean string equality on `Instructor.city`, so "Tel Aviv" and "Tel-Aviv" were
@@ -545,6 +605,8 @@ would misrepresent how well we know where an instructor is.
 ## CloudKit Dashboard setup
 
 ### `InstructorListing` (added fields)
+
+Two more fields on the record type defined under *Instructor catalog* above.
 
 | Field | Type | Index |
 |---|---|---|
