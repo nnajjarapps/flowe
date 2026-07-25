@@ -46,7 +46,7 @@ final class EventsUITests: FloweUITestCase {
     /// Events tab shows its empty state — and, unlike the feed, offers no way to create anything: a
     /// student has nothing to host.
     func testEventsTabShowsEmptyStateWithNoCreateAffordance() {
-        openCommunity()
+        openCommunity(seeded: false)   // unseeded: the store hosts no sample event
         app.buttons["community.tab.events"].tap()
 
         XCTAssertTrue(waitForAnyText(["No events yet"], timeout: timeout),
@@ -64,7 +64,7 @@ final class EventsUITests: FloweUITestCase {
     /// Switching back to Feed brings the compose button back — proving the affordance is scoped to
     /// the sub-tab, not removed outright.
     func testComposeReturnsWhenSwitchingBackToFeed() {
-        openCommunity()
+        openCommunity(seeded: false)   // unseeded: Events is empty, a clean waypoint for the tab switch
         app.buttons["community.tab.events"].tap()
         XCTAssertTrue(waitForAnyText(["No events yet"], timeout: timeout))
 
@@ -150,5 +150,53 @@ final class EventsUITests: FloweUITestCase {
         // Back on the dashboard, the new event shows in YOUR EVENTS with its organizer's own name.
         XCTAssertTrue(waitForAnyText([title], timeout: 15),
                       "A published event should appear in the dashboard's YOUR EVENTS")
+    }
+
+    // MARK: - Manage vs. join (role/context gate)
+    //
+    // The seeded event (legacyId 700) is owned by `local-user`, the same fallback id a seeded student
+    // has — so `isMine` is true for the student too. Management must still be gated on the presenting
+    // CONTEXT, not that id coincidence: a student browsing events can only JOIN.
+
+    /// A student opens an instructor's event and can JOIN it, and is NOT offered edit/cancel/delete —
+    /// even though, in this seeded build, they share the organizer's fallback id.
+    func testStudentCanJoinButNotManageAnEvent() {
+        openCommunity()   // seeded
+        app.buttons["community.tab.events"].tap()
+
+        let card = app.buttons["event.card.700"]
+        XCTAssertTrue(card.waitForExistence(timeout: timeout), "Seeded event card missing")
+        _ = waitUntil({ card.isHittable })
+        card.tap()
+
+        // The student rail is Join — never the organizer's Edit.
+        XCTAssertTrue(app.buttons["event.join"].waitForExistence(timeout: timeout),
+                      "A student must be able to join an event")
+
+        // The menu offers Report, not the owner controls.
+        let menu = app.buttons["event.moderation"]
+        XCTAssertTrue(menu.waitForExistence(timeout: timeout), "Event menu missing")
+        menu.tap()
+        XCTAssertTrue(app.buttons["Report event"].waitForExistence(timeout: timeout),
+                      "A student's event menu should offer Report")
+        XCTAssertFalse(app.buttons["Edit event"].exists, "A student must NOT be able to edit an event")
+        XCTAssertFalse(app.buttons["Delete event"].exists, "A student must NOT be able to delete an event")
+        XCTAssertFalse(app.buttons["Cancel event"].exists, "A student must NOT be able to cancel an event")
+    }
+
+    /// The organizer opens the same event from their Dashboard and CAN manage it — the management
+    /// path stays intact where it belongs.
+    func testInstructorCanManageOwnEventFromDashboard() {
+        launch(as: .instructor, seeded: true)
+        let card = app.buttons["event.card.700"]
+        XCTAssertTrue(scrollToElement(card), "The instructor's own event should appear in YOUR EVENTS")
+        _ = waitUntil({ card.isHittable })
+        card.tap()
+
+        let menu = app.buttons["event.moderation"]
+        XCTAssertTrue(menu.waitForExistence(timeout: timeout), "Event menu missing")
+        menu.tap()
+        XCTAssertTrue(app.buttons["Edit event"].waitForExistence(timeout: timeout),
+                      "The organizer must be able to edit their own event")
     }
 }

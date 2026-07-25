@@ -121,7 +121,9 @@ struct InstructorDashboardView: View {
         .sheet(isPresented: $showPaywall) { PaywallView() }
         .sheet(isPresented: $showComposeEvent) { ComposeEventSheet() }
         .sheet(item: $selectedEvent) { event in
-            EventDetailView(event: event)
+            // The instructor manages their own events from here — the one context that may edit /
+            // cancel / delete. Everywhere else (the student Community browse) leaves this false.
+            EventDetailView(event: event, manageable: true)
         }
     }
 

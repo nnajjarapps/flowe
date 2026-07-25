@@ -144,6 +144,21 @@ enum SeedLoader {
                 createdAt: Date(timeIntervalSinceNow: -Double(r.booking + 1) * 86_400)
             ))
         }
+
+        // One upcoming event this instructor hosts. Owned by `owner` (== a seeded student's own
+        // fallback id, since neither has a real Apple sign-in), which is exactly the collision that
+        // let a student "own" an event: the organizer view and the student view of this same row are
+        // both reachable in seeded builds, so it doubles as the fixture for the manage-vs-join gate.
+        let event = CommunityEvent(
+            legacyId: 700, remoteID: "seed-event-700",
+            organizerID: owner, organizerName: me.name,
+            title: "Reformer Flow Workshop",
+            about: "A 90-minute Reformer intensive — controlled, breath-led, all levels welcome.",
+            location: "Studio Flowe, Lisbon",
+            startsAt: Date(timeIntervalSinceNow: 5 * 86_400), durationMinutes: 90,
+            capacity: 12, price: 30, attendees: 4
+        )
+        context.insert(event)
     }
 
     /// A generated highlight image for a seeded lesson type, so the photo band renders in previews and

@@ -15,6 +15,16 @@ struct EventDetailView: View {
 
     let event: CommunityEvent
 
+    /// Whether this presentation may MANAGE the event (edit / cancel / delete). Only the instructor
+    /// Dashboard passes `true`; the student Community browse context leaves it `false`.
+    ///
+    /// Management is deliberately gated on the presenting CONTEXT, not on identity alone. `isMine`
+    /// compares `organizerID == currentUserID`, but a dev/seeded build has no real Apple sign-in, so
+    /// every role falls back to the same `local-user` id — which made a student "own" an instructor's
+    /// event and see Edit/Delete. A student browsing events must never manage one, whatever the ids
+    /// happen to be, so the student side simply never grants management.
+    var manageable: Bool = false
+
     @State private var showReport = false
     @State private var showEdit = false
     @State private var showOrganizer = false
@@ -23,6 +33,9 @@ struct EventDetailView: View {
     @State private var confirmDelete = false
 
     private var isMine: Bool { data.isMine(event) }
+
+    /// The real gate for every owner-only control: the organizer, AND a context that allows managing.
+    private var canManage: Bool { manageable && isMine }
 
     private var organizerListing: Instructor? { data.organizerListing(for: event) }
 
@@ -174,7 +187,7 @@ struct EventDetailView: View {
 
     private var moderationMenu: some View {
         Menu {
-            if isMine {
+            if canManage {
                 Button("Edit event", systemImage: "pencil") { showEdit = true }
                 if !event.cancelled {
                     Button("Cancel event", systemImage: "xmark.circle", role: .destructive) {
@@ -332,7 +345,7 @@ struct EventDetailView: View {
     @ViewBuilder
     private var whoIsGoing: some View {
         if let attendees = event.attendees {
-            if isMine {
+            if canManage {
                 // The organizer's view. A full attendee roster (names + join times) would need a
                 // store accessor the data layer doesn't expose — only the count is persisted — so
                 // this surfaces the count and, crucially, the overflow, which is the one thing the
@@ -383,7 +396,7 @@ struct EventDetailView: View {
                 .frame(maxWidth: .infinity)
         } else if event.pendingJoin {
             GradientButton(title: "Sending…", enabled: false) {}
-        } else if isMine {
+        } else if canManage {
             organizerRail
         } else {
             studentRail
