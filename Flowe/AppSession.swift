@@ -85,6 +85,28 @@ final class AppSession {
         if case .some(let newPhoto) = photo { user.photo = newPhoto }
         currentUser = user
         persistUser()
+        persistDurableProfile()
+    }
+
+    // MARK: - Durable per-account profile
+    //
+    // `userKey` is the *session* copy — `logout()` clears it so the next person on a shared device
+    // doesn't inherit the last one's identity. But a user's own edits (name, bio, photo, join date)
+    // must come back when *they* sign in again. Apple returns the name only on the first
+    // authorization and nothing thereafter, so without this a re-sign-in mints a blank profile and
+    // the edits appear lost. This copy is keyed by the stable owner id, outlives logout, and is
+    // restored on the next sign-in for the same account.
+
+    private func durableProfileKey(for owner: String) -> String { "flowe.profile.\(owner)" }
+
+    private func persistDurableProfile() {
+        guard let user = currentUser, let data = try? JSONEncoder().encode(user) else { return }
+        UserDefaults.standard.set(data, forKey: durableProfileKey(for: ownerID))
+    }
+
+    private func loadDurableProfile() -> User? {
+        guard let data = UserDefaults.standard.data(forKey: durableProfileKey(for: ownerID)) else { return nil }
+        return try? JSONDecoder().decode(User.self, from: data)
     }
 
     /// Records the Apple credential's stable user id (persisted to the Keychain).
@@ -108,24 +130,34 @@ final class AppSession {
     /// `User.id` is a fresh UUID and is **display-only** — never use it as an owner id. Ownership
     /// comes from `ownerID`, which is backed by the Apple credential; see the note there.
     func signUp(name: String, email: String, role: UserRole) {
-        currentUser = User(
-            id: UUID(),
-            fullName: name,
-            email: email,
-            role: role,
-            memberSince: Date()
-        )
-        persist(role: role)
+        startSession(defaultName: name, email: email, role: role)
     }
 
     func login(email: String, role: UserRole) {
-        currentUser = User(
-            id: UUID(),
-            fullName: Self.displayName(fromEmail: email),
-            email: email,
-            role: role,
-            memberSince: Date()
-        )
+        startSession(defaultName: Self.displayName(fromEmail: email), email: email, role: role)
+    }
+
+    /// Begin an authenticated session. If the account has a saved profile from a previous session
+    /// (see the durable-profile note above), restore the user's own edits — name, bio, photo, join
+    /// date — instead of minting a blank identity. Role always comes from this sign-in; the email is
+    /// only taken when none was stored, so a real address survives Apple's nil-on-re-auth behaviour.
+    private func startSession(defaultName: String, email: String, role: UserRole) {
+        if var saved = loadDurableProfile() {
+            saved.role = role
+            if saved.fullName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                saved.fullName = defaultName
+            }
+            if saved.email.isEmpty, !email.isEmpty { saved.email = email }
+            currentUser = saved
+        } else {
+            currentUser = User(
+                id: UUID(),
+                fullName: defaultName,
+                email: email,
+                role: role,
+                memberSince: Date()
+            )
+        }
         persist(role: role)
     }
 
@@ -161,6 +193,7 @@ final class AppSession {
         UserDefaults.standard.set(role.rawValue, forKey: roleKey)
         UserDefaults.standard.set(true, forKey: loggedInKey)
         persistUser()
+        persistDurableProfile()
         withAnimation(.spring(duration: 0.4, bounce: 0.1)) {
             authState = role == .student ? .student : .instructor
         }
