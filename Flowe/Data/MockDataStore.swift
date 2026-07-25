@@ -2071,6 +2071,14 @@ final class MockDataStore {
         let owners = Set(listings.map(\.ownerID))
 
         for listing in listings {
+            // NEVER apply the signed-in user's OWN listing from the catalog. Their listing is
+            // locally authoritative — they edit it here (availability, bio, rate…) and publish it
+            // OUTWARD via `publishMyListing`. Pulling the public copy back in overwrites unsynced or
+            // just-made local edits with a staler catalog snapshot. This is what wiped an
+            // instructor's availability after they signed in as a student on the same device (same
+            // Apple id → same ownerID → their own listing came back in the visible set and clobbered
+            // the local hours). The hide-loop below already excludes `currentUserID`; this matches it.
+            guard listing.ownerID != currentUserID else { continue }
             if let existing = instructors.first(where: { $0.ownerID == listing.ownerID }) {
                 apply(listing, to: existing)
             } else {
