@@ -8,6 +8,7 @@ struct ProfileView: View {
 
     @State private var showSettings = false
     @State private var showNotifications = false
+    @State private var legalDoc: LegalDoc?
 
     /// Per-icon accent tints matching the Figma mockup (deep → pink → soft).
     private let achievementTints: [Color] = [.flowePinkDeep, .flowePink, .flowePinkSoft]
@@ -99,6 +100,7 @@ struct ProfileView: View {
         .background(Color.flowWhite)
         .sheet(isPresented: $showSettings) { SettingsView() }
         .sheet(isPresented: $showNotifications) { NotificationSettingsView() }
+        .sheet(item: $legalDoc) { LegalDocumentView(resource: $0.resource, title: $0.title) }
     }
 
     // MARK: - Header
@@ -215,6 +217,9 @@ struct ProfileView: View {
                     switch row {
                     case "Log out": session.logout()
                     case "Notifications": showNotifications = true
+                    // Open the bundled documents directly rather than bouncing through Settings.
+                    case "Privacy": legalDoc = .privacy
+                    case "Help & Support": legalDoc = .support
                     default: showSettings = true
                     }
                 } label: {

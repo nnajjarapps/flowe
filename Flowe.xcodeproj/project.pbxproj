@@ -140,9 +140,12 @@
 		F582316F6833E1BD8CCF771E /* InstructorCalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D02BBF683FC16C7795428F78 /* InstructorCalendarView.swift */; };
 		F93612202282923224BD9201 /* FloweCommon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7381734E749647CBCF81D5DC /* FloweCommon.swift */; };
 		F9F588829CD0FF210899133A /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 08B690A006F7E8352F3A828D /* Localizable.xcstrings */; };
+		FEEDFACE000000000000CC01 /* HelpSupport.html in Resources */ = {isa = PBXBuildFile; fileRef = FEEDFACE000000000000CC02 /* HelpSupport.html */; };
+		FEEDFACE000000000000BB01 /* PrivacyPolicy.html in Resources */ = {isa = PBXBuildFile; fileRef = FEEDFACE000000000000BB02 /* PrivacyPolicy.html */; };
 		FC5D98EC9D318EFBDA4996B2 /* InstructorCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = B12BC58F995114991F32175F /* InstructorCard.swift */; };
 		A1B2C3D4E5F6708192A3B4C5 /* StudentInstructorProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5B4A3928170F6E5D4C3B2A1 /* StudentInstructorProfileView.swift */; };
 		A1B2C3D4E5F6708192A31C01 /* LessonTypeCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5B4A3928170F6E5D4C31C02 /* LessonTypeCard.swift */; };
+		FEEDFACE000000000000AA01 /* LegalDocumentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEEDFACE000000000000AA02 /* LegalDocumentView.swift */; };
 		FC96FF052010A41027421DDF /* InstructorSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D8AAB7DA8B7C8BE80DFEEC5 /* InstructorSettingsView.swift */; };
 /* End PBXBuildFile section */
 
@@ -163,6 +166,8 @@
 		06D1617BBCF38F203A11C316 /* FloweConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloweConstants.swift; sourceTree = "<group>"; };
 		077B3B4C3600ECE4CE0E1861 /* UnsplashImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnsplashImage.swift; sourceTree = "<group>"; };
 		08B690A006F7E8352F3A828D /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
+		FEEDFACE000000000000CC02 /* HelpSupport.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = HelpSupport.html; sourceTree = "<group>"; };
+		FEEDFACE000000000000BB02 /* PrivacyPolicy.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = PrivacyPolicy.html; sourceTree = "<group>"; };
 		0AEA61C0D5A07FA6156A5B5F /* MessagingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessagingService.swift; sourceTree = "<group>"; };
 		0C6A6B72111739FB381005F1 /* LocalizationUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizationUITests.swift; sourceTree = "<group>"; };
 		0CE4F79CAA257F95E8F9B243 /* ReviewService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewService.swift; sourceTree = "<group>"; };
@@ -252,6 +257,7 @@
 		B12BC58F995114991F32175F /* InstructorCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstructorCard.swift; sourceTree = "<group>"; };
 		C5B4A3928170F6E5D4C3B2A1 /* StudentInstructorProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudentInstructorProfileView.swift; sourceTree = "<group>"; };
 		C5B4A3928170F6E5D4C31C02 /* LessonTypeCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LessonTypeCard.swift; sourceTree = "<group>"; };
+		FEEDFACE000000000000AA02 /* LegalDocumentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Flowe/Features/Shared/LegalDocumentView.swift; sourceTree = SOURCE_ROOT; };
 		B264A9BA6AB860A28BAC86B9 /* RemoteImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteImage.swift; sourceTree = "<group>"; };
 		B36038D7F8CF809375873BCC /* InstructorTabsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstructorTabsUITests.swift; sourceTree = "<group>"; };
 		B5A1882EB901E61B7AF2A487 /* FloatingLabelField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingLabelField.swift; sourceTree = "<group>"; };
@@ -384,6 +390,7 @@
 				B12BC58F995114991F32175F /* InstructorCard.swift */,
 				C5B4A3928170F6E5D4C3B2A1 /* StudentInstructorProfileView.swift */,
 				C5B4A3928170F6E5D4C31C02 /* LessonTypeCard.swift */,
+				FEEDFACE000000000000AA02 /* LegalDocumentView.swift */,
 			);
 			path = Discover;
 			sourceTree = "<group>";
@@ -565,6 +572,8 @@
 				1DA7831F38CF5EE21BF1DD69 /* Assets.xcassets */,
 				C620D76581FC07D737D5C1BB /* InfoPlist.xcstrings */,
 				08B690A006F7E8352F3A828D /* Localizable.xcstrings */,
+				FEEDFACE000000000000CC02 /* HelpSupport.html */,
+				FEEDFACE000000000000BB02 /* PrivacyPolicy.html */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -801,6 +810,8 @@
 				B029AD2888183B7786C5B22F /* Fraunces-Regular.ttf in Resources */,
 				36C51C50E66B486ABB2E811C /* InfoPlist.xcstrings in Resources */,
 				F9F588829CD0FF210899133A /* Localizable.xcstrings in Resources */,
+				FEEDFACE000000000000CC01 /* HelpSupport.html in Resources */,
+				FEEDFACE000000000000BB01 /* PrivacyPolicy.html in Resources */,
 				DC54DB3091B31BDC362B9E68 /* bookings.json in Resources */,
 				2FA2F742CE16CE6A3912BDF0 /* instructors.json in Resources */,
 			);
@@ -895,6 +906,7 @@
 				FC5D98EC9D318EFBDA4996B2 /* InstructorCard.swift in Sources */,
 				A1B2C3D4E5F6708192A3B4C5 /* StudentInstructorProfileView.swift in Sources */,
 				A1B2C3D4E5F6708192A31C01 /* LessonTypeCard.swift in Sources */,
+				FEEDFACE000000000000AA01 /* LegalDocumentView.swift in Sources */,
 				B1588F941847D026226D4A2A /* InstructorDashboardView.swift in Sources */,
 				3C21FE2BC3DA2E3AA770048F /* InstructorProfileView.swift in Sources */,
 				986ABAA1BDFD64361E931FD2 /* InstructorRouter.swift in Sources */,

@@ -10,6 +10,7 @@ struct SettingsView: View {
     @State private var showNotifications = false
     @State private var showDeleteAccount = false
     @State private var showBlocked = false
+    @State private var legalDoc: LegalDoc?
 
     var body: some View {
         @Bindable var settings = settings
@@ -64,6 +65,21 @@ struct SettingsView: View {
                     .accessibilityIdentifier("settings.blockedUsers")
                 }
 
+                // Both roles need a support + privacy path; these open the documents bundled in the
+                // app (LegalDocumentView), not an external site.
+                Section("Support") {
+                    Button { legalDoc = .support } label: {
+                        Label("Help & Support", systemImage: "questionmark.circle")
+                    }
+                    .tint(Color.floweInk)
+                    .accessibilityIdentifier("settings.help")
+                    Button { legalDoc = .privacy } label: {
+                        Label("Privacy Policy", systemImage: "hand.raised")
+                    }
+                    .tint(Color.floweInk)
+                    .accessibilityIdentifier("settings.privacy")
+                }
+
                 Section {
                     Button(role: .destructive) {
                         session.logout()
@@ -92,6 +108,7 @@ struct SettingsView: View {
             .sheet(isPresented: $showNotifications) { NotificationSettingsView() }
             .sheet(isPresented: $showDeleteAccount) { DeleteAccountView() }
             .sheet(isPresented: $showBlocked) { BlockedUsersView() }
+            .sheet(item: $legalDoc) { LegalDocumentView(resource: $0.resource, title: $0.title) }
         }
     }
 }

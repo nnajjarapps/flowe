@@ -10,6 +10,7 @@ struct PaywallView: View {
     @State private var purchasing: SubscriptionTier?
     @State private var restoring = false
     @State private var trialEligible = true
+    @State private var showPrivacy = false
 
     var body: some View {
         NavigationStack {
@@ -38,6 +39,9 @@ struct PaywallView: View {
             }
             .task {
                 trialEligible = await subscription.introOfferAvailable(for: .visible)
+            }
+            .sheet(isPresented: $showPrivacy) {
+                LegalDocumentView(resource: LegalDoc.privacy.resource, title: LegalDoc.privacy.title)
             }
         }
     }
@@ -180,7 +184,7 @@ struct PaywallView: View {
             HStack(spacing: 6) {
                 Link("Terms of Use", destination: URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!)
                 Text("·").foregroundStyle(Color.floweMuted)
-                Link("Privacy Policy", destination: URL(string: "https://flowepilates.com/privacy")!)
+                Button("Privacy Policy") { showPrivacy = true }
             }
             .font(FloweFont.mono(10))
             .tint(Color.flowePinkDeep)

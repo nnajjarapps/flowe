@@ -17,6 +17,7 @@ struct InstructorSettingsView: View {
     @State private var confirmLogout = false
     @State private var showDeleteAccount = false
     @State private var showBlocked = false
+    @State private var legalDoc: LegalDoc?
 
     private var planLabel: String {
         switch subscription.tier {
@@ -98,12 +99,20 @@ struct InstructorSettingsView: View {
 
                 // MARK: Support
                 Section("Support") {
-                    Link(destination: URL(string: "https://flowepilates.com/support")!) {
+                    // Help & Support and the Privacy Policy open the documents bundled IN the app
+                    // (see LegalDocumentView), not an external site, so they work offline and never
+                    // dump the user into Safari. Terms of Use stays Apple's standard EULA — the App
+                    // Store requires that link for the auto-renewing subscription.
+                    Button { legalDoc = .support } label: {
                         Label("Help & Support", systemImage: "questionmark.circle")
                     }
-                    Link(destination: URL(string: "https://flowepilates.com/privacy")!) {
+                    .tint(Color.floweInk)
+                    .accessibilityIdentifier("settings.help")
+                    Button { legalDoc = .privacy } label: {
                         Label("Privacy Policy", systemImage: "hand.raised")
                     }
+                    .tint(Color.floweInk)
+                    .accessibilityIdentifier("settings.privacy")
                     Link(destination: URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!) {
                         Label("Terms of Use", systemImage: "doc.text")
                     }
@@ -145,6 +154,7 @@ struct InstructorSettingsView: View {
             .sheet(isPresented: $showNotifications) { NotificationSettingsView() }
             .sheet(isPresented: $showDeleteAccount) { DeleteAccountView() }
             .sheet(isPresented: $showBlocked) { BlockedUsersView() }
+            .sheet(item: $legalDoc) { LegalDocumentView(resource: $0.resource, title: $0.title) }
             .manageSubscriptionsSheet(isPresented: $showManageSubscriptions)
             .confirmationDialog("Log out of Flowe?", isPresented: $confirmLogout, titleVisibility: .visible) {
                 Button("Log Out", role: .destructive) {

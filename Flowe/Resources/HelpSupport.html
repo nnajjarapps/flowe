@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Help &amp; Support</title>
+<style>
+  :root {
+    --bg: #ffffff; --card: #fff0f4; --ink: #2d1520; --muted: #8f827a;
+    --border: rgba(232,120,154,0.20); --pink: #d45880; --pink-soft: #e8789a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #170e12; --card: #23151b; --ink: #f6e9ee; --muted: #b6a6ad;
+      --border: rgba(232,120,154,0.28); --pink: #f4a8c0; --pink-soft: #e8789a;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; padding: 24px 20px 56px;
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    color: var(--ink); background: var(--bg);
+    max-width: 720px; margin-left: auto; margin-right: auto;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1 {
+    font: 600 30px/1.15 "Georgia", "Times New Roman", serif;
+    letter-spacing: -0.01em; margin: 0 0 4px;
+  }
+  .sub { color: var(--muted); font-size: 15px; margin: 0 0 28px; }
+  h2 {
+    font: 600 13px/1.4 -apple-system, sans-serif; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--pink); margin: 32px 0 12px;
+  }
+  p { margin: 0 0 14px; }
+  a { color: var(--pink); }
+  strong { font-weight: 600; }
+  .faq {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 16px; padding: 6px 18px; margin: 0 0 14px;
+  }
+  .faq details { border-bottom: 1px solid var(--border); }
+  .faq details:last-child { border-bottom: none; }
+  .faq summary {
+    cursor: pointer; list-style: none; padding: 16px 0;
+    font-weight: 600; color: var(--ink);
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  }
+  .faq summary::-webkit-details-marker { display: none; }
+  .faq summary::after {
+    content: "+"; color: var(--pink); font-size: 20px; font-weight: 400; line-height: 1;
+  }
+  .faq details[open] summary::after { content: "\2013"; }
+  .faq details > p { margin: 0 0 16px; color: var(--ink); }
+  .contact {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 16px; padding: 20px; text-align: center; margin: 12px 0 0;
+  }
+  .contact a.btn {
+    display: inline-block; margin-top: 12px; padding: 12px 22px; border-radius: 999px;
+    background: var(--pink); color: #fff; text-decoration: none; font-weight: 600;
+  }
+  .note { color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+  <h1>Help &amp; Support</h1>
+  <p class="sub">Answers to the common questions — and how to reach a human.</p>
+
+  <h2>Booking &amp; sessions</h2>
+  <div class="faq">
+    <details open>
+      <summary>How do I book a session?</summary>
+      <p>Open an instructor's profile from Discover, tap <strong>Book a session</strong>, pick a day and
+      time they've made available, choose a lesson type, and send the request. It stays
+      <em>Pending</em> until the instructor accepts it.</p>
+    </details>
+    <details>
+      <summary>How do I pay?</summary>
+      <p>Flowe doesn't handle session payments. You arrange payment with your instructor
+      <strong>directly</strong> — the price shown is what they charge, settled between the two of you.
+      The only thing Flowe bills is the optional instructor subscription, through Apple.</p>
+    </details>
+    <details>
+      <summary>Can I cancel a booking?</summary>
+      <p>Yes. Open the booking in the <strong>Bookings</strong> tab and tap Cancel. Your instructor is
+      notified.</p>
+    </details>
+  </div>
+
+  <h2>Teaching on Flowe</h2>
+  <div class="faq">
+    <details>
+      <summary>How do I become an instructor?</summary>
+      <p>Choose "I'm here to teach" when you sign up. You'll get a listing to fill in — bio, rate,
+      specialties, certifications and lesson types — plus a subscription that makes you discoverable to
+      students.</p>
+    </details>
+    <details>
+      <summary>How do I set the days and hours I teach?</summary>
+      <p>Dashboard → <strong>Add availability</strong>. Turn on a day, then pick the hours you teach.
+      Students can only request the times you choose. Close a day and it stays closed until you reopen
+      it.</p>
+    </details>
+    <details>
+      <summary>What is capacity on a lesson type?</summary>
+      <p>It's the maximum group size for that lesson — shown to students as a guide (for example
+      "Up to 6"). Flowe doesn't track live spots; every booking is a direct request to you.</p>
+    </details>
+  </div>
+
+  <h2>Privacy &amp; safety</h2>
+  <div class="faq">
+    <details>
+      <summary>Who can see my messages?</summary>
+      <p>Messages are delivered through the app's shared store, so treat them as visible to other
+      signed-in users and never send sensitive details like payment or ID information.</p>
+    </details>
+    <details>
+      <summary>How do I block or report someone?</summary>
+      <p>Open their profile or a post, tap the menu (•••), and choose <strong>Block</strong> or
+      <strong>Report</strong>. Blocking hides them from you; reports come to us privately.</p>
+    </details>
+    <details>
+      <summary>How do I delete my account?</summary>
+      <p>Settings → <strong>Delete Account</strong>. This removes your account and the data you created.
+      It can't be undone.</p>
+    </details>
+  </div>
+
+  <div class="contact">
+    <p style="margin:0"><strong>Still need help?</strong></p>
+    <p class="note" style="margin:6px 0 0">We usually reply within a day.</p>
+    <a class="btn" href="mailto:pilatesflowe@gmail.com?subject=Flowe%20Support">Email us</a>
+    <p class="note" style="margin:14px 0 0">pilatesflowe@gmail.com</p>
+  </div>
+</body>
+</html>
