@@ -8,6 +8,7 @@ struct ProfileView: View {
 
     @State private var showSettings = false
     @State private var showNotifications = false
+    @State private var showEditProfile = false
     @State private var legalDoc: LegalDoc?
 
     /// Per-icon accent tints matching the Figma mockup (deep → pink → soft).
@@ -100,6 +101,7 @@ struct ProfileView: View {
         .background(Color.flowWhite)
         .sheet(isPresented: $showSettings) { SettingsView() }
         .sheet(isPresented: $showNotifications) { NotificationSettingsView() }
+        .sheet(isPresented: $showEditProfile) { EditStudentProfileView() }
         .sheet(item: $legalDoc) { LegalDocumentView(resource: $0.resource, title: $0.title) }
     }
 
@@ -107,8 +109,8 @@ struct ProfileView: View {
 
     private var header: some View {
         HStack(spacing: 16) {
-            // No photo on file yet → empty id renders the gradient placeholder.
-            AvatarView(id: "", size: 64)
+            // The student's uploaded photo, if any; an empty id falls back to the gradient placeholder.
+            AvatarView(id: "", photo: session.currentUser?.photo, size: 64)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(session.currentUser?.fullName ?? "Your Profile")
@@ -119,8 +121,26 @@ struct ProfileView: View {
                         .font(FloweFont.sans(12))
                         .foregroundStyle(Color.floweMuted)
                 }
-                HStack(spacing: 4) {
+                if let bio = session.currentUser?.bio, !bio.isEmpty {
+                    Text(bio)
+                        .font(FloweFont.sans(12))
+                        .foregroundStyle(Color.floweInk.opacity(0.8))
+                        .lineLimit(2)
+                        .padding(.top, 2)
+                }
+                HStack(spacing: 6) {
                     disciplinePill(roleLabel, background: Color.flowePink.opacity(0.09))
+                    Button {
+                        showEditProfile = true
+                    } label: {
+                        Text("Edit Profile")
+                            .font(FloweFont.sans(11, .medium))
+                            .foregroundStyle(Color.flowePinkDeep)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 3)
+                            .background(Color.flowePink.opacity(0.10), in: Capsule())
+                    }
+                    .accessibilityIdentifier("student.editProfile")
                 }
                 .padding(.top, 4)
             }

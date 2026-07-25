@@ -57,6 +57,36 @@ final class AppSession {
         }
     }
 
+    /// Applies a student's profile edits to the signed-in identity and persists them. A `nil`
+    /// argument leaves that field untouched, so callers can update just the photo or just the bio.
+    /// Trimmed, empty strings clear the field rather than storing whitespace.
+    ///
+    /// A logged-in session normally already carries a `currentUser` from the sign-in flow, but a
+    /// UI-test launch (and any future path that logs in without minting one) can be authenticated
+    /// with no user record. Rather than silently no-op there, synthesise a minimal `User` from the
+    /// current auth state so the edit takes effect and persists.
+    func updateProfile(fullName: String? = nil, bio: String? = nil, photo: Data?? = .none) {
+        var user = currentUser ?? User(
+            id: UUID(),
+            fullName: "",
+            email: "",
+            role: authState == .instructor ? .instructor : .student,
+            memberSince: Date()
+        )
+        guard authState != .unauthenticated || currentUser != nil else { return }
+        if let fullName {
+            let trimmed = fullName.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty { user.fullName = trimmed }
+        }
+        if let bio {
+            let trimmed = bio.trimmingCharacters(in: .whitespacesAndNewlines)
+            user.bio = trimmed.isEmpty ? nil : trimmed
+        }
+        if case .some(let newPhoto) = photo { user.photo = newPhoto }
+        currentUser = user
+        persistUser()
+    }
+
     /// Records the Apple credential's stable user id (persisted to the Keychain).
     func setAppleUserID(_ id: String) {
         appleUserID = id
