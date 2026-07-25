@@ -43,7 +43,7 @@
 		4EE5A56999D31EBF70784FB9 /* DMMono-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = C15E26BF2DDDBD1EECABB0EC /* DMMono-Regular.ttf */; };
 		502B43DE62B8898D6D2DE035 /* DMSans-Light.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0F28297BD9C654202E87114A /* DMSans-Light.ttf */; };
 		5120BF42BF3F17FB47029FE0 /* AppRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3527B833A544893B28CE722 /* AppRouter.swift */; };
-		527829EADB9BDA6A843964F6 /* SplashView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3E94289DCDBDDCA0A071CC8 /* SplashView.swift */; };
+		527829EADB9BDA6A843964F6 /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3E94289DCDBDDCA0A071CC8 /* WelcomeView.swift */; };
 		540376ADAA3BFBF4E858CF43 /* StudentTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E44A0A10890CCFF23B150A04 /* StudentTabView.swift */; };
 		56077DC95736DA622C1DF012 /* Fraunces-LightItalic.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 143E9E63DDABC0E3547106A5 /* Fraunces-LightItalic.ttf */; };
 		59337B263035088E6520BD42 /* OnboardingFlowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92C935E2CA20B8E5750DEE0F /* OnboardingFlowView.swift */; };
@@ -298,7 +298,7 @@
 		ED2BC5AAEAE57BD8B4B05646 /* 0AD9894E-764F-47AF-AC95-56485A70A3C4.PNG */ = {isa = PBXFileReference; path = "0AD9894E-764F-47AF-AC95-56485A70A3C4.PNG"; sourceTree = "<group>"; };
 		EDB60A412E456123013E75E4 /* IconButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IconButton.swift; sourceTree = "<group>"; };
 		F31A42A348DDC6B4F180F617 /* PrimaryButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrimaryButton.swift; sourceTree = "<group>"; };
-		F3E94289DCDBDDCA0A071CC8 /* SplashView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplashView.swift; sourceTree = "<group>"; };
+		F3E94289DCDBDDCA0A071CC8 /* WelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeView.swift; sourceTree = "<group>"; };
 		F64F306B57717DC8ABC5FC15 /* BlockedUser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockedUser.swift; sourceTree = "<group>"; };
 		F71DDCF02E488698B7C62351 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		F8FDF5E6BF0F2C754325BF04 /* FeedPost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedPost.swift; sourceTree = "<group>"; };
@@ -485,7 +485,7 @@
 				4D02AD586357897327237E1F /* LoginView.swift */,
 				92C935E2CA20B8E5750DEE0F /* OnboardingFlowView.swift */,
 				185D1CBA0B81BE9EA96AC524 /* RoleSelectionView.swift */,
-				F3E94289DCDBDDCA0A071CC8 /* SplashView.swift */,
+				F3E94289DCDBDDCA0A071CC8 /* WelcomeView.swift */,
 			);
 			path = Onboarding;
 			sourceTree = "<group>";
@@ -944,7 +944,7 @@
 				958A6D29014C8C1A506A1995 /* SeedLoader.swift in Sources */,
 				B19662C03EF9724511AD914B /* SessionRow.swift in Sources */,
 				CF622EEBD2BC486D9A84998C /* SettingsView.swift in Sources */,
-				527829EADB9BDA6A843964F6 /* SplashView.swift in Sources */,
+				527829EADB9BDA6A843964F6 /* WelcomeView.swift in Sources */,
 				540376ADAA3BFBF4E858CF43 /* StudentTabView.swift in Sources */,
 				A6D68D101065C7820B5BB267 /* SubscriptionService.swift in Sources */,
 				A23AD802E43F2485CF6D38E3 /* UnsplashImage.swift in Sources */,

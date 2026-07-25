@@ -36,3 +36,6 @@ Thumbs.db
 # Xcode export/archive output
 Flowe */
 *.xcarchive
+
+# Stray root-level copy of the Figma export (the tracked one is Flowe/Pilates app/)
+/Pilates app/

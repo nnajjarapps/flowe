@@ -9,13 +9,18 @@ struct OnboardingFlowView: View {
                 RoleSelectionView()
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             } else {
-                SplashView {
-                    withAnimation(.spring(duration: 0.4, bounce: 0.1)) {
-                        showRoleSelection = true
-                    }
-                }
+                WelcomeView(
+                    onGetStarted: { advance() },
+                    onSignIn: { advance() }
+                )
                 .transition(.opacity)
             }
+        }
+    }
+
+    private func advance() {
+        withAnimation(.spring(duration: 0.4, bounce: 0.1)) {
+            showRoleSelection = true
         }
     }
 }
