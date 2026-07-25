@@ -136,9 +136,14 @@ final class Instructor {
 
     /// Bookable times on a weekday, in chronological order.
     ///
-    /// A day with no stored hours falls back to the standard slate. Listings created before
-    /// per-day hours existed have `available` days but no `hours`, and returning nothing for them
-    /// would silently make every one of them unbookable.
+    /// A day with no stored hours falls back to the standard slate — but this fallback is now
+    /// LEGACY-ONLY. `AvailabilityView.save()` recomputes `available` from `daysWithHours`, so after
+    /// any edit `available` holds only days that actually carry `hours` tokens. A token-less day
+    /// still present in `available` can therefore only be a listing written before per-day hours
+    /// existed (days set, hours never populated); returning nothing for those would silently make
+    /// every one of them unbookable. A day the instructor explicitly CLOSED is instead absent from
+    /// `available` (save removed it), so the fallback does not fire and it correctly reads closed —
+    /// this is what fixes the "close a day silently reopens it with the full slate" bug.
     func hours(on day: String) -> [String] {
         // `self.hours` throughout: a bare `hours` here is ambiguous with this method.
         let stored = self.hours.compactMap { token -> String? in
@@ -162,5 +167,16 @@ final class Instructor {
     /// Days with at least one bookable hour — what `available` is kept in sync with.
     var bookableDays: [String] {
         FloweConstants.weekdays.filter(isBookable(on:))
+    }
+
+    /// Days that have at least one explicit hour token, in weekday order. Unlike `bookableDays` this
+    /// reads only `hours`, never the fallback in `hours(on:)`, so it stays correct even while
+    /// `available` still holds a pre-save value. `save()` derives the new `available` from THIS, not
+    /// from `bookableDays`: routing through `bookableDays` → `isBookable` → `hours(on:)` re-reads the
+    /// old `available`, hits the legacy full-slate fallback, and re-opens a day the instructor just
+    /// closed (the reopen-with-full-slate bug).
+    var daysWithHours: [String] {
+        let days = Set(hours.compactMap { $0.components(separatedBy: Self.separator).first })
+        return FloweConstants.weekdays.filter(days.contains)
     }
 }

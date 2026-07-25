@@ -122,6 +122,11 @@ final class CatalogService {
                 server["price"] = instructor.price
                 server["paymentMethods"] = instructor.paymentMethods
                 server["updatedAt"] = Date()
+                // Re-apply availability too — a conflicting save must not resurrect a day the
+                // instructor just closed. A closed day is encoded as ABSENT from `available`, so
+                // taking the server copy without this would silently reopen it from the stale record.
+                server["available"] = instructor.available
+                server["hours"] = instructor.hours
                 // Re-applied including a nil, for the same reason the assets are: a conflicting
                 // save must not resurrect a location the instructor has just removed.
                 server["latitude"] = area?.latitude

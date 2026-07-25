@@ -719,10 +719,15 @@ booking sheet still renders it. Either derive it from distinct booking students 
 publishing the field as-is would only make a fabricated number travel further.
 
 **A missing `hours` field fails quietly and badly.** `Instructor.hours(on:)` falls back to the full
-standard slate for a listing that has days but no hours — correct for listings written before
-per-day hours existed, indistinguishable from a listing whose hours never made the round trip. The
-student is then offered every time in the slate and can request an hour the instructor does not
-teach. Add the field before relying on availability across devices.
+standard slate for a day that is in `available` but has no hours tokens. The invariant that makes
+this safe: `AvailabilityView.save()` recomputes `available` from `daysWithHours` (the days that
+actually carry tokens), so after any edit `available` lists *exactly* the days with hours. A day the
+instructor explicitly CLOSED is therefore ABSENT from `available`, the fallback does not fire, and it
+correctly reads closed — closing a day no longer silently reopens it with the full slate. The
+full-slate fallback now applies ONLY to genuinely legacy listings: days set, `hours` never populated
+(written before per-day hours existed). Those stay bookable until their owner opens the editor and
+saves, which materializes the displayed slate into real tokens. This distinction rides the existing
+wire fields — closed = absent from the `available` String List — so no new record field is needed.
 
 ---
 

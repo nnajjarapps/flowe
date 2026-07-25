@@ -425,3 +425,32 @@ Not done (documented in `BOOKING-SYSTEM.md`):
 - [ ] Message bodies are readable by any authenticated app user (public DB). This is the most
       sensitive data in the app and the strongest reason to move server-side before scaling.
 - [ ] No typing indicators, delivery/read receipts across users, or attachments.
+
+## Phase 17 — Availability: "Close this day" actually closes it  ✅
+Closing a previously-open day in `AvailabilityView` then saving and reopening the editor showed the
+day OPEN again with the **full** time slate — an instructor narrowing their hours could end up with
+more open than they set, and a student could then request an hour never offered.
+
+- [x] **Root cause** — `Instructor.hours(on:)` falls back to the standard slate for a day in
+      `available` with no `hours` tokens (a legacy accommodation for listings created before per-day
+      hours). `save()` then set `available = bookableDays`, which routes back through `hours(on:)`
+      against the OLD, not-yet-reassigned `available`, so a just-closed day hit the fallback, counted
+      as bookable, and was written straight back into `available`. Circular: closing reopened.
+- [x] **Fix** — `save()` now derives the new `available` from a new `Instructor.daysWithHours`, which
+      reads only the `hours` tokens (never the fallback). A closed day carries no tokens, so it is
+      absent from `daysWithHours`, absent from the new `available`, and the fallback never fires for
+      it. The full-slate fallback is now **legacy-only**: it applies solely to listings that have
+      `available` days but never populated `hours`, keeping existing instructors bookable until they
+      edit. Closed and legacy-unset are distinguished by presence in `available`, so **no new record
+      field was needed** — the fix rides the existing `available`/`hours` String Lists.
+- [x] **CloudKit conflict merge** — `CatalogService.publish`'s `serverRecordChanged` retry now
+      re-applies `available` and `hours` (alongside the fields it already re-applied), so a conflicting
+      save can't resurrect a day the instructor just closed from the stale server copy. No schema
+      change: both fields were already published and already in `CLOUDKIT-DEPLOYMENT.md` /
+      `flowe-schema.ckdb`.
+- [x] **Docs** — semantics written up in `BOOKING-SYSTEM.md § Instructor catalog` (the closed = absent
+      from `available`, legacy = present-without-tokens rule). Consumers left unchanged and verified by
+      reading: BookingSheet `stepDay`/`stepTimeType`, `StudentInstructorProfileView` AVAILABILITY, and
+      `MockDataStore.apply(_:to:)` all read `available`/`isBookable`/`hours(on:)` and stay correct.
+- [x] **Tests** — `InstructorTabsUITests` gains coverage that a closed day stays closed across
+      save + reopen and that saving never expands a day to unpicked slots.

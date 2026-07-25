@@ -193,6 +193,7 @@ struct AvailabilityView: View {
         }
         .font(FloweFont.mono(11))
         .foregroundStyle(openDays.isEmpty ? Color.flowePinkDeep : Color.floweMuted)
+        .accessibilityIdentifier("availability.summary")
     }
 
     /// "3 slots" — or the single time when there's only one, which is more useful than a count.
@@ -218,9 +219,13 @@ struct AvailabilityView: View {
         for day in allDays {
             me.setHours(FloweConstants.times.filter { hours[day]?.contains($0) == true }, on: day)
         }
-        // `available` stays the day-level view of the same data — the feed and the public catalog
-        // already read it, so it must not drift out of sync with the hours.
-        me.available = me.bookableDays
+        // Recompute `available` from the hours we just wrote — a day is bookable iff it kept ≥1
+        // slot. Must read the NEW tokens (`daysWithHours`), NOT `bookableDays`: bookableDays →
+        // isBookable → hours(on:) re-reads the OLD, not-yet-reassigned `available` and its legacy
+        // full-slate fallback re-opens a day we just closed, writing it straight back into
+        // `available` (the "close a day silently reopens it with the full slate" bug). Deriving from
+        // the tokens makes `available` list exactly the open days and leaves closed days absent.
+        me.available = me.daysWithHours
         data.commit()
         dismiss()
     }

@@ -75,6 +75,77 @@ final class InstructorTabsUITests: FloweUITestCase {
                       "Add availability should open the availability editor")
     }
 
+    // MARK: - Availability editing (regression: closing a day must stay closed)
+
+    /// Open the availability editor from the dashboard quick action and wait for it to appear.
+    private func openAvailabilityEditor(file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertTrue(waitForAnyText(["QUICK ACTIONS"], timeout: 15), file: file, line: line)
+        app.staticTexts["Add availability"].tap()
+        XCTAssertTrue(app.navigationBars["Availability"].waitForExistence(timeout: 15),
+                      "Availability editor did not open", file: file, line: line)
+    }
+
+    /// Close one day. On first open the first open day is already expanded (its Close button is
+    /// visible); any other day must be expanded first by tapping its row. Tapping an
+    /// already-expanded day's row would collapse it, so only expand when the Close button is absent.
+    private func closeDay(_ day: String, file: StaticString = #filePath, line: UInt = #line) {
+        let close = app.buttons["availability.close.\(day)"]
+        if !close.isHittable {
+            let row = app.buttons["availability.day.\(day)"]
+            XCTAssertTrue(row.waitForExistence(timeout: timeout), "\(day) row missing", file: file, line: line)
+            _ = waitUntil({ row.isHittable })
+            row.tap()
+        }
+        XCTAssertTrue(close.waitForExistence(timeout: timeout), "Close button for \(day) missing", file: file, line: line)
+        _ = waitUntil({ close.isHittable })
+        close.tap()
+    }
+
+    /// The bug: closing a previously-open day and saving silently REOPENED it with the full time
+    /// slate on the next open — an instructor narrowing availability ended up with MORE open than
+    /// they set. Seeded Taylor is Mon{8,9,10}/Wed{9,10,11}/Fri{5PM,6PM} = "8 slots across 3 days".
+    /// Closing Mon must persist as Wed+Fri = "5 slots across 2 days"; before the fix it re-read as
+    /// "13 slots across 3 days" (Mon reopened with all 8). The Wed/Fri untouched days keep exactly
+    /// their own slots — no day ever expands to a slate it wasn't given.
+    func testClosingADayStaysClosedAcrossSaveAndReopen() {
+        launch(as: .instructor, seeded: true)
+        openAvailabilityEditor()
+        XCTAssertTrue(waitForAnyText(["8 slots across 3 days"], timeout: 15),
+                      "Seeded availability should start at 8 slots across 3 days")
+
+        closeDay("Mon")
+        app.buttons["availability.save"].tap()
+
+        // Reopen from the dashboard — persistence is the whole point, so re-read a fresh editor.
+        openAvailabilityEditor()
+        XCTAssertTrue(waitForAnyText(["5 slots across 2 days"], timeout: 15),
+                      "Closing Mon must persist as Wed+Fri (5 slots / 2 days), not reopen the full slate")
+        XCTAssertNil(anyStaticText(["13 slots across 3 days"]),
+                     "Mon must not silently reopen with the full time slate")
+
+        // Mon itself must read Closed, not 8 slots. The row button folds its child Texts into its
+        // label, so an open Mon would carry "slots"; a closed one carries "Closed".
+        let monLabel = app.buttons["availability.day.Mon"].label
+        XCTAssertTrue(monLabel.contains("Closed"), "Mon should read Closed after being closed, got: \(monLabel)")
+        XCTAssertFalse(monLabel.contains("slots"), "Mon must not show any slots after being closed, got: \(monLabel)")
+    }
+
+    /// An instructor must be able to close their whole week. Before the fix the circular
+    /// `available = bookableDays` re-derivation kept re-opening every token-less day from the
+    /// legacy full-slate fallback, so a fully-closed week was impossible.
+    func testClosingAllDaysLeavesNoBookableDays() {
+        launch(as: .instructor, seeded: true)
+        openAvailabilityEditor()
+        XCTAssertTrue(waitForAnyText(["8 slots across 3 days"], timeout: 15))
+
+        for day in ["Mon", "Wed", "Fri"] { closeDay(day) }
+        app.buttons["availability.save"].tap()
+
+        openAvailabilityEditor()
+        XCTAssertTrue(waitForAnyText(["Students can't book you until you open at least one day."], timeout: 15),
+                      "Closing every day must persist as a fully-closed week, not reopen from the fallback")
+    }
+
     func testEditProfileQuickActionOpensEditor() {
         launch(as: .instructor)
         XCTAssertTrue(waitForAnyText(["QUICK ACTIONS"], timeout: 15))
