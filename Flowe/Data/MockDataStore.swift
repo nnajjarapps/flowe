@@ -36,6 +36,10 @@ final class MockDataStore {
     /// Suppresses public-catalog network calls (previews + UI tests).
     private let isPreview: Bool
 
+    /// TEMPORARY DIAGNOSTIC: the actual CloudKit reason the last account-deletion attempt failed,
+    /// shown in the delete error alert. Remove once deletion is confirmed working on device.
+    private(set) var lastDeleteFailure: String?
+
     /// The shipping app starts EMPTY — no mock data is seeded into the (CloudKit-synced) store.
     /// Sample data is only loaded for SwiftUI previews and UI tests (`seed: true`).
     /// - Parameters:
@@ -796,7 +800,10 @@ final class MockDataStore {
     /// account is exactly what Guideline 5.1.1(v) is meant to prevent.
     func deleteAccount() async -> Bool {
         if !isPreview, let me = currentUserID {
-            guard await deletionService.deleteAllRecords(ownerID: me) else { return false }
+            guard await deletionService.deleteAllRecords(ownerID: me) else {
+                lastDeleteFailure = deletionService.lastFailureReason
+                return false
+            }
         }
         Self.deleteAll(context)
         currentUserID = nil
