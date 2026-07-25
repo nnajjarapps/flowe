@@ -1,0 +1,194 @@
+DEFINE SCHEMA
+
+/*
+ * Flowe public-database schema — generated from CLOUDKIT-DEPLOYMENT.md.
+ *
+ * Import with cktool (see the deploy steps the assistant provided). ALWAYS
+ * `validate-schema` against your container before importing, and import to
+ * `development` first, verify, then `production`.
+ *
+ * TWO THINGS THIS FILE MAY NOT EXPRESS — verify in the CloudKit Console after import:
+ *   1. CommunityPost needs its RECORD TYPE recordName index set QUERYABLE (the feed
+ *      query is a TRUEPREDICATE). If the feed returns nothing, this is why.
+ *   2. "Subscriptions permitted" on SessionBooking, SessionDecision, ChatMessage,
+ *      SessionReview, CommunityComment (the five push types). Enable per record type.
+ *
+ * Security: default is _world read / _creator write. ContentReport is the ONE
+ * exception — no world read, so a report can't reveal who filed it.
+ */
+
+RECORD TYPE InstructorListing (
+    name            STRING,
+    city            STRING,
+    bio             STRING,
+    price           INT64,
+    yearsExp        INT64,
+    rating          DOUBLE,
+    reviews         INT64,
+    cert            STRING,
+    img             STRING,
+    photo           ASSET,
+    certPhoto       ASSET,
+    latitude        DOUBLE,
+    longitude       DOUBLE,
+    specialties     LIST<STRING>,
+    sessionTypes    LIST<STRING>,
+    available       LIST<STRING>,
+    hours           LIST<STRING>,
+    paymentMethods  LIST<STRING>,
+    visibility      INT64 QUERYABLE SORTABLE,
+    updatedAt       TIMESTAMP QUERYABLE,
+    GRANT WRITE TO "_creator",
+    GRANT CREATE TO "_icloud",
+    GRANT READ TO "_world"
+);
+
+RECORD TYPE SessionBooking (
+    instructorID    STRING QUERYABLE,
+    studentID       STRING QUERYABLE,
+    studentName     STRING,
+    date            STRING,
+    time            STRING,
+    type            STRING,
+    duration        STRING,
+    cancelled       INT64,
+    createdAt       TIMESTAMP SORTABLE,
+    GRANT WRITE TO "_creator",
+    GRANT CREATE TO "_icloud",
+    GRANT READ TO "_world"
+);
+
+RECORD TYPE SessionDecision (
+    bookingID       STRING QUERYABLE,
+    studentID       STRING QUERYABLE,
+    confirmed       INT64 QUERYABLE,
+    respondedAt     TIMESTAMP,
+    GRANT WRITE TO "_creator",
+    GRANT CREATE TO "_icloud",
+    GRANT READ TO "_world"
+);
+
+RECORD TYPE ChatMessage (
+    conversationID  STRING QUERYABLE,
+    senderID        STRING QUERYABLE,
+    recipientID     STRING QUERYABLE,
+    senderName      STRING,
+    recipientName   STRING,
+    text            STRING,
+    sentAt          TIMESTAMP QUERYABLE SORTABLE,
+    GRANT WRITE TO "_creator",
+    GRANT CREATE TO "_icloud",
+    GRANT READ TO "_world"
+);
+
+RECORD TYPE SessionReview (
+    bookingID       STRING,
+    instructorID    STRING QUERYABLE,
+    studentID       STRING QUERYABLE,
+    studentName     STRING,
+    rating          INT64,
+    text            STRING,
+    createdAt       TIMESTAMP QUERYABLE SORTABLE,
+    GRANT WRITE TO "_creator",
+    GRANT CREATE TO "_icloud",
+    GRANT READ TO "_world"
+);
+
+RECORD TYPE CommunityPost (
+    authorID        STRING QUERYABLE,
+    authorName      STRING,
+    type            STRING,
+    instructorName  STRING,
+    text            STRING,
+    image           ASSET,
+    hasImage        INT64,
+    createdAt       TIMESTAMP QUERYABLE SORTABLE,
+    GRANT WRITE TO "_creator",
+    GRANT CREATE TO "_icloud",
+    GRANT READ TO "_world"
+);
+
+RECORD TYPE CommunityLike (
+    postID          STRING QUERYABLE,
+    authorID        STRING QUERYABLE,
+    createdAt       TIMESTAMP,
+    GRANT WRITE TO "_creator",
+    GRANT CREATE TO "_icloud",
+    GRANT READ TO "_world"
+);
+
+RECORD TYPE CommunityComment (
+    postID          STRING QUERYABLE,
+    authorID        STRING QUERYABLE,
+    replyTargetID   STRING QUERYABLE,
+    authorName      STRING,
+    text            STRING,
+    createdAt       TIMESTAMP QUERYABLE SORTABLE,
+    GRANT WRITE TO "_creator",
+    GRANT CREATE TO "_icloud",
+    GRANT READ TO "_world"
+);
+
+RECORD TYPE CommunityEvent (
+    organizerID     STRING QUERYABLE,
+    organizerName   STRING,
+    title           STRING,
+    about           STRING,
+    location        STRING,
+    startsAt        TIMESTAMP QUERYABLE SORTABLE,
+    durationMinutes INT64,
+    capacity        INT64,
+    price           INT64,
+    cancelled       INT64,
+    highlight       ASSET,
+    hasHighlight    INT64,
+    createdAt       TIMESTAMP,
+    updatedAt       TIMESTAMP,
+    GRANT WRITE TO "_creator",
+    GRANT CREATE TO "_icloud",
+    GRANT READ TO "_world"
+);
+
+RECORD TYPE EventRegistration (
+    eventID         STRING QUERYABLE,
+    studentID       STRING QUERYABLE,
+    studentName     STRING,
+    eventTitle      STRING,
+    joinTargetID    STRING,
+    createdAt       TIMESTAMP,
+    GRANT WRITE TO "_creator",
+    GRANT CREATE TO "_icloud",
+    GRANT READ TO "_world"
+);
+
+RECORD TYPE LessonType (
+    ownerID         STRING QUERYABLE,
+    name            STRING,
+    details         STRING,
+    durationMinutes INT64,
+    capacity        INT64,
+    price           INT64,
+    order           INT64,
+    highlight       ASSET,
+    hasHighlight    INT64,
+    createdAt       TIMESTAMP,
+    updatedAt       TIMESTAMP,
+    GRANT WRITE TO "_creator",
+    GRANT CREATE TO "_icloud",
+    GRANT READ TO "_world"
+);
+
+/* ContentReport: creator-only. NO world read — a report must not expose its reporter. */
+RECORD TYPE ContentReport (
+    reportedID      STRING QUERYABLE,
+    reportedName    STRING,
+    contentType     STRING QUERYABLE,
+    contentID       STRING,
+    reason          STRING,
+    details         STRING,
+    snapshot        STRING,
+    reporterID      STRING,
+    createdAt       TIMESTAMP QUERYABLE SORTABLE,
+    GRANT WRITE TO "_creator",
+    GRANT CREATE TO "_icloud"
+);
