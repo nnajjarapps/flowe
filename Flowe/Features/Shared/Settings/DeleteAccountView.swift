@@ -81,11 +81,8 @@ struct DeleteAccountView: View {
             .alert("Couldn't delete your account", isPresented: $failed) {
                 Button("OK", role: .cancel) {}
             } message: {
-                // TEMPORARY DIAGNOSTIC: append the real CloudKit cause when we have one, so a
-                // real-device failure reports what actually threw instead of the generic message.
                 Text("Your account is unchanged. Check your connection and make sure you're "
-                     + "signed in to iCloud, then try again."
-                     + (data.lastDeleteFailure.map { "\n\nDetails: \($0)" } ?? ""))
+                     + "signed in to iCloud, then try again.")
             }
         }
     }

@@ -21,19 +21,6 @@ final class AccountDeletionService {
     /// Page size for the id sweep. Completeness comes from following the cursor, not from this.
     private static let pageSize = 400
 
-    /// TEMPORARY DIAGNOSTIC: the first failure that aborted the last sweep, surfaced in the delete
-    /// error alert so a real-device failure reports its actual CloudKit cause instead of the generic
-    /// "check your connection" message. Remove once account deletion is confirmed working.
-    private(set) var lastFailureReason: String?
-
-    /// Compact, human-readable cause — prefers CloudKit's server-side reason (e.g. "Field 'authorID'
-    /// is not marked queryable"), which is where the actionable detail lives.
-    private static func describe(_ error: Error) -> String {
-        guard let ck = error as? CKError else { return error.localizedDescription }
-        let server = ck.errorUserInfo["ServerErrorDescription"] as? String
-        return "CKError \(ck.errorCode): \(server ?? ck.localizedDescription)"
-    }
-
     #if CLOUDKIT_ENABLED
     private let database = CKContainer(identifier: FloweModelContainer.cloudKitContainerID).publicCloudDatabase
     #endif
@@ -44,7 +31,6 @@ final class AccountDeletionService {
     /// the user out while their records stay readable in the public database.
     func deleteAllRecords(ownerID: String) async -> Bool {
         #if CLOUDKIT_ENABLED
-        lastFailureReason = nil
         var ids: [CKRecord.ID] = []
 
         // Messages I wrote. Ones written *to* me belong to their sender and cannot be removed.
@@ -176,7 +162,6 @@ final class AccountDeletionService {
             // likes, events — which is most accounts.)
             return []
         } catch {
-            lastFailureReason = "query \(type) → \(Self.describe(error))"
             return nil
         }
     }
@@ -189,13 +174,9 @@ final class AccountDeletionService {
             do {
                 let (_, deletes) = try await database.modifyRecords(saving: [], deleting: chunk)
                 for result in deletes.values {
-                    if case .failure(let error) = result, !Self.isAlreadyGone(error) {
-                        lastFailureReason = "delete → \(Self.describe(error))"
-                        return false
-                    }
+                    if case .failure(let error) = result, !Self.isAlreadyGone(error) { return false }
                 }
             } catch {
-                lastFailureReason = "delete → \(Self.describe(error))"
                 return false
             }
         }
