@@ -9,6 +9,7 @@ import PhotosUI
 struct ComposeEventSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(MockDataStore.self) private var data
+    @Environment(AppSettings.self) private var settings
 
     private let editing: CommunityEvent?
 
@@ -108,7 +109,7 @@ struct ComposeEventSheet: View {
                         .tint(Color.flowePinkDeep)
                     if !isFree {
                         HStack(spacing: 4) {
-                            Text(verbatim: "$")
+                            Text(verbatim: settings.currencySymbol)
                                 .font(FloweFont.serif(18, .medium))
                                 .foregroundStyle(Color.floweInk)
                             TextField("40", text: $priceText)

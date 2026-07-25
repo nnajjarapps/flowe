@@ -104,7 +104,7 @@ struct ComposeLessonTypeSheet: View {
                         .tint(Color.flowePinkDeep)
                     if !isFree {
                         HStack(spacing: 4) {
-                            Text(verbatim: "$")
+                            Text(verbatim: settings.currencySymbol)
                                 .font(FloweFont.serif(18, .medium))
                                 .foregroundStyle(Color.floweInk)
                             TextField("40", text: $priceText)

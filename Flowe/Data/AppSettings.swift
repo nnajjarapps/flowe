@@ -100,4 +100,13 @@ final class AppSettings {
             .locale(Locale(identifier: "en_US"))
         )
     }
+
+    /// The currency symbol to prefix a price INPUT field with, so an instructor typing a rate sees
+    /// the same symbol students see on the price. Derived from `money(_:)`'s own output — the symbol
+    /// is everything before the first digit — so the entry prefix can never drift from the display,
+    /// and it tracks the selected currency instead of a hardcoded "$". `money` always formats in a
+    /// fixed Western locale, so the symbol is always the leading run.
+    var currencySymbol: String {
+        String(money(0).prefix { !$0.isNumber }).trimmingCharacters(in: .whitespaces)
+    }
 }

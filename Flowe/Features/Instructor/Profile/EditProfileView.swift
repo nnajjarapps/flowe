@@ -93,7 +93,7 @@ struct EditProfileView: View {
 
                     field(title: "RATE PER SESSION") {
                         HStack(spacing: 4) {
-                            Text("$").font(FloweFont.serif(18, .medium)).foregroundStyle(Color.floweInk)
+                            Text(verbatim: settings.currencySymbol).font(FloweFont.serif(18, .medium)).foregroundStyle(Color.floweInk)
                             TextField("95", text: $priceText)
                                 .font(FloweFont.serif(18, .medium))
                                 .foregroundStyle(Color.floweInk)
