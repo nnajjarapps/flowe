@@ -34,7 +34,7 @@ final class InstructorProfileEditingUITests: FloweUITestCase {
     func testEditorOffersEveryListingField() {
         openEditor()
         for label in ["NAME", "CITY", "BIO", "RATE PER SESSION",
-                      "YEARS OF EXPERIENCE", "CERTIFICATION", "SPECIALTIES", "SESSION TYPES"] {
+                      "YEARS OF EXPERIENCE", "CERTIFICATION", "SPECIALTIES", "LESSON TYPES"] {
             XCTAssertTrue(scrollToText([label]), "Editor is missing the \(label) field")
         }
     }

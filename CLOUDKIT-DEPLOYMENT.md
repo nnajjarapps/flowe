@@ -65,6 +65,7 @@ carried.
 | `CommunityComment` | either | server-minted | ✅ |
 | `CommunityEvent` | instructor | `event-<localID>` | — |
 | `EventRegistration` | student | `reg-<eventID>-<studentID>` | — |
+| `LessonType` | instructor | `lessontype-<localID>` | — |
 | `ContentReport` | either | server-minted | — |
 
 Type key: **Bool → Int(64)** (CKRecord has no boolean; `0`/`1`). **String List** = the CKRecord list
@@ -284,6 +285,38 @@ No push (student-side event notifications were deliberately not built).
 > subscription consumes it yet** — an "someone registered for your event" push is not built. Do
 > **not** enable Subscriptions permitted here, and do not index `joinTargetID`, until that push
 > ships. (This corrects an aspirational note in an earlier doc.)
+
+---
+
+## 10a. `LessonType`
+
+An instructor's self-authored lesson offer — the rich replacement for the old flat `sessionTypes`
+string list. `recordName == lessontype-<localID>` (client-minted UUID), so a re-publish upserts one
+record rather than forking a type. One per offer the instructor adds; read by every student viewing
+their profile.
+
+| Field | Type | Index |
+|---|---|---|
+| `ownerID` | String | **Queryable** |
+| `name` | String | — |
+| `details` | String | — |
+| `durationMinutes` | Int(64) | — |
+| `capacity` | Int(64) | — |
+| `price` | Int(64) | — |
+| `order` | Int(64) | — |
+| `highlight` | Asset | — |
+| `hasHighlight` | Int(64) | — |
+| `createdAt` | Date/Time | — |
+| `updatedAt` | Date/Time | — |
+
+`ownerID` Queryable is the only index needed — every read is `ownerID == %@` (an instructor's own
+types, and a student fetching one instructor's). The list query names its metadata keys so it never
+downloads the `highlight` asset; photos come from a bounded second pass keyed by `hasHighlight`, the
+same pipeline as `CommunityEvent`/`CommunityPost`. `capacity` is a displayed **group size**, not a
+fillable count — there is no registration record and no attendee query. Deletion sweep: an instructor's
+own `LessonType` records go with their account (`ownerID == me`).
+
+Default security role: `_world` read, `_creator` write. No subscription.
 
 ---
 

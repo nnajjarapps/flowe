@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import UIKit
 
 /// Seeds the SwiftData store from the bundled `MockData/*.json` on first launch.
 /// Idempotent: each entity is only seeded when its table is empty (no `@Attribute(.unique)` exists
@@ -62,10 +63,35 @@ enum SeedLoader {
         // The instructor's own listing — priced, so earnings are non-zero. Hidden from the student
         // feed (visibility .none) so seeded students don't see a listing named after themselves.
         let meId = (existing.map(\.legacyId).max() ?? 0) + 1
+        // Rich, instructor-authored lesson types for the owner — the sample that demonstrates the
+        // feature in previews and UI tests. Varied on purpose: a 1-on-1 with a highlight photo, a duet
+        // and a larger group without one, different durations and prices, one free. The listing's flat
+        // `sessionTypes` name cache is DERIVED from these (never hardcoded), exactly as a real edit
+        // republishes it — so the resolver's rich path and its name-only fallback both have real data.
+        struct SeedType { let name, details: String; let duration, capacity: Int; let price: Int?; let photo: Bool }
+        let seedTypes: [SeedType] = [
+            SeedType(name: "Private Reformer", details: "A focused one-to-one on the reformer, fully tailored to your goals and pace.",
+                     duration: 55, capacity: 1, price: 70, photo: true),
+            SeedType(name: "Duet", details: "Share the studio with a partner — two students, one instructor, same attention.",
+                     duration: 50, capacity: 2, price: 55, photo: false),
+            SeedType(name: "Group Mat", details: "A lively mat class for up to eight. All levels welcome.",
+                     duration: 45, capacity: 8, price: 25, photo: false),
+        ]
+        for (i, t) in seedTypes.enumerated() {
+            let type = LessonType(
+                legacyId: i + 1,
+                remoteID: "seed-lessontype-\(i)",   // treated as delivered, so no upload is attempted
+                ownerID: owner, name: t.name, details: t.details,
+                durationMinutes: t.duration, capacity: t.capacity, price: t.price, order: i,
+                highlight: t.photo ? seedHighlight() : nil, hasHighlight: t.photo
+            )
+            context.insert(type)
+        }
+
         let me = Instructor(
             legacyId: meId, name: "Taylor Brooks", city: "Lisbon",
             price: 70, yearsExp: 6, specialties: ["Reformer", "Mat"],
-            sessionTypes: ["Private", "Duet"], cert: "BASI Comprehensive",
+            sessionTypes: seedTypes.map(\.name), cert: "BASI Comprehensive",
             available: ["Mon", "Wed", "Fri"], bio: "Reformer-focused sessions for every level.",
             order: meId, ownerID: owner
         )
@@ -118,6 +144,25 @@ enum SeedLoader {
                 createdAt: Date(timeIntervalSinceNow: -Double(r.booking + 1) * 86_400)
             ))
         }
+    }
+
+    /// A generated highlight image for a seeded lesson type, so the photo band renders in previews and
+    /// tests without shipping a bundled asset or reaching the network. A soft pink gradient, encoded as
+    /// JPEG bytes — the same `Data` shape a real picked-and-downscaled photo produces.
+    @MainActor
+    private static func seedHighlight() -> Data? {
+        let size = CGSize(width: 640, height: 360)   // 16:9, matching the card's photo band
+        let renderer = UIGraphicsImageRenderer(size: size)
+        let image = renderer.image { ctx in
+            let cg = ctx.cgContext
+            let colors = [UIColor(red: 0.91, green: 0.47, blue: 0.60, alpha: 1).cgColor,   // flowePink
+                          UIColor(red: 0.83, green: 0.35, blue: 0.50, alpha: 1).cgColor]   // flowePinkDeep
+            guard let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
+                                            colors: colors as CFArray, locations: [0, 1]) else { return }
+            cg.drawLinearGradient(gradient, start: .zero,
+                                  end: CGPoint(x: size.width, y: size.height), options: [])
+        }
+        return image.jpegData(compressionQuality: 0.8)
     }
 
     /// Insert seed rows for `Model` only if none exist yet.

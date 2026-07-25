@@ -726,6 +726,79 @@ teach. Add the field before relying on availability across devices.
 
 ---
 
+# Lesson types
+
+An instructor's lesson types used to be a flat `Instructor.sessionTypes: [String]` chosen from a
+fixed four-item menu. They are now `LessonType` — rich objects the instructor **authors themselves**:
+a free-form name, an optional highlight photo, a description, a duration, a group-size capacity, and
+an optional price. There is no predefined menu; a type is an arbitrary row the instructor adds, edits,
+reorders and deletes, exactly the way they author a `CommunityEvent`.
+
+## Why a separate record type
+
+A `LessonType` carries a photo, and a `CKAsset` cannot ride the listing's flat `sessionTypes` String
+List. So each type is its own public CKRecord (`recordType "LessonType"`, `recordName
+lessontype-<localID>` from a client-minted UUID → deterministic upsert), `_creator`-write keyed by
+`ownerID` — the same shape as `CommunityEvent`. The photo follows the shared pipeline: excluded from
+the list query's `desiredKeys`, fetched in a bounded second pass keyed by a `hasHighlight` flag, so
+browsing an instructor never downloads photos for types the student won't look at.
+
+## Capacity is group size, not fillable spots
+
+A `LessonType.capacity` is the **maximum group size** — a static, descriptive attribute ("1-on-1",
+"Up to 10") — **not** a live "spots left / fully booked" gauge. A Flowe booking is a 1:1 request, not
+a scheduled shared instance that a type could fill, so there is no registration record, no attendee
+query, and no `EventStatus`/`spotsLeft` analog. A spots-remaining number would be state nobody
+counts — the same fabricated-data trap the rating ("New", never 0.0) and the events design already
+refuse. The composer's own footer tells the instructor this outright.
+
+## Migration is mandatory, and lossless
+
+Existing listings, seed data, and past bookings all predate rich types, so both directions are
+covered:
+
+- **Reading** — `MockDataStore.lessonTypes(for:)` is a resolver: it returns the instructor's rich
+  `LessonType` rows when they exist, and otherwise **synthesises** minimal ones from the listing's
+  legacy `sessionTypes` strings. So a student viewing an instructor who hasn't migrated still sees
+  their offers rendered as cards, just without photos/details.
+- **Writing** — `migrateLessonTypesIfNeeded()` (run when the instructor opens Edit Profile) converts
+  their own flat strings into editable `LessonType` rows, order preserved, idempotently (it no-ops once
+  rich rows exist). `Booking.type` stays a plain string key resolved by name, so past bookings keep
+  rendering.
+
+## CloudKit Dashboard setup
+
+### `LessonType`
+
+| Field | Type | Index |
+|---|---|---|
+| `ownerID` | String | **Queryable** |
+| `name` | String | — |
+| `details` | String | — |
+| `durationMinutes` | Int(64) | — |
+| `capacity` | Int(64) | — |
+| `price` | Int(64) | — |
+| `order` | Int(64) | — |
+| `highlight` | Asset | — |
+| `hasHighlight` | Int(64) | — |
+| `createdAt` | Date/Time | — |
+| `updatedAt` | Date/Time | — |
+
+Default security role: `_world` read, `_creator` write. `ownerID` is the only index — every read is
+`ownerID == %@`. No subscription. Until this is deployed, lesson types don't cross devices and a
+student sees only the legacy-string fallback.
+
+## Known limitations
+
+- **Price entry hardcodes "$".** The composer's price field prefixes a literal `$` while the
+  instructor types (shared with `ComposeEventSheet`), so a non-dollar instructor sees the wrong symbol
+  during entry — though the value renders correctly through `settings.money(_:)` everywhere it is
+  displayed. Needs a shared currency-symbol helper, fixed in both composers at once.
+- **No per-type availability or scheduling.** Capacity is descriptive; making group sessions actually
+  fill would require scheduled shared instances (a separate, larger build).
+
+---
+
 # Location
 
 "Near you" used to mean string equality on `Instructor.city`, so "Tel Aviv" and "Tel-Aviv" were

@@ -345,6 +345,52 @@ Follow-ups (deliberately out of scope):
       rating too; same stored-field unreliability the audit flagged.
 - [ ] Delete `BookingSheet.stepIntro` and renumber the steps once nothing else depends on it.
 
+## Phase 16 — Rich, instructor-authored lesson types  ✅
+Session types were a flat `Instructor.sessionTypes: [String]` picked from a fixed
+`["Private","Duet","Group","Online"]` chip menu. They are now `LessonType` — a rich object the
+instructor **authors from scratch** (free-form name, not a predefined menu), each with an optional
+highlight photo, a description, a duration, a capacity, and an optional price.
+
+- [x] **`LessonType` + `LessonTypeService`** — its own public CKRecord (recordName
+      `lessontype-<localID>`, deterministic upsert), `_world` read / `_creator` write keyed by
+      `ownerID`, the photo a `CKAsset` excluded from the list query and fetched in a bounded second pass
+      via `hasHighlight` — the `CommunityEvent` pipeline exactly. `@Model` cached in `UserData`.
+- [x] **Fully custom, no fixed menu** — EditProfileView's chip grid is replaced by an "Add lesson type"
+      flow with reorderable/editable/deletable rows and a `ComposeLessonTypeSheet` (name, details,
+      duration, group size, price, PhotosPicker). `typeIcon(_:)`'s hardcoded Private/Duet/Online → SF
+      Symbol map is gone; a custom name has no predefined icon. Zero types is a real empty state.
+- [x] **Capacity is displayed GROUP SIZE, never fillable spots** — "1-on-1" / "Up to N spots" / omitted
+      at 0. A Flowe booking is a 1:1 request, not a shared instance a type could fill, so there is no
+      `spotsLeft`/`attendees`/status analog — a spots-remaining number would be state nobody counted.
+      The composer's own footer says so.
+- [x] **Back-compat / migration** — a `lessonTypes(for:)` resolver renders rich rows when they exist
+      and falls back to synthesizing from a listing's legacy `[String] sessionTypes`, so a not-yet-
+      migrated instructor still shows types to students. `migrateLessonTypesIfNeeded()` (run when the
+      instructor opens Edit Profile) converts their own flat strings into editable `LessonType` rows,
+      order preserved, idempotently. `Booking.type` stays a string key; past bookings still render.
+- [x] **Student surfaces** — the profile OFFERS section renders rich `LessonTypeCard`s (photo, group
+      size, duration, price); the booking type-picker shows the same. Matches EventCardView / the
+      profile's bar.
+- [x] **Seed + tests** — seeded instructors get varied sample types (with/without photo, different
+      capacities); `LessonTypesUITests` covers authoring a type, the compose sheet's rich fields + the
+      honest capacity footer, the student OFFERS rendering, and the legacy-string migration path.
+- Built by a multi-agent workflow (scout → design → judge → data → instructor UI → student UI → wire);
+  a mid-run session restart cut its build/review/doc phases, finished by hand — verified the full
+  build + tests, the migration and capacity-honesty paths by reading, and the screen in the simulator.
+
+      ⚠️ CloudKit Dashboard: create `LessonType` (index `ownerID` **Queryable**), default `_world` read
+      / `_creator` write, then **Deploy Schema Changes to Production** — until then lesson types don't
+      cross devices (a student sees only the legacy-string fallback from the listing). Full field table
+      in `CLOUDKIT-DEPLOYMENT.md § 10a` and `BOOKING-SYSTEM.md § Lesson types`.
+
+Follow-ups (deliberately out of scope):
+- [ ] The price input in **both** compose sheets (event + lesson type) hardcodes a "$" prefix while the
+      instructor types, so a ₪/€ instructor sees "$" during entry though it renders correctly
+      everywhere else. Needs a shared currency-symbol helper (`AppSettings` has `money(_:)` but no bare
+      symbol) and should be fixed in both places at once.
+- [ ] No per-type availability or scheduling; capacity stays descriptive (fillable group sessions would
+      be the separate, larger "scheduled instances" build).
+
 ## Phase 12 — Messaging (end-to-end)  ✅
 Messaging was a UI shell: `MessageListView.inbox` was a hardcoded empty array nothing wrote to, and
 `ConversationView.send()` appended to a local `@State` array, so messages vanished on dismiss and

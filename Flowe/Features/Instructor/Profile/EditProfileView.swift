@@ -10,11 +10,11 @@ import UIKit
 /// set rather than the three the first pass shipped with.
 struct EditProfileView: View {
     @Environment(MockDataStore.self) private var data
+    @Environment(AppSettings.self) private var settings
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
 
     private let allSpecialties = ["Mat", "Reformer", "Barre", "Tower", "Prenatal", "Rehab"]
-    private let allSessionTypes = ["Private", "Duet", "Group", "Online"]
 
     @State private var name = ""
     @State private var city = ""
@@ -23,8 +23,12 @@ struct EditProfileView: View {
     @State private var yearsText = ""
     @State private var cert = ""
     @State private var specialties: Set<String> = []
-    @State private var sessionTypes: Set<String> = []
     @State private var paymentMethods: Set<String> = []
+
+    /// Presents the compose sheet: `nil` isn't "hidden" — `showAddType` drives the create path, while a
+    /// non-nil `editingType` drives the edit path on a live `LessonType` row.
+    @State private var showAddType = false
+    @State private var editingType: LessonType?
 
     @State private var photo: Data?
     @State private var pickerItem: PhotosPickerItem?
@@ -126,8 +130,8 @@ struct EditProfileView: View {
                         chipGrid(allSpecialties, selection: $specialties)
                     }
 
-                    field(title: "SESSION TYPES") {
-                        chipGrid(allSessionTypes, selection: $sessionTypes)
+                    field(title: "LESSON TYPES") {
+                        lessonTypesField
                     }
 
                     field(title: "HOW YOU TAKE PAYMENT") {
@@ -161,6 +165,11 @@ struct EditProfileView: View {
         .onAppear(perform: load)
         .task(id: pickerItem) { await loadPickedPhoto() }
         .task(id: certPickerItem) { await loadPickedCert() }
+        // A legacy instructor's flat chips become editable rich rows the first time they open the
+        // editor — a no-op once they own any, and only ever for the signed-in owner.
+        .onAppear { data.migrateLessonTypesIfNeeded() }
+        .sheet(isPresented: $showAddType) { ComposeLessonTypeSheet() }
+        .sheet(item: $editingType) { ComposeLessonTypeSheet(editing: $0) }
         .alert("Check your profile",
                isPresented: .init(get: { filterMessage != nil },
                                   set: { if !$0 { filterMessage = nil } })) {
@@ -462,6 +471,131 @@ struct EditProfileView: View {
         .accessibilityIdentifier("editProfile.payment.\(id)")
     }
 
+    // MARK: - Lesson types
+
+    /// The instructor's rich, self-authored lesson types, replacing the fixed
+    /// `["Private","Duet","Group","Online"]` chip menu. Each is a reorderable, editable, deletable row;
+    /// zero rows is an honest empty state prompting the first one, never a backfilled default.
+    ///
+    /// Read from `ownedLessonTypes` (the live `LessonType` rows) rather than the resolver, because these
+    /// rows are what the compose sheet edits and swipe/delete removes — the resolver returns flattened
+    /// value copies with no persistent identity to mutate.
+    @ViewBuilder
+    private var lessonTypesField: some View {
+        let rows = data.currentInstructor.map { data.ownedLessonTypes(for: $0) } ?? []
+        VStack(alignment: .leading, spacing: 10) {
+            if rows.isEmpty {
+                Text("Add your first lesson type — a class you offer, in your own words.")
+                    .font(FloweFont.sans(11))
+                    .foregroundStyle(Color.floweMuted)
+            } else {
+                ForEach(Array(rows.enumerated()), id: \.element.legacyId) { index, type in
+                    lessonTypeRow(type, index: index, count: rows.count)
+                }
+            }
+
+            Button {
+                showAddType = true
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "plus").font(.system(size: 11, weight: .semibold))
+                    Text("Add lesson type").font(FloweFont.sans(13, .medium))
+                }
+                .foregroundStyle(Color.flowePinkDeep)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("editProfile.addLessonType")
+        }
+        // No container-level identifier here: a plain VStack forms no AX element of its own, so an
+        // identifier on it propagates down and shadows the specific ids on the leaf button and the
+        // empty-state text (they'd all report "editProfile.lessonTypes"). The rows and the add button
+        // carry their own ids; the group needs none.
+    }
+
+    /// One lesson-type row: optional thumbnail, name, a compact stated-only meta line, and trailing
+    /// reorder/delete controls. Tapping the row opens the compose sheet on that live row.
+    ///
+    /// Reorder is chevron buttons rather than `.onMove`/swipe-to-delete: those need a `List`, and this
+    /// editor is a `ScrollView` of custom sections, so the native list gestures aren't available here.
+    private func lessonTypeRow(_ type: LessonType, index: Int, count: Int) -> some View {
+        HStack(spacing: 12) {
+            // A compact row shows a real thumbnail or nothing — no gradient stand-in for a photo-less type.
+            if let bytes = type.highlight, let ui = UIImage(data: bytes) {
+                Image(uiImage: ui)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 44, height: 44)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                // The instructor's own words — shown verbatim, never localized.
+                Text(verbatim: type.name)
+                    .font(FloweFont.sans(14, .medium))
+                    .foregroundStyle(Color.floweInk)
+                if let meta = metaText(for: type) {
+                    meta.font(FloweFont.mono(10)).foregroundStyle(Color.floweMuted)
+                }
+            }
+
+            Spacer(minLength: 8)
+
+            HStack(spacing: 10) {
+                Button { moveLessonType(from: index, up: true) } label: {
+                    Image(systemName: "chevron.up").font(.system(size: 12, weight: .semibold))
+                }
+                .disabled(index == 0)
+
+                Button { moveLessonType(from: index, up: false) } label: {
+                    Image(systemName: "chevron.down").font(.system(size: 12, weight: .semibold))
+                }
+                .disabled(index == count - 1)
+
+                Button(role: .destructive) { data.deleteLessonType(type) } label: {
+                    Image(systemName: "trash").font(.system(size: 12))
+                }
+                .accessibilityIdentifier("lessonType.delete")
+            }
+            .buttonStyle(.plain)
+            .tint(Color.floweMuted)
+            .foregroundStyle(Color.floweMuted)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .boxed()
+        .contentShape(Rectangle())
+        .onTapGesture { editingType = type }
+        .accessibilityIdentifier("editProfile.lessonType.\(type.legacyId)")
+    }
+
+    /// A stated-only meta line — capacity, duration, price — built as separate `Text` runs joined by an
+    /// explicit "·" so it lays out correctly under RTL, with the count inflected. Each run appears only
+    /// when its field is stated (0/nil is "not stated"), matching the student card's rule.
+    private func metaText(for type: LessonType) -> Text? {
+        var parts: [Text] = []
+        if type.capacity == 1 {
+            parts.append(Text("1-on-1"))
+        } else if type.capacity >= 2 {
+            parts.append(Text("Up to ") + Text("^[\(type.capacity) spot](inflect: true)"))
+        }
+        if type.durationMinutes > 0 {
+            parts.append(Text("\(type.durationMinutes) min"))
+        }
+        if let price = type.price {
+            // A formatted currency string is data — verbatim, never a translation key. 0 is "Free".
+            parts.append(price == 0 ? Text("Free") : Text(verbatim: settings.money(price)))
+        }
+        guard let first = parts.first else { return nil }
+        return parts.dropFirst().reduce(first) { $0 + Text(verbatim: " · ") + $1 }
+    }
+
+    /// Move one row and republish its `order`. `move(fromOffsets:toOffset:)` reads the destination as an
+    /// index in the pre-removal array, so moving down is `index + 2`, not `index + 1`.
+    private func moveLessonType(from index: Int, up: Bool) {
+        let destination = up ? index - 1 : index + 2
+        data.reorderLessonTypes(from: IndexSet(integer: index), to: destination)
+    }
+
     // MARK: - Load / save
 
     private func load() {
@@ -473,7 +607,6 @@ struct EditProfileView: View {
         yearsText = me.yearsExp > 0 ? String(me.yearsExp) : ""
         cert = me.cert
         specialties = Set(me.specialties)
-        sessionTypes = Set(me.sessionTypes)
         paymentMethods = Set(PaymentMethod.known(me.paymentMethods))
         photo = me.photo
         certPhoto = me.certPhoto
@@ -499,7 +632,8 @@ struct EditProfileView: View {
         me.yearsExp = Int(yearsText) ?? 0
         // Filter through the canonical lists so stored order stays stable rather than set order.
         me.specialties = allSpecialties.filter { specialties.contains($0) }
-        me.sessionTypes = allSessionTypes.filter { sessionTypes.contains($0) }
+        // sessionTypes is no longer edited here — it is the denormalised name cache the store re-derives
+        // from the rich `LessonType` rows on every mutation, so this Save leaves it untouched.
         me.paymentMethods = PaymentMethod.all.filter { paymentMethods.contains($0) }
         me.photo = photo
         me.certPhoto = certPhoto

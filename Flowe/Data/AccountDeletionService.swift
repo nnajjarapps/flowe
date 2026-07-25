@@ -100,6 +100,13 @@ final class AccountDeletionService {
         ) else { return false }
         ids += myRegistrations
 
+        // Lesson types I authored — my public offer records, keyed by ownerID exactly like my events.
+        guard let myLessonTypes = await recordIDs(
+            ofType: LessonTypeService.recordType,
+            matching: NSPredicate(format: "ownerID == %@", ownerID)
+        ) else { return false }
+        ids += myLessonTypes
+
         // My instructor listing, whose recordName *is* the owner id. Absent for students.
         ids.append(CKRecord.ID(recordName: ownerID))
 

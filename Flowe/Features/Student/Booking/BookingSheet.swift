@@ -59,8 +59,15 @@ struct BookingSheet: View {
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
         .onAppear {
-            if type.isEmpty { type = instructor.sessionTypes.first ?? "" }
+            // Default to the first resolved (rich) type's name; fall back to the raw name cache so an
+            // un-upgraded remote instructor still preselects. Empty only when the instructor authored none.
+            if type.isEmpty {
+                type = data.lessonTypes(for: instructor).first?.name ?? instructor.sessionTypes.first ?? ""
+            }
         }
+        // The presenting profile already syncs types, but the fetch is idempotent — so a BookingSheet
+        // reached by any other path still populates the picker rather than showing only the name cache.
+        .task { await data.syncLessonTypes(for: instructor) }
         .sheet(isPresented: $showReport) {
             ReportSheet(
                 reportedID: instructor.ownerID ?? "",
@@ -457,16 +464,25 @@ struct BookingSheet: View {
                 .padding(.bottom, 8)
 
             HStack(spacing: 8) {
-                ForEach(instructor.sessionTypes, id: \.self) { t in
-                    let sel = type == t
-                    Button { type = t } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: typeIcon(t)).font(.system(size: 12))
-                            Text(t).font(FloweFont.sans(12))
+                // The rich resolver, not `instructor.sessionTypes`: each cell now shows the authored
+                // name plus a compact capacity/price subtitle. No per-type icon — a custom-named type
+                // has no predefined glyph. If the resolver is empty the row collapses and booking
+                // proceeds with an empty type (honest — the instructor authored none).
+                ForEach(Array(data.lessonTypes(for: instructor).enumerated()), id: \.element.id) { index, resolved in
+                    let sel = type == resolved.name
+                    Button { type = resolved.name } label: {
+                        VStack(spacing: 3) {
+                            Text(resolved.name)
+                                .font(FloweFont.sans(12))
+                                .lineLimit(1)
+                            if let subtitle = typeSubtitle(resolved) {
+                                subtitle.font(FloweFont.mono(9))
+                            }
                         }
                         .foregroundStyle(sel ? .white : Color.floweMuted)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
+                        .padding(.horizontal, 6)
                         .background {
                             if sel {
                                 RoundedRectangle(cornerRadius: 12).fill(FlowGradients.gradDark)
@@ -476,6 +492,7 @@ struct BookingSheet: View {
                             }
                         }
                     }
+                    .accessibilityIdentifier("booking.type.\(index)")
                 }
             }
             .padding(.bottom, 20)
@@ -494,12 +511,21 @@ struct BookingSheet: View {
         booked = true
     }
 
-    private func typeIcon(_ t: String) -> String {
-        switch t {
-        case "Online": return "video.fill"
-        case "Private": return "person.crop.circle.badge.checkmark"
-        default: return "person.2.fill"
+    /// A compact capacity · price subtitle for a picker cell, RTL-safe separate `Text` runs joined by a
+    /// bullet — present only when a field is stated, nil when the type is name-only (the cell then shows
+    /// just the name). Capacity is displayed group size, never a live availability count.
+    private func typeSubtitle(_ t: ResolvedLessonType) -> Text? {
+        var runs: [Text] = []
+        if t.capacity == 1 {
+            runs.append(Text("1-on-1"))
+        } else if t.capacity >= 2 {
+            runs.append(Text("Up to ") + Text("^[\(t.capacity) spot](inflect: true)"))
         }
+        if let price = t.price {
+            runs.append(price == 0 ? Text("Free") : Text(settings.money(price)))
+        }
+        guard let first = runs.first else { return nil }
+        return runs.dropFirst().reduce(first) { $0 + Text(verbatim: " · ") + $1 }
     }
 
     // MARK: - Step 3

@@ -19,6 +19,10 @@ final class MockDataStore {
     private(set) var blocked: [BlockedUser] = []
     private(set) var reviews: [Review] = []
     private(set) var events: [CommunityEvent] = []
+    /// Every cached lesson type — the owner's own rows plus any fetched for an instructor a student is
+    /// viewing. Kept as `@Model` rows (not `ResolvedLessonType`) because the editor mutates them and
+    /// the sync merges into them; views consume the flattened `lessonTypes(for:)` resolver instead.
+    private(set) var lessonTypes: [LessonType] = []
 
     private let catalog = CatalogService()
     private let bookingService = BookingService()
@@ -28,6 +32,7 @@ final class MockDataStore {
     private let reviewService = ReviewService()
     private let communityService = CommunityService()
     private let eventService = EventService()
+    private let lessonTypeService = LessonTypeService()
     /// Suppresses public-catalog network calls (previews + UI tests).
     private let isPreview: Bool
 
@@ -54,6 +59,7 @@ final class MockDataStore {
         try? context.delete(model: BlockedUser.self)
         try? context.delete(model: Review.self)
         try? context.delete(model: CommunityEvent.self)
+        try? context.delete(model: LessonType.self)
         try? context.save()
     }
 
@@ -85,6 +91,11 @@ final class MockDataStore {
         // relies on a local `order` for shared records.
         events      = (try? context.fetch(
             FetchDescriptor<CommunityEvent>(sortBy: [SortDescriptor(\.startsAt, order: .forward)])
+        )) ?? []
+        // By the instructor-controlled `order`, so the editor list and both student surfaces show the
+        // exact sequence the instructor arranged.
+        lessonTypes = (try? context.fetch(
+            FetchDescriptor<LessonType>(sortBy: [SortDescriptor(\.order, order: .forward)])
         )) ?? []
         applyCompletions()
     }
@@ -233,13 +244,19 @@ final class MockDataStore {
     func addBooking(instructor: Instructor, day: String, time: String, type: String) {
         let nextId = (bookings.map(\.legacyId).max() ?? 0) + 1
         let topOrder = (bookings.map(\.order).min() ?? 0) - 1   // smaller order sorts first
+        // Resolve the chosen type name to its authored lesson type: a stated duration wins, so a
+        // "90 min" reformer no longer collapses to the old Private/other 55-vs-50 guess. A migrated
+        // bare name (durationMinutes 0) or an unresolved past type falls back to that heuristic, so a
+        // booking always carries some duration.
+        let stated = ownedLessonTypes(for: instructor).first { $0.name == type }?.durationMinutes ?? 0
+        let duration = stated > 0 ? "\(stated) min" : (type == "Private" ? "55 min" : "50 min")
         let booking = Booking(
             legacyId: nextId,
             instructorId: instructor.legacyId,
             date: Self.formatDay(day),
             time: time,
             type: type,
-            duration: type == "Private" ? "55 min" : "50 min",
+            duration: duration,
             status: .pending,
             ownerID: currentUserID,
             order: topOrder,
@@ -1694,6 +1711,315 @@ final class MockDataStore {
         save()
     }
 
+    // MARK: - Lesson types
+
+    /// The signed-in instructor's own lesson-type rows, in display order — what the editor lists and
+    /// mutates. Read directly (not through the resolver) because the compose sheet edits a live
+    /// `LessonType` and swipe-to-delete removes one.
+    func ownedLessonTypes(for instructor: Instructor) -> [LessonType] {
+        guard let owner = instructor.ownerID else { return [] }
+        return lessonTypes.filter { $0.ownerID == owner }.sorted { $0.order < $1.order }
+    }
+
+    /// The single render currency both student surfaces consume. Owned rich rows when the instructor
+    /// has authored any; otherwise the denormalised `sessionTypes` name cache mapped to name-only
+    /// values — so an un-upgraded (or remote) instructor still shows plain-name offers, and a listing
+    /// with genuinely no types resolves to an honest empty array rather than a backfilled default.
+    func lessonTypes(for instructor: Instructor) -> [ResolvedLessonType] {
+        let owned = ownedLessonTypes(for: instructor)
+        if !owned.isEmpty {
+            return owned.map {
+                ResolvedLessonType(
+                    legacyId: $0.legacyId, name: $0.name, details: $0.details,
+                    durationMinutes: $0.durationMinutes, capacity: $0.capacity, price: $0.price,
+                    hasPhoto: $0.hasHighlight, photo: $0.highlight
+                )
+            }
+        }
+        return instructor.sessionTypes.map { ResolvedLessonType(name: $0) }
+    }
+
+    /// Create a lesson type for the signed-in instructor. Marked pending up front so a kill mid-upload
+    /// retries on the next sync rather than losing the row.
+    func addLessonType(name: String,
+                       details: String,
+                       durationMinutes: Int,
+                       capacity: Int,
+                       price: Int?,
+                       image: Data?) {
+        guard let owner = currentUserID, let me = currentInstructor else { return }
+        let owned = ownedLessonTypes(for: me)
+        let type = LessonType(
+            legacyId: (lessonTypes.map(\.legacyId).max() ?? 0) + 1,
+            ownerID: owner,
+            name: name,
+            details: details,
+            durationMinutes: durationMinutes,
+            capacity: capacity,
+            price: price,
+            order: (owned.map(\.order).max() ?? -1) + 1,
+            highlight: image,
+            // Set true only once the asset actually stages, in `uploadLessonType` — never from `image`.
+            hasHighlight: false,
+            pendingUpload: true
+        )
+        context.insert(type)
+        // Keep the denormalised name cache and the public listing current even if the instructor never
+        // taps profile Save — the resolver, InstructorCard and the catalog String List all read it.
+        rederiveSessionTypeCache(for: me)
+
+        guard !isPreview else {
+            type.pendingUpload = false
+            save()
+            publishMyListing()
+            return
+        }
+        save()
+        publishMyListing()
+        Task { await uploadLessonType(type) }
+    }
+
+    /// Edit a lesson type's fields. The deterministic `localID` makes the re-publish an upsert onto the
+    /// same record.
+    func updateLessonType(_ type: LessonType,
+                          name: String,
+                          details: String,
+                          durationMinutes: Int,
+                          capacity: Int,
+                          price: Int?,
+                          image: Data?) {
+        guard let me = currentInstructor, type.ownerID == me.ownerID else { return }
+        type.name = name
+        type.details = details
+        type.durationMinutes = durationMinutes
+        type.capacity = capacity
+        type.price = price
+        type.highlight = image
+        type.updatedAt = Date()
+        type.pendingUpload = true
+        rederiveSessionTypeCache(for: me)
+
+        guard !isPreview else {
+            type.pendingUpload = false
+            save()
+            publishMyListing()
+            return
+        }
+        save()
+        publishMyListing()
+        Task { await uploadLessonType(type) }
+    }
+
+    /// Delete the instructor's own lesson type.
+    func deleteLessonType(_ type: LessonType) {
+        guard let me = currentInstructor, type.ownerID == me.ownerID else { return }
+        guard !isPreview else {
+            deleteLessonTypeLocally(type)
+            rederiveSessionTypeCache(for: me)
+            save()
+            publishMyListing()
+            return
+        }
+
+        // A nil remoteID does NOT mean "never published" — it is also nil for the whole publish
+        // round-trip. Deleting locally in that window would drop the row while `uploadLessonType` is
+        // still suspended, the record would land anyway, and the next sync would re-insert a type the
+        // instructor was told had been removed. Mark it and let the flush withdraw it once an id exists.
+        type.pendingDelete = true
+        rederiveSessionTypeCache(for: me)
+        save()
+        publishMyListing()
+        guard let remoteID = type.remoteID else { return }
+        Task {
+            if await lessonTypeService.delete(id: remoteID) { deleteLessonTypeLocally(type) }
+            save()
+        }
+    }
+
+    /// Reorder the instructor's lesson types after a drag in the editor, rewriting each row's `order`
+    /// and republishing so students see the same sequence.
+    func reorderLessonTypes(from source: IndexSet, to destination: Int) {
+        guard let me = currentInstructor else { return }
+        var owned = ownedLessonTypes(for: me)
+        owned.move(fromOffsets: source, toOffset: destination)
+        for (index, type) in owned.enumerated() where type.order != index {
+            type.order = index
+            type.updatedAt = Date()
+            type.pendingUpload = true
+        }
+        rederiveSessionTypeCache(for: me)
+
+        guard !isPreview else {
+            for type in owned { type.pendingUpload = false }
+            save()
+            publishMyListing()
+            return
+        }
+        save()
+        publishMyListing()
+        Task { for type in owned where type.pendingUpload { await uploadLessonType(type) } }
+    }
+
+    /// Recompute `Instructor.sessionTypes` from the owned rows, in display order. The one place the
+    /// name cache is derived — never by a view — so the catalog String List, the resolver fallback and
+    /// `InstructorCard` all stay consistent with the rich rows. Rows queued for deletion are excluded.
+    private func rederiveSessionTypeCache(for instructor: Instructor) {
+        instructor.sessionTypes = ownedLessonTypes(for: instructor)
+            .filter { !$0.pendingDelete }
+            .map(\.name)
+    }
+
+    /// One-time upgrade for the signed-in owner: materialise a minimal `LessonType` per existing
+    /// `sessionTypes` name, preserving order, so a legacy instructor's flat chips become editable rich
+    /// rows the first time they open the editor. Only ever runs for the signed-in owner (whose
+    /// credential can write the records) and only when they have names but no rows yet.
+    func migrateLessonTypesIfNeeded() {
+        guard let me = currentInstructor, let owner = me.ownerID else { return }
+        guard ownedLessonTypes(for: me).isEmpty, !me.sessionTypes.isEmpty else { return }
+
+        var nextId = lessonTypes.map(\.legacyId).max() ?? 0
+        var created: [LessonType] = []
+        for (index, name) in me.sessionTypes.enumerated() {
+            nextId += 1
+            let type = LessonType(
+                legacyId: nextId, ownerID: owner, name: name,
+                order: index, pendingUpload: !isPreview
+            )
+            context.insert(type)
+            created.append(type)
+        }
+        save()
+        guard !isPreview else {
+            for type in created { type.pendingUpload = false }
+            save()
+            return
+        }
+        Task { for type in created { await uploadLessonType(type) } }
+    }
+
+    private func deleteLessonTypeLocally(_ type: LessonType) {
+        context.delete(type)
+        save()
+    }
+
+    /// Push a locally created/edited/reordered lesson type to the shared store, flagging it for retry
+    /// if it fails. Doubles as create, edit and reorder because `upsert` is deterministic on `localID`.
+    private func uploadLessonType(_ type: LessonType) async {
+        guard let owner = type.ownerID else { return }
+        let remoteID = await lessonTypeService.upsert(
+            localID: type.localID,
+            ownerID: owner,
+            name: type.name,
+            details: type.details,
+            durationMinutes: type.durationMinutes,
+            capacity: type.capacity,
+            price: type.price,
+            order: type.order,
+            createdAt: type.createdAt,
+            highlight: type.highlight
+        )
+        type.remoteID = remoteID
+        // Derive `hasHighlight` from the delivered result, not `highlight != nil`: a delivered type
+        // that carried bytes staged its asset; one that never reached the server carries nothing
+        // anyone else can see yet.
+        type.hasHighlight = remoteID != nil && type.highlight != nil
+        type.pendingUpload = remoteID == nil
+        save()
+
+        // The instructor may have deleted the type while the publish was in flight. Withdraw it now
+        // rather than leaving it world-readable until the next sync.
+        if type.pendingDelete, let remoteID {
+            if await lessonTypeService.delete(id: remoteID) { deleteLessonTypeLocally(type) }
+            save()
+        }
+    }
+
+    // MARK: - Lesson-type sync
+
+    /// Pull one instructor's lesson types from the shared store, cache them so both student surfaces
+    /// work offline, then fetch any missing highlight photos. Called for the instructor a student is
+    /// viewing and for the signed-in owner's own device.
+    func syncLessonTypes(for instructor: Instructor) async {
+        guard !isPreview, let owner = instructor.ownerID else { return }
+        // Flush the owner's own queued writes first so a fetch never clobbers an undelivered edit.
+        if owner == currentUserID { await flushPendingLessonTypeWrites() }
+        mergeLessonTypes(await lessonTypeService.fetch(ownerID: owner))
+        await fetchMissingLessonPhotos()
+    }
+
+    /// Re-send anything that never reached the server: a type created offline, an edit taken while the
+    /// network was down, a deletion the server never confirmed.
+    private func flushPendingLessonTypeWrites() async {
+        for type in lessonTypes where type.pendingUpload && type.remoteID == nil && !type.pendingDelete {
+            await uploadLessonType(type)
+        }
+        for type in lessonTypes where type.pendingDelete {
+            guard let remoteID = type.remoteID else { continue }
+            if await lessonTypeService.delete(id: remoteID) { deleteLessonTypeLocally(type) }
+        }
+        save()
+    }
+
+    private func mergeLessonTypes(_ remote: [RemoteLessonType]) {
+        guard !remote.isEmpty else { return }
+        // A type can arrive both from the public fetch and from the private SwiftData mirror, keyed
+        // differently there (a delivered remoteID vs the deterministic `lessontype-<localID>`), so a
+        // row is "known" under either name and is never inserted twice.
+        let known = Set(lessonTypes.compactMap(\.remoteID))
+            .union(lessonTypes.map { "lessontype-\($0.localID.uuidString)" })
+        var nextId = lessonTypes.map(\.legacyId).max() ?? 0
+
+        for entry in remote {
+            if let existing = lessonTypes.first(where: {
+                $0.remoteID == entry.id || "lessontype-\($0.localID.uuidString)" == entry.id
+            }) {
+                // A pending row is my own undelivered edit — the server copy is stale, so don't clobber
+                // my fields with it.
+                if !existing.pendingUpload { apply(entry, to: existing) }
+                if existing.remoteID == nil { existing.remoteID = entry.id }
+            } else if !known.contains(entry.id) {
+                nextId += 1
+                let type = LessonType(legacyId: nextId, remoteID: entry.id)
+                apply(entry, to: type)
+                context.insert(type)
+            }
+        }
+        save()
+    }
+
+    /// Copy a fetched lesson type's fields onto the cache. Unlike an event there is no reader-only
+    /// state to protect — a lesson type is 100% descriptive, so every field is copied.
+    private func apply(_ r: RemoteLessonType, to type: LessonType) {
+        type.ownerID = r.ownerID
+        type.name = r.name
+        type.details = r.details
+        type.durationMinutes = r.durationMinutes
+        type.capacity = r.capacity
+        type.price = r.price
+        type.order = r.order
+        type.hasHighlight = r.hasHighlight
+        type.createdAt = r.createdAt
+        type.updatedAt = r.updatedAt
+    }
+
+    /// Download the highlight photos of lesson types that have one but haven't got it yet. Separate
+    /// from `mergeLessonTypes` because the list query deliberately doesn't carry assets (see
+    /// `LessonTypeService.lessonTypeMetadataKeys`). Capped per pass; a cached photo is never re-fetched.
+    private func fetchMissingLessonPhotos() async {
+        let wanted = lessonTypes
+            .filter { $0.hasHighlight && $0.highlight == nil && !$0.pendingDelete }
+            .compactMap(\.remoteID)
+        guard !wanted.isEmpty else { return }
+
+        let images = await lessonTypeService.fetchPhotos(ids: wanted)
+        guard !images.isEmpty else { return }
+        for type in lessonTypes {
+            guard let remoteID = type.remoteID, let data = images[remoteID] else { continue }
+            type.highlight = data
+        }
+        save()
+    }
+
     // MARK: - Instructor identity & editing
 
     /// Owner id of the signed-in user (set from AppSession); scopes "my" instructor listing.
@@ -1799,8 +2125,10 @@ final class MockDataStore {
         if let existing = instructors.first(where: { $0.ownerID == ownerID }) { return existing }
         let nextId = (instructors.map(\.legacyId).max() ?? 0) + 1
         let nextOrder = (instructors.map(\.order).max() ?? 0) + 1
+        // No backfilled session type: a new instructor starts with zero lesson types (an honest empty
+        // state the editor prompts them to fill), rather than a fake default "Private" nobody authored.
         let instructor = Instructor(
-            legacyId: nextId, name: name, city: city, sessionTypes: ["Private"],
+            legacyId: nextId, name: name, city: city,
             order: nextOrder, ownerID: ownerID
         )
         context.insert(instructor)

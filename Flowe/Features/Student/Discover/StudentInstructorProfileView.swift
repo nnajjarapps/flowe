@@ -75,6 +75,10 @@ struct StudentInstructorProfileView: View {
         .accessibilityIdentifier("instructor.profile")
         .task {
             if let id = instructor.ownerID { await data.syncReviews(forInstructor: id) }
+            // Pull the instructor's rich lesson types so the OFFERS cards and the booking picker show
+            // capacity/details/photos, not just the denormalised name cache. Same non-pruning pattern
+            // as reviews: a student viewing this profile fetches all of one instructor's types.
+            await data.syncLessonTypes(for: instructor)
         }
         .sheet(isPresented: $showReport) {
             ReportSheet(
@@ -310,18 +314,16 @@ struct StudentInstructorProfileView: View {
                 }
             }
 
-            if !instructor.sessionTypes.isEmpty {
+            // Rich, instructor-authored lesson types via the single resolver — owned rows when the
+            // instructor has authored any, else the denormalised name cache as name-only cards. The
+            // section stays conditional: a genuinely empty resolver omits it, an honest empty state
+            // rather than a backfilled default.
+            let types = data.lessonTypes(for: instructor)
+            if !types.isEmpty {
                 section("OFFERS") {
-                    FlowLayout(spacing: 6) {
-                        ForEach(instructor.sessionTypes, id: \.self) { type in
-                            HStack(spacing: 6) {
-                                Image(systemName: typeIcon(type)).font(.system(size: 11))
-                                Text(type).font(FloweFont.sans(12))
-                            }
-                            .foregroundStyle(Color.flowePinkDeep)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .background(Color.flowePink.opacity(0.12), in: Capsule())
+                    VStack(spacing: 12) {
+                        ForEach(Array(types.enumerated()), id: \.element.id) { index, type in
+                            LessonTypeCard(type: type, index: index)
                         }
                     }
                 }
@@ -528,14 +530,6 @@ struct StudentInstructorProfileView: View {
             }
         }
         .accessibilityIdentifier("instructor.payment")
-    }
-
-    private func typeIcon(_ t: String) -> String {
-        switch t {
-        case "Online": return "video.fill"
-        case "Private": return "person.crop.circle.badge.checkmark"
-        default: return "person.2.fill"
-        }
     }
 
     // MARK: - Reviews

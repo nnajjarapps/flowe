@@ -77,8 +77,16 @@ struct InstructorProfileView: View {
             }
         }
         .background(Color.flowWhite.ignoresSafeArea())
-        .task { await data.syncReviews(asInstructor: true) }
-        .refreshable { await data.syncReviews(asInstructor: true) }
+        .task {
+            await data.syncReviews(asInstructor: true)
+            // The owner's own device pulls its lesson types too, so a type authored on another device
+            // (delivered via the private mirror, or re-fetched from the public store) shows here.
+            if let me { await data.syncLessonTypes(for: me) }
+        }
+        .refreshable {
+            await data.syncReviews(asInstructor: true)
+            if let me { await data.syncLessonTypes(for: me) }
+        }
         .sheet(isPresented: $showSettings) { InstructorSettingsView() }
         .sheet(isPresented: $showEditProfile) { EditProfileView() }
     }
@@ -260,7 +268,7 @@ struct InstructorProfileView: View {
                 if let types = me?.sessionTypes, !types.isEmpty {
                     FlowChipRow(items: types)
                 } else {
-                    Text("Add the session types you offer in Edit Profile.")
+                    Text("Add the lesson types you offer in Edit Profile.")
                         .font(FloweFont.sans(13))
                         .foregroundStyle(Color.floweMuted)
                 }
