@@ -7,9 +7,22 @@ struct BookingCard: View {
 
     let booking: Booking
 
-    @State private var bookAgainInstructor: Instructor?
+    /// The card's two sheets share ONE presentation. Two `.sheet` modifiers on the same view is a
+    /// SwiftUI trap — the later one shadows the earlier, so "Book again" set its state but never
+    /// presented while a review sheet also existed on the row. One item-driven sheet, one route.
+    private enum Route: Identifiable {
+        case bookAgain(Instructor)
+        case review
+        var id: String {
+            switch self {
+            case .bookAgain(let ins): return "book-\(ins.legacyId)"
+            case .review:             return "review"
+            }
+        }
+    }
+
+    @State private var route: Route?
     @State private var confirmingCancel = false
-    @State private var showReview = false
 
     private var instructor: Instructor? { data.instructor(id: booking.instructorId) }
 
@@ -19,10 +32,16 @@ struct BookingCard: View {
             bodyRow
         }
         .floweCard()
-        .sheet(item: $bookAgainInstructor) { ins in
-            BookingSheet(instructor: ins) { bookAgainInstructor = nil }
+        // "Book again" reopens the instructor's full profile, not the booking sheet directly. No
+        // distance here — there is no location fix in the bookings tab — so the profile omits it.
+        .sheet(item: $route) { route in
+            switch route {
+            case .bookAgain(let ins):
+                StudentInstructorProfileView(instructor: ins) { self.route = nil }
+            case .review:
+                ReviewSheet(booking: booking)
+            }
         }
-        .sheet(isPresented: $showReview) { ReviewSheet(booking: booking) }
         .confirmationDialog("Cancel this session?",
                             isPresented: $confirmingCancel, titleVisibility: .visible) {
             Button("Cancel session", role: .destructive) { data.cancel(booking) }
@@ -93,7 +112,7 @@ struct BookingCard: View {
                 HStack(spacing: 14) {
                     if data.canReview(booking) {
                         Button {
-                            showReview = true
+                            route = .review
                         } label: {
                             Text(LocalizedStringKey(data.myReview(for: booking) == nil ? "Leave a review" : "Edit review"))
                                 .font(FloweFont.sans(11))
@@ -103,12 +122,13 @@ struct BookingCard: View {
                     }
 
                     Button {
-                        bookAgainInstructor = instructor
+                        if let instructor { route = .bookAgain(instructor) }
                     } label: {
                         Text("Book again")
                             .font(FloweFont.sans(11))
                             .foregroundStyle(Color.floweMuted)
                     }
+                    .accessibilityIdentifier("booking.bookAgain")
                 }
             } else if booking.status != .cancelled {
                 Button {

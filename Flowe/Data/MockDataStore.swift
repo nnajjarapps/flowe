@@ -672,6 +672,17 @@ final class MockDataStore {
         if asInstructor { refreshMyPublishedRating() }
     }
 
+    /// Reviews ABOUT another instructor, for a student viewing their profile. Distinct from
+    /// `syncReviews(asInstructor:)`, which only pulls the signed-in user's own reviews — a student
+    /// browsing someone else's listing has none of those cached. Non-pruning: it reuses `merge`,
+    /// which only inserts/updates, so it can never delete a `Review` the open profile is rendering
+    /// (the deleted-SwiftData-model trap `EventDetailView` documents does not apply here).
+    func syncReviews(forInstructor ownerID: String) async {
+        guard !isPreview else { return }
+        let remote = await reviewService.fetchForInstructor(ownerID: ownerID)
+        merge(remote)
+    }
+
     private func merge(_ remote: [RemoteReview]) {
         guard !remote.isEmpty else { return }
         var changed = false

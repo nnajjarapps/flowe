@@ -8,7 +8,9 @@ struct DiscoverView: View {
 
     @State private var search = ""
     @State private var filter = "All"
-    @State private var selected: Instructor?
+    /// The tapped row, not just its instructor — carrying `distanceMetres` so the profile can show the
+    /// same "~N km" the card did without recomputing (there is no `LocationService` inside the profile).
+    @State private var selected: Row?
 
     /// On-device only. The student's position is never stored, never published and never even
     /// readable from here — `LocationService` hands out distances, not coordinates.
@@ -101,7 +103,11 @@ struct DiscoverView: View {
                 if let featured = featuredInstructor {
                     VStack(alignment: .leading, spacing: 10) {
                         SectionHeader(text: "FEATURED")
-                        FeaturedHeroCard(instructor: featured) { selected = featured }
+                        FeaturedHeroCard(instructor: featured) {
+                            selected = Row(instructor: featured,
+                                           distanceMetres: location.distance(toLatitude: featured.latitude,
+                                                                             longitude: featured.longitude))
+                        }
                             .accessibilityIdentifier("discover.instructorCard")
                     }
                     .padding(.horizontal, 20)
@@ -131,7 +137,7 @@ struct DiscoverView: View {
                             ForEach(rows) { row in
                                 InstructorCard(instructor: row.instructor,
                                                distanceMetres: row.distanceMetres) {
-                                    selected = row.instructor
+                                    selected = row
                                 }
                                 .accessibilityIdentifier("discover.instructorCard")
                             }
@@ -143,8 +149,11 @@ struct DiscoverView: View {
             }
         }
         .background(Color.flowWhite)
-        .sheet(item: $selected) { ins in
-            BookingSheet(instructor: ins) { selected = nil }
+        // The rich student-facing profile — not the booking sheet directly. It presents BookingSheet
+        // (at the day picker) on top of itself when the student taps Book.
+        .sheet(item: $selected) { row in
+            StudentInstructorProfileView(instructor: row.instructor,
+                                         distanceMetres: row.distanceMetres) { selected = nil }
         }
         .task { await data.syncCatalog() }
         // Only when the student has already agreed. This never raises the prompt — that is the

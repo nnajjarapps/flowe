@@ -299,6 +299,52 @@ Not done (deliberate, documented in `BOOKING-SYSTEM.md`):
       `PushService` gains no `.events` topic yet. Everything the push needs on the record side
       (`EventRegistration.joinTargetID`, Subscriptions-permitted note) is in place for a follow-up.
 
+## Phase 15 — Student-facing instructor profile  ✅
+A student had no instructor profile: tapping a card jumped straight into `BookingSheet`, whose
+`stepIntro` was the only "profile" — three thin stats (including the fake `students` count the audit
+flagged) plus a bio and specialty tags. So the app was sitting on a rich `Instructor` model students
+barely saw. `StudentInstructorProfileView` is the screen it was missing.
+
+- [x] **A real, rich profile** (`Features/Student/Discover/StudentInstructorProfileView.swift`) —
+      full-bleed hero with the name in Fraunces over the photo, an overlapping identity card, an honest
+      stat trio, then conditional ABOUT / SPECIALTIES / OFFERS / TEACHING AREA / AVAILABILITY /
+      CERTIFICATION / PAYMENT / REVIEWS sections, and a pinned "Book a session" CTA. Mirrors
+      `EventDetailView`'s skeleton; empty fields yield no empty blocks, so a sparse listing still reads
+      as a finished screen.
+- [x] **Nothing fabricated** — the whole point. Rating and reviews come from the *derived*
+      `data.rating(for:)` / `reviews(for:)` (real `Review` rows, blocked authors filtered), so a new
+      instructor reads **"New"**, never a 0.0; the fake `students` stat is gone; `yearsExp == 0` renders
+      "—"; cert is labelled "Flowe doesn't verify certifications." with a fullscreen photo viewer;
+      distance is threaded from Discover only (no second `LocationService`/permission surface), coarse
+      and RTL-safe; price is `settings.money(_:)`, "Free" at 0.
+- [x] **Replaces the old fake profile at all three entry points** — Discover cards (with distance),
+      Bookings "Book again", and an event's organizer link — each now opens the profile instead of
+      jumping to the booking sheet. `BookingSheet` gained a back-compatible `startStep`; the profile
+      presents it at `startStep: 1` (day picker), since the profile *is* the intro. `stepIntro` is left
+      in place for the preview/any caller — deleting it and renumbering is a documented follow-up.
+- [x] **Booking handoff is clean** — `BookingSheet.onClose` now reports whether a booking was made, so
+      the profile tears the whole stack down on completion (never leaving itself over the tab bar) but
+      stays put on a mid-flow cancel; the day-picker back button returns to the profile, not the dead
+      intro.
+- [x] **Localization** — 17 new keys, es/fr/ar authored by hand (inflected review counts); catalog
+      diffed unit-by-unit against HEAD, zero existing translations dropped.
+- [x] **Tests** — `InstructorProfileUITests` (6): the card opens the profile not the booking sheet, the
+      honest sections render, payment-is-direct, an unreviewed instructor shows "New" + the reviews
+      empty state, "Book a session" enters the flow at the day picker, and "Book again" opens the
+      profile. `ModerationUITests` updated (the report/block menu moved onto the profile). Verified in
+      the simulator end-to-end.
+- Fixed while finishing (defects the workflow's interrupted review phase would have caught): the
+  profile-over-profile booking dismiss stranding the student; `BookingCard`'s two `.sheet` modifiers
+  shadowing each other so "Book again" never presented (now one enum-driven sheet); the orphaned-intro
+  back button.
+
+Follow-ups (deliberately out of scope):
+- [ ] The Discover **card** and the booking sheet's compact hero still show the stale stored
+      `instructor.rating`/`.reviews` (e.g. "4.9 (112)") while the profile shows the honest derived
+      value — so a card can read "4.9" and its profile "New". The card should move to the derived
+      rating too; same stored-field unreliability the audit flagged.
+- [ ] Delete `BookingSheet.stepIntro` and renumber the steps once nothing else depends on it.
+
 ## Phase 12 — Messaging (end-to-end)  ✅
 Messaging was a UI shell: `MessageListView.inbox` was a hardcoded empty array nothing wrote to, and
 `ConversationView.send()` appended to a local `@State` array, so messages vanished on dismiss and

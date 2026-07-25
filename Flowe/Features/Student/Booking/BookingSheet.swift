@@ -3,12 +3,16 @@ import UIKit
 
 struct BookingSheet: View {
     let instructor: Instructor
-    let onClose: () -> Void
+    /// Called when the sheet closes, reporting whether a booking was actually made. A presenter that
+    /// stacked this on top of something else (the profile) needs the distinction: on a completed
+    /// booking it should tear the whole stack down and return to the app, but on a mid-flow
+    /// cancel/back it should stay put — otherwise "Done" leaves the profile covering the tab bar.
+    let onClose: (_ booked: Bool) -> Void
 
     @Environment(MockDataStore.self) private var data
     @Environment(AppSettings.self) private var settings
 
-    @State private var step = 0
+    @State private var step: Int
     @State private var day = ""
     @State private var time = ""
     @State private var type = ""
@@ -16,6 +20,21 @@ struct BookingSheet: View {
     @State private var showReport = false
     @State private var confirmBlock = false
     @State private var showCertificate = false
+
+    /// Route A handoff: a caller that already showed the profile (InstructorProfileView) opens the
+    /// sheet at the day picker with `startStep: 1`, skipping the intro it just rendered. Default 0
+    /// keeps stepIntro as the entry for the Xcode preview and any existing caller.
+    /// The step this sheet opened at. When it is the day picker (1), the profile above already served
+    /// as the intro, so the day picker's "back" dismisses to it rather than descending into the
+    /// orphaned `stepIntro` — which still carries the thin stats the profile exists to replace.
+    private let startStep: Int
+
+    init(instructor: Instructor, startStep: Int = 0, onClose: @escaping (Bool) -> Void) {
+        self.instructor = instructor
+        self.onClose = onClose
+        self.startStep = startStep
+        _step = State(initialValue: startStep)
+    }
 
     /// Payment methods we know how to render, in canonical order.
     private var methods: [String] { PaymentMethod.known(instructor.paymentMethods) }
@@ -60,7 +79,7 @@ struct BookingSheet: View {
                 if let id = instructor.ownerID {
                     data.block(id: id, name: instructor.name)
                 }
-                onClose()
+                onClose(false)
             }
             Button("Cancel", role: .cancel) {}
         } message: {
@@ -99,7 +118,7 @@ struct BookingSheet: View {
                     }
                     .accessibilityIdentifier("booking.moderation")
 
-                    Button(action: onClose) {
+                    Button(action: { onClose(false) }) {
                         Image(systemName: "xmark")
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(.white)
@@ -323,7 +342,9 @@ struct BookingSheet: View {
     private var stepDay: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
-                backButton { step = 0 }
+                // Opened from the profile (startStep 1) → back returns to it; opened at the intro →
+                // back steps up to it. Never strands the profile-first flow on the orphaned intro.
+                backButton { if startStep >= 1 { onClose(false) } else { step = 0 } }
                 Text("Choose a day")
                     .font(FloweFont.serif(17))
                     .foregroundStyle(Color.floweInk)
@@ -373,6 +394,9 @@ struct BookingSheet: View {
 
             GradientButton(title: "Continue", enabled: !day.isEmpty) { step = 2 }
         }
+        // Lets a UI test confirm the profile→booking handoff landed on the day picker (startStep: 1),
+        // not the orphaned intro.
+        .accessibilityIdentifier("booking.dayStep")
     }
 
     // MARK: - Step 2
@@ -548,7 +572,7 @@ struct BookingSheet: View {
             .floweCard()
             .padding(.bottom, 20)
 
-            GradientButton(title: "Done") { onClose() }
+            GradientButton(title: "Done") { onClose(true) }
         }
         .frame(maxWidth: .infinity)
     }
@@ -576,7 +600,7 @@ struct BookingSheet: View {
 }
 
 #Preview {
-    BookingSheet(instructor: MockDataStore.preview.instructors[0], onClose: {})
+    BookingSheet(instructor: MockDataStore.preview.instructors[0], onClose: { _ in })
         .environment(MockDataStore.preview)
         .environment(AppSettings())
         .environment(AppSession())

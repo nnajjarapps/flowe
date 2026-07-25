@@ -6,7 +6,7 @@ final class BookingFlowUITests: FloweUITestCase {
 
     // MARK: - Student books
 
-    /// Walk the whole BookingSheet: instructor card → day → time → request.
+    /// Walk the whole flow: instructor card → profile → Book → day → time → request.
     /// Returns the step that failed, or nil on success — so a failure names the step it died on.
     @discardableResult
     private func completeBookingFlow(file: StaticString = #filePath, line: UInt = #line) -> String? {
@@ -20,10 +20,10 @@ final class BookingFlowUITests: FloweUITestCase {
         _ = waitUntil({ card.isHittable })
         card.tap()
 
-        let bookCTA = app.buttons.matching(
-            NSPredicate(format: "label BEGINSWITH 'Book a Session'")
-        ).firstMatch
-        guard bookCTA.waitForExistence(timeout: timeout) else { return "'Book a Session' CTA never appeared" }
+        // The card now opens the rich profile; its Book CTA hands into the booking sheet at the day
+        // picker (startStep: 1), so the intro step is skipped.
+        let bookCTA = app.buttons["instructor.book"]
+        guard bookCTA.waitForExistence(timeout: timeout) else { return "Profile Book CTA never appeared" }
         _ = waitUntil({ bookCTA.isHittable })
         bookCTA.tap()
 

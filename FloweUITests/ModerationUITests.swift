@@ -139,13 +139,13 @@ final class ModerationUITests: FloweUITestCase {
     func testInstructorListingCanBeReported() {
         launch(as: .student, seeded: true)
         selectTab("Discover")
-        // The card opens the booking sheet, which doubles as the student-facing profile detail.
+        // The card opens the student-facing instructor profile, which carries the moderation menu.
         let card = app.buttons["discover.instructorCard"].firstMatch
         XCTAssertTrue(card.waitForExistence(timeout: timeout), "No instructor cards in Discover")
         _ = waitUntil({ card.isHittable })
         card.tap()
 
-        XCTAssertTrue(app.buttons["booking.moderation"].waitForExistence(timeout: 15),
+        XCTAssertTrue(app.buttons["instructor.moderation"].waitForExistence(timeout: 15),
                       "A public instructor listing must be reportable")
     }
 
@@ -157,7 +157,7 @@ final class ModerationUITests: FloweUITestCase {
         _ = waitUntil({ card.isHittable })
         card.tap()
 
-        let menu = app.buttons["booking.moderation"]
+        let menu = app.buttons["instructor.moderation"]
         XCTAssertTrue(menu.waitForExistence(timeout: 15))
         menu.tap()
         app.buttons["Report this profile"].tap()
