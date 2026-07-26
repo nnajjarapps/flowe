@@ -39,3 +39,7 @@ Flowe */
 
 # Stray root-level copy of the Figma export (the tracked one is Flowe/Pilates app/)
 /Pilates app/
+
+# CloudKit deploy scratch (transient schema exports)
+dev-live.ckdb
+dev-verify.ckdb
