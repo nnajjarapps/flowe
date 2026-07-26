@@ -80,6 +80,15 @@ final class MessagingService {
         #endif
     }
 
+    /// Delete a message from the shared store. Only the message's own sender can do this — the
+    /// public database grants write to `_creator`, so deleting someone else's message is rejected.
+    /// Best-effort: a failure (offline, not mine) just leaves the record, which the caller tolerates.
+    func delete(remoteID: String) async {
+        #if CLOUDKIT_ENABLED
+        _ = try? await database.deleteRecord(withID: CKRecord.ID(recordName: remoteID))
+        #endif
+    }
+
     /// Every message involving this user, in both directions.
     func fetchMessages(for ownerID: String) async -> [RemoteMessage] {
         #if CLOUDKIT_ENABLED

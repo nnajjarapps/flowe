@@ -510,6 +510,30 @@ final class MockDataStore {
         save()
     }
 
+    /// Remove a message from the conversation. Deleting it locally isn't enough — `merge` would
+    /// re-insert it on the next sync — so its id is tombstoned (persisted) to stay gone. If the
+    /// message is the signed-in user's OWN, its shared-store record is deleted too (creator-write),
+    /// so it stops being the source of truth; a received message isn't the reader's to delete from
+    /// the store, so that one is only removed from this device's view.
+    private let deletedMessagesKey = "flowe.deletedMessages"
+
+    private func markMessageDeleted(_ id: String) {
+        var ids = Set(UserDefaults.standard.stringArray(forKey: deletedMessagesKey) ?? [])
+        ids.insert(id)
+        UserDefaults.standard.set(Array(ids), forKey: deletedMessagesKey)
+    }
+
+    func deleteMessage(_ message: Message) {
+        let mine = message.senderID == currentUserID
+        let remoteID = message.remoteID
+        if let remoteID { markMessageDeleted(remoteID) }
+        context.delete(message)
+        save()
+        if mine, let remoteID, !isPreview {
+            Task { await messagingService.delete(remoteID: remoteID) }
+        }
+    }
+
     /// Mark everything received in a thread as read (called when the thread is opened).
     func markThreadRead(with counterpartID: String) {
         guard let me = currentUserID else { return }
@@ -545,8 +569,11 @@ final class MockDataStore {
     private func merge(_ remote: [RemoteMessage], me: String) {
         guard !remote.isEmpty else { return }
         let known = Set(messages.compactMap(\.remoteID))
+        // Tombstoned ids the user deleted — never re-insert them, or a sync would resurrect a
+        // message they removed from the conversation.
+        let deleted = Set(UserDefaults.standard.stringArray(forKey: deletedMessagesKey) ?? [])
         var inserted = false
-        for entry in remote where !known.contains(entry.id) {
+        for entry in remote where !known.contains(entry.id) && !deleted.contains(entry.id) {
             context.insert(Message(
                 remoteID: entry.id,
                 conversationID: entry.conversationID,

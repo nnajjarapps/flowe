@@ -35,6 +35,13 @@ struct ConversationView: View {
                                             : Self.timeLabel(message.sentAt)
                                     )
                                     .id(message.persistentModelID)
+                                    .contextMenu {
+                                        Button(role: .destructive) {
+                                            data.deleteMessage(message)
+                                        } label: {
+                                            Label("Delete", systemImage: "trash")
+                                        }
+                                    }
                                 }
                             }
                         }
