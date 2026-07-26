@@ -12,6 +12,7 @@ struct MessageListView: View {
 
     @State private var search = ""
     @State private var showCompose = false
+    @State private var deleteTarget: Counterpart?
 
     private var conversations: [ConversationSummary] { data.conversations }
 
@@ -40,6 +41,13 @@ struct MessageListView: View {
                             row(summary)
                         }
                         .buttonStyle(.plain)
+                        .contextMenu {
+                            Button(role: .destructive) {
+                                deleteTarget = summary.counterpart
+                            } label: {
+                                Label("Delete conversation", systemImage: "trash")
+                            }
+                        }
                         Divider().overlay(Color.floweBorder).padding(.leading, 78)
                     }
 
@@ -61,6 +69,21 @@ struct MessageListView: View {
         }
         .task { await data.syncMessages() }
         .sheet(isPresented: $showCompose) { NewMessageSheet() }
+        .confirmationDialog(
+            "Delete conversation?",
+            isPresented: Binding(get: { deleteTarget != nil },
+                                 set: { if !$0 { deleteTarget = nil } }),
+            titleVisibility: .visible,
+            presenting: deleteTarget
+        ) { target in
+            Button("Delete", role: .destructive) {
+                data.deleteConversation(with: target.id)
+                deleteTarget = nil
+            }
+            Button("Cancel", role: .cancel) { deleteTarget = nil }
+        } message: { target in
+            Text("This removes your conversation with \(target.firstName) from your inbox.")
+        }
     }
 
     // MARK: - Header

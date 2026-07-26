@@ -12,6 +12,7 @@ struct ConversationView: View {
     @State private var draft = ""
     @State private var showReport = false
     @State private var confirmBlock = false
+    @State private var confirmDeleteConversation = false
     @State private var showStudentProfile = false
 
     private var messages: [Message] { data.thread(with: counterpart.id) }
@@ -92,6 +93,9 @@ struct ConversationView: View {
                     Button("Block \(counterpart.firstName)", systemImage: "hand.raised", role: .destructive) {
                         confirmBlock = true
                     }
+                    Button("Delete conversation", systemImage: "trash", role: .destructive) {
+                        confirmDeleteConversation = true
+                    }
                 } label: {
                     Image(systemName: "ellipsis.circle")
                         .foregroundStyle(Color.floweInk)
@@ -126,6 +130,16 @@ struct ConversationView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("You won't see their messages or their profile. You can undo this in Settings.")
+        }
+        .confirmationDialog("Delete conversation?",
+                            isPresented: $confirmDeleteConversation, titleVisibility: .visible) {
+            Button("Delete", role: .destructive) {
+                data.deleteConversation(with: counterpart.id)
+                dismiss()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This removes your conversation with \(counterpart.firstName) from your inbox.")
         }
     }
 

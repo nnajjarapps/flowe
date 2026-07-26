@@ -543,6 +543,32 @@ final class MockDataStore {
         }
     }
 
+    /// Delete a whole conversation from this device's inbox. Each message is tombstoned so a later
+    /// sync can't resurrect the thread, then removed locally; the user's OWN messages are deleted
+    /// from the shared store too (creator-write). The counterpart's copy is untouched — this is a
+    /// hide-for-me, and a new incoming message re-forms the thread, matching how messaging apps
+    /// behave. Mirrors `deleteMessage`, applied to the full thread.
+    func deleteConversation(with counterpartID: String) {
+        guard let me = currentUserID else { return }
+        let id = Message.conversationID(me, counterpartID)
+        let thread = messages.filter { $0.conversationID == id }
+        var minesRemoteIDs: [String] = []
+        for message in thread {
+            if let remoteID = message.remoteID {
+                markMessageDeleted(remoteID)
+                if message.senderID == me { minesRemoteIDs.append(remoteID) }
+            }
+            context.delete(message)
+        }
+        save()
+        guard !isPreview, !minesRemoteIDs.isEmpty else { return }
+        Task {
+            for remoteID in minesRemoteIDs {
+                await messagingService.delete(remoteID: remoteID)
+            }
+        }
+    }
+
     /// Mark everything received in a thread as read (called when the thread is opened).
     func markThreadRead(with counterpartID: String) {
         guard let me = currentUserID else { return }
