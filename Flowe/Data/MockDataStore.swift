@@ -2157,7 +2157,10 @@ final class MockDataStore {
     /// Fetch visible listings from the public catalog and cache them into the local store the feed reads.
     func syncCatalog() async {
         guard !isPreview else { return }
-        let listings = await catalog.fetchVisibleListings()
+        // nil means the fetch FAILED (offline / visibility index not deployed) — leave the cached feed
+        // exactly as it is rather than hiding every instructor on the strength of a failed query. An
+        // empty array is a real "no visible listings" answer and is allowed to prune below.
+        guard let listings = await catalog.fetchVisibleListings() else { return }
         var nextId = instructors.map(\.legacyId).max() ?? 0
         var nextOrder = instructors.map(\.order).max() ?? 0
         let owners = Set(listings.map(\.ownerID))

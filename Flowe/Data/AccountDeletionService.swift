@@ -154,12 +154,18 @@ final class AccountDeletionService {
                 ids += page.matchResults.map(\.0)
             }
             return ids
-        } catch let ck as CKError where ck.code == .unknownItem {
-            // The record type doesn't exist in this environment — no record of it was ever saved,
-            // so the user has zero of them. That is "genuinely none", not a failure: there is
-            // nothing to delete here, so return empty and let the sweep continue. (Aborting instead
-            // would block deletion for any account that never used a given feature — reviews,
-            // likes, events — which is most accounts.)
+        } catch let ck as CKError where ck.code == .unknownItem || ck.code == .invalidArguments {
+            // Two permanent-for-this-deployment conditions, both of which mean "we cannot enumerate
+            // these records here", not "the operation failed and might succeed on retry":
+            //   .unknownItem      — the record type doesn't exist in this environment (nothing was
+            //                       ever saved), so the user has zero of them.
+            //   .invalidArguments — the field we query by isn't marked QUERYABLE in the deployed
+            //                       schema. Retrying can't fix that, and the predicates here are
+            //                       static and correct, so this only ever means a missing index.
+            // Skipping and continuing is what keeps account deletion from being *permanently blocked*
+            // (App Store Guideline 5.1.1(v)) by one un-deployed index — the schema-deploy checklist
+            // covers the residual records. A genuinely transient error (offline, rate-limited) is a
+            // different case and still aborts below, so we never claim a deletion that didn't happen.
             return []
         } catch {
             return nil

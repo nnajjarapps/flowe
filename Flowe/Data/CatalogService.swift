@@ -166,7 +166,12 @@ final class CatalogService {
     }
 
     /// Fetch all currently-visible listings (Boost + Visible).
-    func fetchVisibleListings() async -> [CatalogListing] {
+    ///
+    /// Returns nil when the query itself failed (offline, or the `visibility` index isn't deployed to
+    /// this environment) — distinct from an empty array, which means "genuinely no visible listings".
+    /// Conflating the two would let a schema/network error look identical to an empty marketplace, and
+    /// the caller would then hide every cached instructor on the strength of a failed fetch.
+    func fetchVisibleListings() async -> [CatalogListing]? {
         #if CLOUDKIT_ENABLED
         let query = CKQuery(recordType: Self.recordType, predicate: NSPredicate(format: "visibility > 0"))
         query.sortDescriptors = [NSSortDescriptor(key: "visibility", ascending: false)]
@@ -174,10 +179,10 @@ final class CatalogService {
             let (matches, _) = try await database.records(matching: query, desiredKeys: nil, resultsLimit: 200)
             return matches.compactMap { try? $0.1.get() }.compactMap(CatalogListing.init)
         } catch {
-            return []   // schema not deployed / offline / no records yet
+            return nil   // schema not deployed / offline — NOT "no records"
         }
         #else
-        return []
+        return nil
         #endif
     }
 
