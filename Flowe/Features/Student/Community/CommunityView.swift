@@ -64,13 +64,16 @@ struct CommunityView: View {
 
                 // Feed
                 if feed.isEmpty {
-                    EmptyStateView(
-                        icon: "camera",
-                        title: "Nothing here yet",
-                        message: "Photos, tips and check-ins from the community will show up here.",
-                        actionTitle: "Share the first post",
-                        action: { showCompose = true }
-                    )
+                    FeedPlaceholder(phase: data.communityPhase,
+                                    retry: { Task { await data.syncCommunity() } }) {
+                        EmptyStateView(
+                            icon: "camera",
+                            title: "Nothing here yet",
+                            message: "Photos, tips and check-ins from the community will show up here.",
+                            actionTitle: "Share the first post",
+                            action: { showCompose = true }
+                        )
+                    }
                     .padding(.top, 80)
                 } else {
                     ForEach(feed) { post in

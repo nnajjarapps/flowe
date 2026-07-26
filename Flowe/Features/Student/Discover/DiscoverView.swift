@@ -134,16 +134,30 @@ struct DiscoverView: View {
                     // above, `rows` is empty because that one listing *is* the whole catalog — an
                     // empty state under a real card would tell the user "no instructors" beside one.
                     if featuredInstructor == nil {
-                        EmptyStateView(
-                            icon: isSearchingOrFiltering ? "magnifyingglass" : "person.2.slash",
-                            title: isSearchingOrFiltering ? "No matches" : "No instructors yet",
-                            message: isSearchingOrFiltering
-                                ? "No instructors match — try a different search or category."
-                                : "Instructors near you will appear here once they join Flowe."
-                        )
-                        .padding(.horizontal, 20)
-                        .padding(.top, 40)
-                        .padding(.bottom, 24)
+                        // While searching/filtering, "no matches" is a real answer about the query, not
+                        // a load state — so only defer to the load phase when the user isn't filtering.
+                        if isSearchingOrFiltering {
+                            EmptyStateView(
+                                icon: "magnifyingglass",
+                                title: "No matches",
+                                message: "No instructors match — try a different search or category."
+                            )
+                            .padding(.horizontal, 20)
+                            .padding(.top, 40)
+                            .padding(.bottom, 24)
+                        } else {
+                            FeedPlaceholder(phase: data.catalogPhase,
+                                            retry: { Task { await data.syncCatalog() } }) {
+                                EmptyStateView(
+                                    icon: "person.2.slash",
+                                    title: "No instructors yet",
+                                    message: "Instructors near you will appear here once they join Flowe."
+                                )
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.top, 40)
+                            .padding(.bottom, 24)
+                        }
                     }
                 } else {
                     VStack(alignment: .leading, spacing: 10) {

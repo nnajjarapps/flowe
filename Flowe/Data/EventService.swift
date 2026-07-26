@@ -200,7 +200,9 @@ final class EventService {
     /// The soonest upcoming events, earliest first. The caller passes `now − 6h` so a class that
     /// started an hour ago doesn't vanish while people are in it; ascending + limit keeps the
     /// *soonest* hundred rather than an arbitrary slice.
-    func fetchUpcoming(since: Date) async -> [RemoteEvent] {
+    /// Nil when the query failed (offline / schema not deployed) — distinct from an empty array, which
+    /// means "genuinely no upcoming events".
+    func fetchUpcoming(since: Date) async -> [RemoteEvent]? {
         #if CLOUDKIT_ENABLED
         let query = CKQuery(recordType: Self.eventRecordType,
                             predicate: NSPredicate(format: "startsAt >= %@", since as NSDate))
@@ -211,10 +213,10 @@ final class EventService {
             )
             return matches.compactMap { try? $0.1.get() }.compactMap(RemoteEvent.init)
         } catch {
-            return []
+            return nil   // query failed — NOT "no events"
         }
         #else
-        return []
+        return nil
         #endif
     }
 

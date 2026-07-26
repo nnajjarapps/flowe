@@ -18,11 +18,14 @@ struct EventsListView: View {
                 if events.isEmpty {
                     // No actionTitle/action: a student has nothing to create here, and the CTA only
                     // renders when both are non-nil. Instructors never see this view.
-                    EmptyStateView(
-                        icon: "sparkles",
-                        title: "No events yet",
-                        message: "When instructors host a class, a workshop or a retreat, it'll show up here."
-                    )
+                    FeedPlaceholder(phase: data.eventsPhase,
+                                    retry: { Task { await data.syncEvents(asOrganizer: false) } }) {
+                        EmptyStateView(
+                            icon: "sparkles",
+                            title: "No events yet",
+                            message: "When instructors host a class, a workshop or a retreat, it'll show up here."
+                        )
+                    }
                     .padding(.top, 80)
                 } else {
                     ForEach(events) { event in

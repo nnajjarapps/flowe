@@ -168,17 +168,18 @@ final class BookingService {
 
     // MARK: - Reads
 
-    /// Bookings addressed to an instructor.
-    func fetchForInstructor(ownerID: String) async -> [RemoteBooking] {
+    /// Bookings addressed to an instructor. Nil when the query itself failed (offline / schema not
+    /// deployed) — distinct from an empty array, which means "genuinely no bookings".
+    func fetchForInstructor(ownerID: String) async -> [RemoteBooking]? {
         await fetchBookings(matching: NSPredicate(format: "instructorID == %@", ownerID))
     }
 
-    /// Bookings a student has made.
-    func fetchForStudent(ownerID: String) async -> [RemoteBooking] {
+    /// Bookings a student has made. Nil when the query failed; empty when there are none.
+    func fetchForStudent(ownerID: String) async -> [RemoteBooking]? {
         await fetchBookings(matching: NSPredicate(format: "studentID == %@", ownerID))
     }
 
-    private func fetchBookings(matching predicate: NSPredicate) async -> [RemoteBooking] {
+    private func fetchBookings(matching predicate: NSPredicate) async -> [RemoteBooking]? {
         #if CLOUDKIT_ENABLED
         let query = CKQuery(recordType: Self.bookingRecordType, predicate: predicate)
         query.sortDescriptors = [NSSortDescriptor(key: "createdAt", ascending: false)]
@@ -188,10 +189,10 @@ final class BookingService {
             )
             return matches.compactMap { try? $0.1.get() }.compactMap(RemoteBooking.init)
         } catch {
-            return []
+            return nil   // query failed — NOT "no bookings"
         }
         #else
-        return []
+        return nil
         #endif
     }
 

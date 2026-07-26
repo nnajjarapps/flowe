@@ -38,6 +38,17 @@ final class MockDataStore {
     private let communityService = CommunityService()
     private let eventService = EventService()
     private let lessonTypeService = LessonTypeService()
+
+    // MARK: - Feed load state
+
+    /// Per-feed load phase, so a screen can tell "first load in flight", "loaded with nothing", and
+    /// "the load failed" apart instead of rendering all three as the same empty state. Written by the
+    /// sync methods below, read by the feed views. Once a feed has loaded, a later background-refresh
+    /// failure leaves it `.loaded` (the cached data stays on screen) rather than flipping to `.failed`.
+    private(set) var catalogPhase: LoadPhase = .idle
+    private(set) var bookingsPhase: LoadPhase = .idle
+    private(set) var communityPhase: LoadPhase = .idle
+    private(set) var eventsPhase: LoadPhase = .idle
     /// Suppresses public-catalog network calls (previews + UI tests).
     private let isPreview: Bool
 
@@ -363,11 +374,17 @@ final class MockDataStore {
     /// cache the result locally so the UI works offline.
     func syncBookings(asInstructor: Bool) async {
         guard !isPreview, let currentUserID else { return }
+        if bookingsPhase != .loaded { bookingsPhase = .loading }
         if asInstructor { await flushPendingListing() } else { await flushPendingStudentProfile() }
         await flushPendingWrites()
-        let remote = asInstructor
+        let fetched = asInstructor
             ? await bookingService.fetchForInstructor(ownerID: currentUserID)
             : await bookingService.fetchForStudent(ownerID: currentUserID)
+        guard let remote = fetched else {
+            if bookingsPhase != .loaded { bookingsPhase = .failed }
+            return
+        }
+        bookingsPhase = .loaded
         guard !remote.isEmpty else { return }
 
         let decisions = await bookingService.fetchDecisions(bookingIDs: remote.map(\.id))
@@ -1156,8 +1173,14 @@ final class MockDataStore {
     /// counts that live in their own records.
     func syncCommunity() async {
         guard !isPreview else { return }
+        if communityPhase != .loaded { communityPhase = .loading }
         await flushPendingCommunityWrites()
-        mergePosts(await communityService.fetchRecentPosts())
+        guard let posts = await communityService.fetchRecentPosts() else {
+            if communityPhase != .loaded { communityPhase = .failed }
+            return
+        }
+        communityPhase = .loaded
+        mergePosts(posts)
         await refreshEngagement()
         await fetchMissingPostImages()
     }
@@ -1605,11 +1628,17 @@ final class MockDataStore {
     /// registration records, then fetch any missing highlight photos.
     func syncEvents(asOrganizer: Bool) async {
         guard !isPreview, let me = currentUserID else { return }
+        if eventsPhase != .loaded { eventsPhase = .loading }
         await flushPendingEventWrites()
 
         // The 6-hour grace keeps a class that started an hour ago from vanishing while people are in
         // it. Only this (whole-window) merge prunes — see `mergeEvents(_:prune:)`.
-        mergeEvents(await eventService.fetchUpcoming(since: Date(timeIntervalSinceNow: -6 * 3600)))
+        guard let upcoming = await eventService.fetchUpcoming(since: Date(timeIntervalSinceNow: -6 * 3600)) else {
+            if eventsPhase != .loaded { eventsPhase = .failed }
+            return
+        }
+        eventsPhase = .loaded
+        mergeEvents(upcoming)
         if asOrganizer {
             // An organizer also keeps their past events, which the upcoming window excludes. Merge
             // without pruning: pruning against this narrow (mine-only) set would wipe every other
@@ -2157,10 +2186,15 @@ final class MockDataStore {
     /// Fetch visible listings from the public catalog and cache them into the local store the feed reads.
     func syncCatalog() async {
         guard !isPreview else { return }
+        if catalogPhase != .loaded { catalogPhase = .loading }
         // nil means the fetch FAILED (offline / visibility index not deployed) — leave the cached feed
         // exactly as it is rather than hiding every instructor on the strength of a failed query. An
         // empty array is a real "no visible listings" answer and is allowed to prune below.
-        guard let listings = await catalog.fetchVisibleListings() else { return }
+        guard let listings = await catalog.fetchVisibleListings() else {
+            if catalogPhase != .loaded { catalogPhase = .failed }
+            return
+        }
+        catalogPhase = .loaded
         var nextId = instructors.map(\.legacyId).max() ?? 0
         var nextOrder = instructors.map(\.order).max() ?? 0
         let owners = Set(listings.map(\.ownerID))

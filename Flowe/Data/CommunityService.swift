@@ -200,7 +200,9 @@ final class CommunityService {
 
     /// The most recent posts, newest first. There is no per-user feed to assemble: the community
     /// tab is the whole community.
-    func fetchRecentPosts() async -> [RemotePost] {
+    /// Nil when the query failed (offline / schema not deployed) — distinct from an empty array, which
+    /// means "genuinely no posts yet".
+    func fetchRecentPosts() async -> [RemotePost]? {
         #if CLOUDKIT_ENABLED
         let query = CKQuery(recordType: Self.postRecordType, predicate: NSPredicate(value: true))
         query.sortDescriptors = [NSSortDescriptor(key: "createdAt", ascending: false)]
@@ -210,10 +212,10 @@ final class CommunityService {
             )
             return matches.compactMap { try? $0.1.get() }.compactMap(RemotePost.init)
         } catch {
-            return []
+            return nil   // query failed — NOT "no posts"
         }
         #else
-        return []
+        return nil
         #endif
     }
 

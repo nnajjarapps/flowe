@@ -79,19 +79,22 @@ struct BookingsView: View {
 
     @ViewBuilder
     private var emptyState: some View {
-        switch tab {
-        case .upcoming:
-            EmptyStateView(
-                icon: "calendar.badge.plus",
-                title: "No sessions yet",
-                message: "Book a class from Discover to see your upcoming sessions here."
-            )
-        case .past:
-            EmptyStateView(
-                icon: "clock.arrow.circlepath",
-                title: "No past sessions",
-                message: "Once you complete a class, it'll show up here."
-            )
+        FeedPlaceholder(phase: data.bookingsPhase,
+                        retry: { Task { await data.syncBookings(asInstructor: false) } }) {
+            switch tab {
+            case .upcoming:
+                EmptyStateView(
+                    icon: "calendar.badge.plus",
+                    title: "No sessions yet",
+                    message: "Book a class from Discover to see your upcoming sessions here."
+                )
+            case .past:
+                EmptyStateView(
+                    icon: "clock.arrow.circlepath",
+                    title: "No past sessions",
+                    message: "Once you complete a class, it'll show up here."
+                )
+            }
         }
     }
 
