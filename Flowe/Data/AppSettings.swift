@@ -5,36 +5,15 @@ import Observation
 
 enum Currency: String, CaseIterable, Identifiable {
     // ISO 4217 codes — `ils` is the shekel ("NIS" is a colloquial name Foundation does not accept).
-    case usd, eur, gbp, cad, aud, aed, inr, jpy, ils
+    // USD and ILS only for now. The USD→ILS rate is fetched live (see AppSettings), not hardcoded.
+    case usd, ils
 
     var id: String { rawValue }
     var code: String { rawValue.uppercased() }
 
-    /// Approximate units per 1 USD (static demo rates).
-    var rate: Double {
-        switch self {
-        case .usd: return 1
-        case .eur: return 0.92
-        case .gbp: return 0.79
-        case .cad: return 1.36
-        case .aud: return 1.52
-        case .aed: return 3.67
-        case .inr: return 83
-        case .jpy: return 149
-        case .ils: return 3.7
-        }
-    }
-
     var name: String {
         switch self {
         case .usd: return "US Dollar"
-        case .eur: return "Euro"
-        case .gbp: return "British Pound"
-        case .cad: return "Canadian Dollar"
-        case .aud: return "Australian Dollar"
-        case .aed: return "UAE Dirham"
-        case .inr: return "Indian Rupee"
-        case .jpy: return "Japanese Yen"
         case .ils: return "Israeli New Shekel"
         }
     }
@@ -70,13 +49,26 @@ final class AppSettings {
     var currency: Currency { didSet { defaults.set(currency.rawValue, forKey: currencyKey) } }
     var language: AppLanguage { didSet { defaults.set(language.rawValue, forKey: languageKey) } }
 
+    /// Israeli shekels per 1 USD. Fetched live from Frankfurter (ECB daily rates), cached across
+    /// launches, with a cold-start fallback. This is the single source of truth for conversion now
+    /// that the per-currency static table is gone.
+    private(set) var usdToILS: Double
+
     private let defaults = UserDefaults.standard
     private let currencyKey = "flowe.currency"
     private let languageKey = "flowe.language"
+    private let fxRateKey = "flowe.fx.usdToILS"
+    private let fxDateKey = "flowe.fx.date"
+
+    /// Last-resort rate, used only on a first launch with no cached rate and no network. The live
+    /// fetch replaces it immediately; steady state runs off the cached value.
+    private static let fallbackUSDToILS = 3.6
 
     init() {
         currency = defaults.string(forKey: currencyKey).flatMap(Currency.init) ?? .usd
         language = defaults.string(forKey: languageKey).flatMap(AppLanguage.init) ?? .system
+        let cached = defaults.double(forKey: fxRateKey)
+        usdToILS = cached > 0 ? cached : Self.fallbackUSDToILS
     }
 
     /// Locale that drives both string localization and number/currency/date formatting.
@@ -93,12 +85,38 @@ final class AppSettings {
     /// Currency is **independent of the app language** — it always uses a fixed Western locale so
     /// numerals and symbol placement stay consistent (e.g. Arabic UI can still show "$95").
     func money(_ usd: Int, decimals: Bool = false) -> String {
-        let amount = Double(usd) * currency.rate
+        let amount = currency == .ils ? Double(usd) * usdToILS : Double(usd)
         return amount.formatted(
             .currency(code: currency.code)
             .precision(.fractionLength(decimals ? 2 : 0))
             .locale(Locale(identifier: "en_US"))
         )
+    }
+
+    // MARK: - Exchange rate (Frankfurter — ECB daily rates, keyless)
+
+    /// Refresh USD→ILS from Frankfurter. No-ops if today's rate is already cached (rates are daily),
+    /// and on any failure it silently keeps the cached/fallback value — conversion never blocks on
+    /// the network and never shows nothing.
+    @MainActor
+    func refreshExchangeRate(now: Date = Date()) async {
+        let today = Self.dayStamp(now)
+        if defaults.string(forKey: fxDateKey) == today, defaults.double(forKey: fxRateKey) > 0 { return }
+        guard let url = URL(string: "https://api.frankfurter.dev/v1/latest?base=USD&symbols=ILS"),
+              let (data, _) = try? await URLSession.shared.data(from: url),
+              let payload = try? JSONDecoder().decode(FrankfurterRates.self, from: data),
+              let rate = payload.rates["ILS"], rate > 0
+        else { return }
+        usdToILS = rate
+        defaults.set(rate, forKey: fxRateKey)
+        defaults.set(today, forKey: fxDateKey)
+    }
+
+    private static func dayStamp(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: date)
     }
 
     /// The currency symbol to prefix a price INPUT field with, so an instructor typing a rate sees
@@ -109,4 +127,9 @@ final class AppSettings {
     var currencySymbol: String {
         String(money(0).prefix { !$0.isNumber }).trimmingCharacters(in: .whitespaces)
     }
+}
+
+/// Frankfurter's `/latest` response — only the rates map is needed.
+private struct FrankfurterRates: Decodable {
+    let rates: [String: Double]
 }

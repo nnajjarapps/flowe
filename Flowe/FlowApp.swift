@@ -118,6 +118,7 @@ struct FlowApp: App {
                 .environment(\.locale, settings.locale)
                 .environment(\.layoutDirection, settings.layoutDirection)
                 .task { await session.validateAppleCredential() }
+                .task { await settings.refreshExchangeRate() }
                 .task(id: session.authState) {
                     data.currentUserID = session.ownerID
                     data.currentUserName = session.currentUser?.fullName ?? ""
