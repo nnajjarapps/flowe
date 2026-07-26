@@ -46,7 +46,8 @@ final class MessagingService {
     /// and the subscription predicate can't drift apart.
     static let recipientField = "recipientID"
 
-    private static let fetchLimit = 400
+    /// Per-page size for the cursor sweep. Completeness comes from following the cursor, not this.
+    private static let pageSize = 400
 
     #if CLOUDKIT_ENABLED
     private let database = CKContainer(identifier: FloweModelContainer.cloudKitContainerID).publicCloudDatabase
@@ -109,11 +110,22 @@ final class MessagingService {
         #if CLOUDKIT_ENABLED
         let query = CKQuery(recordType: Self.recordType, predicate: predicate)
         query.sortDescriptors = [NSSortDescriptor(key: "sentAt", ascending: true)]
+        var messages: [RemoteMessage] = []
         do {
-            let (matches, _) = try await database.records(
-                matching: query, desiredKeys: nil, resultsLimit: Self.fetchLimit
+            var page = try await database.records(
+                matching: query, desiredKeys: nil, resultsLimit: Self.pageSize
             )
-            return matches.compactMap { try? $0.1.get() }.compactMap(RemoteMessage.init)
+            messages += page.matchResults.compactMap { try? $0.1.get() }.compactMap(RemoteMessage.init)
+            // Follow the cursor so a thread (or an inbox) past one page keeps updating. Without this,
+            // the ascending sort returns the OLDEST page and the newest messages are silently dropped
+            // forever once the record set crosses `pageSize` — an active conversation stops updating.
+            while let cursor = page.queryCursor {
+                page = try await database.records(
+                    continuingMatchFrom: cursor, desiredKeys: nil, resultsLimit: Self.pageSize
+                )
+                messages += page.matchResults.compactMap { try? $0.1.get() }.compactMap(RemoteMessage.init)
+            }
+            return messages
         } catch {
             return []
         }
