@@ -12,11 +12,21 @@ struct AppRouter: View {
                     removal: .move(edge: .leading).combined(with: .opacity)
                 ))
         case .student:
-            StudentTabView()
-                .transition(.asymmetric(
-                    insertion: .move(edge: .trailing).combined(with: .opacity),
-                    removal: .opacity
-                ))
+            Group {
+                if session.needsOnboardingQuiz {
+                    StudentQuizView(existing: session.studentPreferences) { prefs in
+                        session.saveStudentPreferences(prefs)
+                    } onSkip: {
+                        session.saveStudentPreferences(StudentPreferences(completedAt: Date()))
+                    }
+                } else {
+                    StudentTabView()
+                }
+            }
+            .transition(.asymmetric(
+                insertion: .move(edge: .trailing).combined(with: .opacity),
+                removal: .opacity
+            ))
         case .instructor:
             InstructorTabView()
                 .transition(.asymmetric(

@@ -4,10 +4,12 @@ import UIKit
 /// Discover screen: greeting header, search, category filter, featured hero, instructor list.
 struct DiscoverView: View {
     @Environment(MockDataStore.self) private var data
+    @Environment(AppSession.self) private var session
     @Environment(\.openURL) private var openURL
 
     @State private var search = ""
     @State private var filter = "All"
+    @State private var retakeQuiz = false
     /// The tapped row, not just its instructor — carrying `distanceMetres` so the profile can show the
     /// same "~N km" the card did without recomputing (there is no `LocationService` inside the profile).
     @State private var selected: Row?
@@ -100,6 +102,18 @@ struct DiscoverView: View {
                 FilterChipsBar(items: FloweConstants.discoverCategories, selection: $filter)
                     .padding(.bottom, 16)
 
+                // Personalized matches — only on the default, unfiltered view (owns its own insets).
+                if filter == "All", search.isEmpty {
+                    RecommendedSection(
+                        preferences: session.studentPreferences,
+                        distance: { location.distance(toLatitude: $0.latitude, longitude: $0.longitude) },
+                        onSelect: { instructor, dist in
+                            selected = Row(instructor: instructor, distanceMetres: dist)
+                        },
+                        onTakeQuiz: { retakeQuiz = true }
+                    )
+                }
+
                 if let featured = featuredInstructor {
                     VStack(alignment: .leading, spacing: 10) {
                         SectionHeader(text: "FEATURED")
@@ -154,6 +168,14 @@ struct DiscoverView: View {
         .sheet(item: $selected) { row in
             StudentInstructorProfileView(instructor: row.instructor,
                                          distanceMetres: row.distanceMetres) { selected = nil }
+        }
+        .sheet(isPresented: $retakeQuiz) {
+            StudentQuizView(existing: session.studentPreferences) { prefs in
+                session.saveStudentPreferences(prefs)
+                retakeQuiz = false
+            } onSkip: {
+                retakeQuiz = false
+            }
         }
         .task { await data.syncCatalog() }
         // Only when the student has already agreed. This never raises the prompt — that is the

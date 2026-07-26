@@ -13,6 +13,13 @@ final class AppSession {
     var authState: AuthState = .unauthenticated
     var currentUser: User?
 
+    /// True when a signed-in student hasn't finished the onboarding quiz — drives `AppRouter` to show
+    /// the quiz before the tabs.
+    var needsOnboardingQuiz = false
+    /// The student's saved match preferences. Restored per-account (mirrors the durable-profile
+    /// pattern), so they survive logout and come back on re-sign-in for the same Apple ID.
+    private(set) var studentPreferences: StudentPreferences?
+
     /// Stable Apple user identifier (the only id Apple returns on every sign-in). Kept in the
     /// Keychain so it survives reinstalls; becomes the owner id for the user's CloudKit records.
     private(set) var appleUserID: String?
@@ -44,6 +51,7 @@ final class AppSession {
             currentUser = Self.loadUser(from: defaults, key: userKey)
             authState = role == .student ? .student : .instructor
         }
+        refreshStudentPreferences()
     }
 
     private static func loadUser(from defaults: UserDefaults, key: String) -> User? {
@@ -109,6 +117,34 @@ final class AppSession {
         return try? JSONDecoder().decode(User.self, from: data)
     }
 
+    // MARK: - Student onboarding preferences (durable, per-account)
+
+    private func studentPrefsKey(for owner: String) -> String { "flowe.studentPrefs.\(owner)" }
+
+    /// Persist the student's quiz answers and leave onboarding. Stamps `completedAt` if the caller
+    /// didn't (a skip stores an empty completed record, so we never re-prompt).
+    func saveStudentPreferences(_ prefs: StudentPreferences) {
+        var stored = prefs
+        if stored.completedAt == nil { stored.completedAt = Date() }
+        studentPreferences = stored
+        if let data = try? JSONEncoder().encode(stored) {
+            UserDefaults.standard.set(data, forKey: studentPrefsKey(for: ownerID))
+        }
+        withAnimation(.spring(duration: 0.4, bounce: 0.1)) { needsOnboardingQuiz = false }
+    }
+
+    private func loadStudentPreferences() -> StudentPreferences? {
+        guard let data = UserDefaults.standard.data(forKey: studentPrefsKey(for: ownerID)) else { return nil }
+        return try? JSONDecoder().decode(StudentPreferences.self, from: data)
+    }
+
+    /// Re-derive the in-memory prefs + onboarding flag from disk for the current owner.
+    private func refreshStudentPreferences() {
+        let prefs = loadStudentPreferences()
+        studentPreferences = prefs
+        needsOnboardingQuiz = (authState == .student) && (prefs == nil)
+    }
+
     /// Records the Apple credential's stable user id (persisted to the Keychain).
     func setAppleUserID(_ id: String) {
         appleUserID = id
@@ -158,6 +194,11 @@ final class AppSession {
                 memberSince: Date()
             )
         }
+        // Restore this account's quiz answers; a student with none is routed to onboarding.
+        // (ownerID is valid here — sign-in sets the Apple id before signUp/login.)
+        let prefs = loadStudentPreferences()
+        studentPreferences = prefs
+        needsOnboardingQuiz = (role == .student) && (prefs == nil)
         persist(role: role)
     }
 
@@ -174,6 +215,10 @@ final class AppSession {
         currentUser = nil
         appleUserID = nil
         authState = .unauthenticated
+        needsOnboardingQuiz = false
+        // Clear the in-memory prefs, but leave the durable per-account copy on disk — it's restored
+        // on re-sign-in, exactly like the durable profile.
+        studentPreferences = nil
         UserDefaults.standard.removeObject(forKey: roleKey)
         UserDefaults.standard.removeObject(forKey: userKey)
         UserDefaults.standard.set(false, forKey: loggedInKey)
