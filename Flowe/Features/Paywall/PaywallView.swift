@@ -43,6 +43,17 @@ struct PaywallView: View {
             .sheet(isPresented: $showPrivacy) {
                 LegalDocumentView(resource: LegalDoc.privacy.resource, title: LegalDoc.privacy.title)
             }
+            // Surface purchase failures — StoreKit errors, an unavailable product, or an
+            // unverifiable receipt. Without this the spinner just reverts and the user is left
+            // guessing whether anything happened.
+            .alert("Purchase failed", isPresented: Binding(
+                get: { subscription.purchaseError != nil },
+                set: { if !$0 { subscription.purchaseError = nil } }
+            )) {
+                Button("OK", role: .cancel) { subscription.purchaseError = nil }
+            } message: {
+                Text(subscription.purchaseError ?? "")
+            }
         }
     }
 
@@ -153,17 +164,6 @@ struct PaywallView: View {
     }
 
     // MARK: Footer (restore + disclosures)
-
-    private var unavailable: some View {
-        VStack(spacing: 8) {
-            ProgressView()
-            Text("Loading subscriptions…")
-                .font(FloweFont.sans(13))
-                .foregroundStyle(Color.floweMuted)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 24)
-    }
 
     private var footer: some View {
         VStack(spacing: 12) {

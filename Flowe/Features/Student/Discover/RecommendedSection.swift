@@ -146,7 +146,16 @@ private struct RecommendedCard: View {
                         .foregroundStyle(Color.floweInk)
                         .lineLimit(1)
 
-                    StarRatingView(rating: instructor.rating)
+                    if instructor.reviews > 0 {
+                        StarRatingView(rating: instructor.rating)
+                    } else {
+                        Text("New")
+                            .font(FloweFont.mono(10))
+                            .foregroundStyle(Color.floweMuted)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(Color.flowePink.opacity(0.10), in: Capsule())
+                    }
 
                     HStack(spacing: 4) {
                         ForEach(instructor.specialties.prefix(2), id: \.self) { s in

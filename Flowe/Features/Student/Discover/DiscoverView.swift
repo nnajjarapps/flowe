@@ -10,6 +10,7 @@ struct DiscoverView: View {
     @State private var search = ""
     @State private var filter = "All"
     @State private var retakeQuiz = false
+    @State private var showNotifications = false
     /// The tapped row, not just its instructor — carrying `distanceMetres` so the profile can show the
     /// same "~N km" the card did without recomputing (there is no `LocationService` inside the profile).
     @State private var selected: Row?
@@ -177,6 +178,7 @@ struct DiscoverView: View {
                 retakeQuiz = false
             }
         }
+        .sheet(isPresented: $showNotifications) { NotificationSettingsView() }
         .task { await data.syncCatalog() }
         // Only when the student has already agreed. This never raises the prompt — that is the
         // "Use my location" button's job, and a permission sheet on top of a feed the user just
@@ -187,11 +189,21 @@ struct DiscoverView: View {
 
     // MARK: - Header
 
+    /// Time-of-day greeting so the feed reads like it was opened just now. Uppercase to match the
+    /// mono label style *and* the localization keys, so it translates (see the instructor dashboard).
+    private var greeting: String {
+        switch Calendar.current.component(.hour, from: Date()) {
+        case 5..<12:  return "GOOD MORNING"
+        case 12..<17: return "GOOD AFTERNOON"
+        default:      return "GOOD EVENING"
+        }
+    }
+
     private var header: some View {
         VStack(spacing: 16) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("GOOD MORNING")
+                    Text(LocalizedStringKey(greeting))
                         .font(FloweFont.mono(11))
                         .foregroundStyle(Color.flowePinkDeep)
                     (Text("Find your ")
@@ -202,6 +214,7 @@ struct DiscoverView: View {
                 }
                 Spacer()
                 Button {
+                    showNotifications = true
                 } label: {
                     Image(systemName: "bell")
                         .font(.system(size: 16))
@@ -212,6 +225,7 @@ struct DiscoverView: View {
                         .overlay(Circle().stroke(Color.floweBorder, lineWidth: 1))
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Notifications")
             }
 
             HStack(spacing: 10) {

@@ -97,5 +97,5 @@ struct WeeklyBar: Identifiable {
 
 enum ProfileMock {
     /// Real account menu rows (not mock content) — kept for the ACCOUNT list.
-    static let accountRows = ["Notifications", "Payment methods", "Privacy", "Help & Support", "Log out"]
+    static let accountRows = ["Notifications", "Privacy", "Help & Support", "Log out"]
 }

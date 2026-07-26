@@ -33,7 +33,6 @@
 		3463BAC1A6EF2B14D0622CDD /* FlowApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8834262674B21339DCB9CC33 /* FlowApp.swift */; };
 		3569E85932969520E8E9FC32 /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FA653CE87EE4098EAB086D5 /* ProfileView.swift */; };
 		36C51C50E66B486ABB2E811C /* InfoPlist.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = C620D76581FC07D737D5C1BB /* InfoPlist.xcstrings */; };
-		383675FF172DEFC6809E7DC0 /* Flowe.storekit in Resources */ = {isa = PBXBuildFile; fileRef = 8AD8385BD6E748B58CBA04BD /* Flowe.storekit */; };
 		3B5ACC010BC814AAD54EF6E8 /* InstructorTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A15B6F9D171C9756B65D7423 /* InstructorTabView.swift */; };
 		3C21FE2BC3DA2E3AA770048F /* InstructorProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 540B00E56D89BF2B030B5185 /* InstructorProfileView.swift */; };
 		3EDD960F8F65E3919A6AD717 /* CreateAccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02CDF14067779CC6520621BC /* CreateAccountView.swift */; };
@@ -146,6 +145,7 @@
 		F582316F6833E1BD8CCF771E /* InstructorCalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D02BBF683FC16C7795428F78 /* InstructorCalendarView.swift */; };
 		F93612202282923224BD9201 /* FloweCommon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7381734E749647CBCF81D5DC /* FloweCommon.swift */; };
 		F9F588829CD0FF210899133A /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 08B690A006F7E8352F3A828D /* Localizable.xcstrings */; };
+		FEEDFACE000000000000AB01 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = FEEDFACE000000000000AB02 /* PrivacyInfo.xcprivacy */; };
 		FEEDFACE000000000000CC01 /* HelpSupport.html in Resources */ = {isa = PBXBuildFile; fileRef = FEEDFACE000000000000CC02 /* HelpSupport.html */; };
 		FEEDFACE000000000000BB01 /* PrivacyPolicy.html in Resources */ = {isa = PBXBuildFile; fileRef = FEEDFACE000000000000BB02 /* PrivacyPolicy.html */; };
 		FC5D98EC9D318EFBDA4996B2 /* InstructorCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = B12BC58F995114991F32175F /* InstructorCard.swift */; };
@@ -174,6 +174,7 @@
 		06D1617BBCF38F203A11C316 /* FloweConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloweConstants.swift; sourceTree = "<group>"; };
 		077B3B4C3600ECE4CE0E1861 /* UnsplashImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnsplashImage.swift; sourceTree = "<group>"; };
 		08B690A006F7E8352F3A828D /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
+		FEEDFACE000000000000AB02 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		FEEDFACE000000000000CC02 /* HelpSupport.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = HelpSupport.html; sourceTree = "<group>"; };
 		FEEDFACE000000000000BB02 /* PrivacyPolicy.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = PrivacyPolicy.html; sourceTree = "<group>"; };
 		0AEA61C0D5A07FA6156A5B5F /* MessagingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessagingService.swift; sourceTree = "<group>"; };
@@ -572,6 +573,7 @@
 				2900A4121599897991E4CAC5 /* Flowe.entitlements */,
 				8AD8385BD6E748B58CBA04BD /* Flowe.storekit */,
 				F99415EA7AD89182BC95C311 /* Info.plist */,
+				FEEDFACE000000000000AB02 /* PrivacyInfo.xcprivacy */,
 			);
 			path = Flowe;
 			sourceTree = "<group>";
@@ -826,7 +828,6 @@
 				0090B8F0D20E644F666A5511 /* DMSans-LightItalic.ttf in Resources */,
 				E35B39FB1D1599098DC6CADF /* DMSans-Medium.ttf in Resources */,
 				2D2F92EF6E999F39ABDCB722 /* DMSans-Regular.ttf in Resources */,
-				383675FF172DEFC6809E7DC0 /* Flowe.storekit in Resources */,
 				DBC8D79713AF1D0E87E2B82E /* Fraunces-Italic.ttf in Resources */,
 				17940F585D865F455EC5E145 /* Fraunces-Light.ttf in Resources */,
 				56077DC95736DA622C1DF012 /* Fraunces-LightItalic.ttf in Resources */,
@@ -834,6 +835,7 @@
 				B029AD2888183B7786C5B22F /* Fraunces-Regular.ttf in Resources */,
 				36C51C50E66B486ABB2E811C /* InfoPlist.xcstrings in Resources */,
 				F9F588829CD0FF210899133A /* Localizable.xcstrings in Resources */,
+				FEEDFACE000000000000AB01 /* PrivacyInfo.xcprivacy in Resources */,
 				FEEDFACE000000000000CC01 /* HelpSupport.html in Resources */,
 				FEEDFACE000000000000BB01 /* PrivacyPolicy.html in Resources */,
 				DC54DB3091B31BDC362B9E68 /* bookings.json in Resources */,

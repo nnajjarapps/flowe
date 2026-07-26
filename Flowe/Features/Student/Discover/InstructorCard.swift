@@ -29,13 +29,24 @@ struct InstructorCard: View {
                             .foregroundStyle(Color.floweInk)
                             .lineLimit(1)
                         Spacer(minLength: 8)
-                        HStack(spacing: 2) {
-                            Image(systemName: "star.fill")
-                                .font(.system(size: 10))
-                                .foregroundStyle(Color.flowePink)
-                            Text(String(format: "%.1f", instructor.rating))
-                                .font(FloweFont.mono(11))
-                                .foregroundStyle(Color.flowePinkDeep)
+                        // No fabricated 0.0 for a review-less instructor — a neutral "New" pill
+                        // instead, matching StudentInstructorProfileView / FeaturedHeroCard.
+                        if instructor.reviews > 0 {
+                            HStack(spacing: 2) {
+                                Image(systemName: "star.fill")
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(Color.flowePink)
+                                Text(String(format: "%.1f", instructor.rating))
+                                    .font(FloweFont.mono(11))
+                                    .foregroundStyle(Color.flowePinkDeep)
+                            }
+                        } else {
+                            Text("New")
+                                .font(FloweFont.mono(10))
+                                .foregroundStyle(Color.floweMuted)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(Color.flowePink.opacity(0.10), in: Capsule())
                         }
                     }
                     .padding(.bottom, 2)

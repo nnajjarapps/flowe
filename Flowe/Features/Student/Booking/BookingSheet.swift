@@ -146,10 +146,15 @@ struct BookingSheet: View {
                         .foregroundStyle(.white.opacity(0.75))
                     }
                     Spacer()
+                    // A review-less instructor reads "New", never a fabricated 0.0 (0).
                     HStack(spacing: 4) {
-                        Image(systemName: "star.fill").font(.system(size: 10))
-                        Text("\(instructor.rating, specifier: "%.1f") (\(instructor.reviews))")
-                            .font(FloweFont.mono(11))
+                        if instructor.reviews > 0 {
+                            Image(systemName: "star.fill").font(.system(size: 10))
+                            Text("\(instructor.rating, specifier: "%.1f") (\(instructor.reviews))")
+                                .font(FloweFont.mono(11))
+                        } else {
+                            Text("New").font(FloweFont.mono(11))
+                        }
                     }
                     .foregroundStyle(.white)
                     .padding(.horizontal, 10)

@@ -99,12 +99,18 @@ final class SubscriptionService {
         do {
             switch try await product.purchase() {
             case .success(let verification):
-                if case .verified(let transaction) = verification {
+                switch verification {
+                case .verified(let transaction):
                     await transaction.finish()
                     await refreshEntitlements()
                     return true
+                case .unverified(let transaction, _):
+                    // Tampered / unverifiable receipt: grant nothing, but finish it so StoreKit
+                    // stops redelivering it on every launch, and tell the user it didn't go through.
+                    await transaction.finish()
+                    purchaseError = "We couldn't verify that purchase. Please try again."
+                    return false
                 }
-                return false
             case .userCancelled, .pending:
                 return false
             @unknown default:
