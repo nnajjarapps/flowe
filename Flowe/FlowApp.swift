@@ -148,9 +148,10 @@ struct FlowApp: App {
                     }
                     await data.syncBookings(asInstructor: isInstructor)
                     await data.syncMessages()
-                    // Pre-warm the instructor's cache of student profiles so photos are present on
-                    // the dashboard, calendar, and inbox before anything is tapped.
-                    if isInstructor { await data.syncStudentProfiles() }
+                    // Pre-warm the opposite party's profiles so names + photos are present in
+                    // Messages/Bookings before anything is tapped: an instructor caches the students
+                    // they transact with; a student caches the instructors they message or booked.
+                    if isInstructor { await data.syncStudentProfiles() } else { await data.syncBookedInstructors() }
 
                     // Re-arm APNs on every sign-in, not just at launch. `tearDown` unregisters the
                     // device token, and signing back in without relaunching would otherwise leave

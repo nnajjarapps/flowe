@@ -148,6 +148,23 @@ final class CatalogService {
         #endif
     }
 
+    /// Fetch specific instructor listings by ownerID (their recordName) — a DIRECT record fetch, not
+    /// a visibility query. Lets a student resolve the instructors they message or booked, even ones
+    /// who have since gone hidden (a lapsed subscription still owes its history a name and a face).
+    func fetch(ownerIDs: [String]) async -> [CatalogListing] {
+        #if CLOUDKIT_ENABLED
+        guard !ownerIDs.isEmpty else { return [] }
+        do {
+            let results = try await database.records(for: ownerIDs.map { CKRecord.ID(recordName: $0) })
+            return results.values.compactMap { try? $0.get() }.compactMap(CatalogListing.init)
+        } catch {
+            return []
+        }
+        #else
+        return []
+        #endif
+    }
+
     /// Fetch all currently-visible listings (Boost + Visible).
     func fetchVisibleListings() async -> [CatalogListing] {
         #if CLOUDKIT_ENABLED

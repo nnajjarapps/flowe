@@ -444,9 +444,16 @@ final class MockDataStore {
         return grouped.compactMap { _, thread -> ConversationSummary? in
             guard let latest = thread.max(by: { $0.sentAt < $1.sentAt }) else { return nil }
             var counterpart = latest.counterpart(for: me)
-            // Instructors carry a listing photo; students carry their published StudentProfile photo.
+            // Instructors carry a listing (Unsplash `img` for seeds, uploaded `photo` for real ones);
+            // students carry their published StudentProfile photo. Forward BOTH the id and the photo,
+            // and fall back to the listing's name if the message never captured one.
             if let listing = instructors.first(where: { $0.ownerID == counterpart.id }) {
-                counterpart.avatarID = listing.img
+                counterpart = Counterpart(
+                    id: counterpart.id,
+                    name: counterpart.name.isEmpty ? listing.name : counterpart.name,
+                    avatarID: listing.img,
+                    photo: listing.photo
+                )
             } else {
                 counterpart.photo = studentPhoto(forOwnerID: counterpart.id)
             }
@@ -610,7 +617,7 @@ final class MockDataStore {
         }
         let listings = reachable.compactMap { listing -> Counterpart? in
             guard let id = listing.ownerID else { return nil }
-            return Counterpart(id: id, name: listing.name, avatarID: listing.img)
+            return Counterpart(id: id, name: listing.name, avatarID: listing.img, photo: listing.photo)
         }
         return dedupe(listings)
     }
@@ -2128,6 +2135,36 @@ final class MockDataStore {
         // Hide cached listings (not mine) that are no longer visible.
         for ins in instructors where ins.ownerID != nil && ins.ownerID != currentUserID {
             if !owners.contains(ins.ownerID!) { ins.visibilityRaw = 0 }
+        }
+        save()
+    }
+
+    /// Pre-warm a STUDENT's cache of the instructors they message or booked, so those instructors'
+    /// name + photo are present in Messages and Bookings without first opening Discover. Targeted
+    /// fetch by ownerID (works even for instructors who have since gone hidden); prunes nothing.
+    /// The counterpart of `syncStudentProfiles`.
+    func syncBookedInstructors() async {
+        guard !isPreview else { return }
+        let wanted = Set(myBookings.compactMap(\.instructorOwnerID))
+            .union(conversations.map { $0.counterpart.id })
+            .subtracting([currentUserID].compactMap { $0 })
+            .subtracting(blockedIDs)
+        guard !wanted.isEmpty else { return }
+        let listings = await catalog.fetch(ownerIDs: Array(wanted))
+        var nextId = instructors.map(\.legacyId).max() ?? 0
+        var nextOrder = instructors.map(\.order).max() ?? 0
+        for listing in listings {
+            guard listing.ownerID != currentUserID else { continue }
+            if let existing = instructors.first(where: { $0.ownerID == listing.ownerID }) {
+                apply(listing, to: existing)
+            } else {
+                nextId += 1; nextOrder += 1
+                let ins = Instructor(ownerID: listing.ownerID)
+                ins.legacyId = nextId
+                ins.order = nextOrder
+                apply(listing, to: ins)
+                context.insert(ins)
+            }
         }
         save()
     }
