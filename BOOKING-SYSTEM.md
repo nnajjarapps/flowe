@@ -1,3 +1,44 @@
+# ⚠️ Deferred production blocker: relationship-graph deanonymization
+
+**Status: known, accepted for a trusted TestFlight pilot only. Must be fixed before any public /
+App Store release. Recorded 2026-07-26 after a production-readiness audit.**
+
+**What it is.** `SessionBooking`, `SessionReview` and `EventRegistration` live in the world-readable
+public CloudKit database and carry both an opaque `studentID` and the student's plaintext
+`studentName`, alongside the session date/time (and, for events, a place). Any authenticated app user
+can query these by a harvested `instructorID`/`studentID`/`eventID` and reconstruct *who trains with
+whom, when, and roughly where* — a named private individual's recurring whereabouts. See the
+`Field / sensitive` tables under Booking, Reviews and Events below.
+
+**Why it isn't fixed in code.** Two approaches were evaluated and both fail:
+
+- *Encrypting or removing `studentName`* (the approach used for message bodies) does **not** close it:
+  the record still carries the opaque `studentID`, and the world-readable `StudentProfile` (recordName
+  == the student's id) maps that id straight back to a name. The identity re-links. Encryption works
+  for message *content* because content is the payload; here the payload is *identity + relationship*,
+  and identity must stay resolvable to the counterpart on a public database.
+
+- *CKShare / private-shared zones* is structurally incompatible with the app's model. CKShare needs a
+  per-pair invite→accept handshake and offers **no cross-zone query**, but Flowe's cross-user flows are
+  all "query the public DB for records addressed to me, from strangers": an instructor discovers new
+  bookings via `instructorID == me` (`BookingService.fetchForInstructor`), reviews are read the same
+  way (by the instructor *and* by browsing students), the community feed is an open
+  `startsAt >= now` query over every organizer's events (no CKShare analog exists), and attendee counts
+  require every device to see the full registration set. On top of that the app identifies users by
+  their Apple Sign-In id and never resolves a CloudKit `userRecordID`, so there is nothing to seed a
+  share participant with. Forcing CKShare would mean rebuilding discovery, notifications and identity
+  from scratch — and it still couldn't express the open feed.
+
+**The actual fix** is a server-side API with per-user authorization (CloudKit Web Services with a
+server-to-server key, or a small backend) — the standard way a marketplace keeps relational data both
+private *and* queryable-to-the-right-party. That is a product/infrastructure decision, not a code
+change, and is deferred until the app moves past the pilot.
+
+**What *was* fixed:** direct message bodies are now end-to-end encrypted (see Messaging), which closed
+the most sensitive leak — message *content* — because that one is amenable to encryption.
+
+---
+
 # Booking system
 
 How a session request gets from a student to an instructor, and back.
