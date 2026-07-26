@@ -131,6 +131,27 @@ enum SeedLoader {
             ))
         }
 
+        // Public student profiles for the seeded students, keyed by the SAME ownerIDs the incoming
+        // bookings use — so a seeded instructor sees a real photo + openable profile. Mia gets a photo.
+        let seededStudents: [(id: String, name: String, bio: String?, photo: Bool)] = [
+            ("seed-student-mia",    "Mia Tanaka",  "Reformer three mornings a week — chasing better posture.", true),
+            ("seed-student-jordan", "Jordan Lee",  nil, false),
+            ("seed-student-sara",   "Sara Kim",    nil, false),
+            ("seed-student-alex",   "Alex Rivera", nil, false),
+        ]
+        for (i, s) in seededStudents.enumerated() {
+            context.insert(StudentProfile(
+                legacyId: 900 + i,
+                ownerID: s.id,
+                name: s.name,
+                bio: s.bio,
+                memberSince: Date(timeIntervalSinceNow: -Double(120 + i * 40) * 86_400),
+                photo: s.photo ? seedHighlight() : nil,
+                updatedAt: Date(),
+                order: i
+            ))
+        }
+
         // Reviews on two of the completed sessions, so the rating is derived, not seeded onto the listing.
         let seededReviews: [(booking: Int, student: (id: String, name: String), rating: Int, text: String)] = [
             (0, mia, 5, "Taylor's cueing is so clear — best Reformer session I've had."),

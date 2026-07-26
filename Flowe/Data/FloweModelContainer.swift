@@ -23,7 +23,7 @@ enum FloweModelContainer {
 
         let reference = ModelConfiguration(
             "Reference",
-            schema: Schema([Instructor.self]),
+            schema: Schema([Instructor.self, StudentProfile.self]),
             isStoredInMemoryOnly: inMemory,
             cloudKitDatabase: .none
         )
@@ -38,7 +38,7 @@ enum FloweModelContainer {
 
         do {
             return try ModelContainer(
-                for: Instructor.self, FeedPost.self, PostComment.self, Booking.self, Message.self,
+                for: Instructor.self, StudentProfile.self, FeedPost.self, PostComment.self, Booking.self, Message.self,
                      BlockedUser.self, Review.self, CommunityEvent.self, LessonType.self,
                 configurations: reference, userData
             )

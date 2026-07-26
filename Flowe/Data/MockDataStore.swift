@@ -12,6 +12,9 @@ final class MockDataStore {
     private let context: ModelContext
 
     private(set) var instructors: [Instructor] = []
+    /// Cached public student profiles — the owner's own row plus instructor-side rows for students
+    /// they transact with. The counterpart to `instructors`; see `StudentProfile`.
+    private(set) var studentProfiles: [StudentProfile] = []
     private(set) var posts: [FeedPost] = []
     private(set) var postComments: [PostComment] = []
     private(set) var bookings: [Booking] = []
@@ -25,6 +28,7 @@ final class MockDataStore {
     private(set) var lessonTypes: [LessonType] = []
 
     private let catalog = CatalogService()
+    private let studentDirectory = StudentDirectoryService()
     private let bookingService = BookingService()
     private let messagingService = MessagingService()
     private let deletionService = AccountDeletionService()
@@ -52,6 +56,7 @@ final class MockDataStore {
     /// Removes every stored model — used to give each UI test a clean slate.
     private static func deleteAll(_ context: ModelContext) {
         try? context.delete(model: Instructor.self)
+        try? context.delete(model: StudentProfile.self)
         try? context.delete(model: FeedPost.self)
         try? context.delete(model: PostComment.self)
         try? context.delete(model: Booking.self)
@@ -70,6 +75,7 @@ final class MockDataStore {
 
     func refresh() {
         instructors = fetch(sortBy: \Instructor.order)
+        studentProfiles = fetch(sortBy: \StudentProfile.order)
         // Newest first: the feed is a timeline, and a shared feed has no meaningful local `order`.
         posts       = (try? context.fetch(
             FetchDescriptor<FeedPost>(sortBy: [SortDescriptor(\.createdAt, order: .reverse)])
@@ -356,7 +362,7 @@ final class MockDataStore {
     /// cache the result locally so the UI works offline.
     func syncBookings(asInstructor: Bool) async {
         guard !isPreview, let currentUserID else { return }
-        if asInstructor { await flushPendingListing() }
+        if asInstructor { await flushPendingListing() } else { await flushPendingStudentProfile() }
         await flushPendingWrites()
         let remote = asInstructor
             ? await bookingService.fetchForInstructor(ownerID: currentUserID)
@@ -438,9 +444,11 @@ final class MockDataStore {
         return grouped.compactMap { _, thread -> ConversationSummary? in
             guard let latest = thread.max(by: { $0.sentAt < $1.sentAt }) else { return nil }
             var counterpart = latest.counterpart(for: me)
-            // Instructors have a listing photo; students don't.
+            // Instructors carry a listing photo; students carry their published StudentProfile photo.
             if let listing = instructors.first(where: { $0.ownerID == counterpart.id }) {
                 counterpart.avatarID = listing.img
+            } else {
+                counterpart.photo = studentPhoto(forOwnerID: counterpart.id)
             }
             return ConversationSummary(
                 counterpart: counterpart,
@@ -562,7 +570,7 @@ final class MockDataStore {
         if asInstructor {
             let students = incomingBookings.compactMap { booking -> Counterpart? in
                 guard let id = booking.studentID, !isBlocked(id) else { return nil }
-                return Counterpart(id: id, name: booking.studentName)
+                return Counterpart(id: id, name: booking.studentName, photo: studentPhoto(forOwnerID: id))
             }
             return dedupe(students)
         }
@@ -2142,6 +2150,131 @@ final class MockDataStore {
         context.insert(instructor)
         save()
         return instructor
+    }
+
+    // MARK: - Student profiles (public directory, mirror of the instructor listing pipeline)
+
+    /// A cached student's public profile, by owner (counterpart to `organizerListing`).
+    func studentProfile(forOwnerID id: String) -> StudentProfile? {
+        studentProfiles.first { $0.ownerID == id }
+    }
+
+    /// A cached student's published photo, if any — used to render their avatar to an instructor.
+    func studentPhoto(forOwnerID id: String) -> Data? {
+        studentProfile(forOwnerID: id)?.photo
+    }
+
+    /// The signed-in student's own profile row (resolved by owner), if it exists.
+    var currentStudentProfile: StudentProfile? {
+        guard let currentUserID else { return nil }
+        return studentProfiles.first { $0.ownerID == currentUserID }
+    }
+
+    /// Ensures the signed-in student has a local profile row. Called on student login (mirror of
+    /// `ensureInstructorProfile`).
+    @discardableResult
+    func ensureStudentProfile(ownerID: String, name: String, memberSince: Date = Date()) -> StudentProfile {
+        if let existing = studentProfiles.first(where: { $0.ownerID == ownerID }) { return existing }
+        let nextId = (studentProfiles.map(\.legacyId).max() ?? 0) + 1
+        let nextOrder = (studentProfiles.map(\.order).max() ?? 0) + 1
+        let profile = StudentProfile(
+            legacyId: nextId, ownerID: ownerID, name: name,
+            memberSince: memberSince, order: nextOrder
+        )
+        context.insert(profile)
+        save()
+        return profile
+    }
+
+    /// Apply the student's edits to their own profile and publish it (mirror of `commit`).
+    func saveStudentProfile(name: String, bio: String?, photo: Data?, memberSince: Date) {
+        let me = currentStudentProfile ?? ensureStudentProfile(
+            ownerID: currentUserID ?? FloweConstants.localOwnerID, name: name, memberSince: memberSince
+        )
+        me.name = name
+        me.bio = bio
+        me.photo = photo
+        me.memberSince = memberSince
+        me.updatedAt = Date()
+        publishMyStudentProfile()
+    }
+
+    private func publishMyStudentProfile() {
+        guard let me = currentStudentProfile else { return }
+        me.pendingPublish = true
+        save()
+        guard !isPreview else { return }
+        Task {
+            if await studentDirectory.publish(me) {
+                me.pendingPublish = false
+                save()
+            }
+        }
+    }
+
+    /// Re-publish a student profile whose last save never landed (mirror of `flushPendingListing`).
+    func flushPendingStudentProfile() async {
+        guard !isPreview, let me = currentStudentProfile, me.pendingPublish else { return }
+        if await studentDirectory.publish(me) {
+            me.pendingPublish = false
+            save()
+        }
+    }
+
+    /// Pre-warm the instructor-side cache of the students they transact with. Targeted fetch by
+    /// ownerID — students are never enumerable — and prunes nothing.
+    func syncStudentProfiles() async {
+        guard !isPreview else { return }
+        let wanted = Set(incomingBookings.compactMap(\.studentID))
+            .union(conversations.map { $0.counterpart.id })
+            .subtracting([currentUserID].compactMap { $0 })
+            .subtracting(blockedIDs)
+        guard !wanted.isEmpty else { return }
+        let listings = await studentDirectory.fetch(ownerIDs: Array(wanted))
+        var nextId = studentProfiles.map(\.legacyId).max() ?? 0
+        var nextOrder = studentProfiles.map(\.order).max() ?? 0
+        for listing in listings {
+            guard listing.ownerID != currentUserID else { continue }
+            if let existing = studentProfiles.first(where: { $0.ownerID == listing.ownerID }) {
+                apply(listing, to: existing)
+            } else {
+                nextId += 1; nextOrder += 1
+                let p = StudentProfile(ownerID: listing.ownerID)
+                p.legacyId = nextId
+                p.order = nextOrder
+                apply(listing, to: p)
+                context.insert(p)
+            }
+        }
+        save()
+    }
+
+    /// Single non-pruning fetch for one open profile view (mirror of `syncReviews(forInstructor:)`).
+    func syncStudentProfile(ownerID: String) async {
+        guard !isPreview, ownerID != currentUserID else { return }
+        guard let listing = await studentDirectory.fetch(ownerID: ownerID) else { return }
+        if let existing = studentProfiles.first(where: { $0.ownerID == ownerID }) {
+            apply(listing, to: existing)
+        } else {
+            let nextId = (studentProfiles.map(\.legacyId).max() ?? 0) + 1
+            let nextOrder = (studentProfiles.map(\.order).max() ?? 0) + 1
+            let p = StudentProfile(ownerID: ownerID)
+            p.legacyId = nextId
+            p.order = nextOrder
+            apply(listing, to: p)
+            context.insert(p)
+        }
+        save()
+    }
+
+    private func apply(_ l: StudentListing, to p: StudentProfile) {
+        p.name = l.name
+        p.bio = l.bio
+        p.memberSince = l.memberSince
+        p.updatedAt = l.updatedAt
+        // Only overwrite a cached image when the server actually has one — protects the owner's own
+        // not-yet-uploaded photo, exactly like the Instructor rule.
+        if let photo = l.photo { p.photo = photo }
     }
 
     // MARK: - Persistence

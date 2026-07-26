@@ -67,7 +67,7 @@ struct NewMessageSheet: View {
 
     private func row(_ person: Counterpart) -> some View {
         HStack(spacing: 14) {
-            AvatarView(id: person.avatarID, size: 46)
+            AvatarView(id: person.avatarID, photo: person.photo, size: 46)
             Text(person.displayName)
                 .font(FloweFont.serif(15))
                 .foregroundStyle(Color.floweInk)

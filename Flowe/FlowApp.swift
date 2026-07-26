@@ -128,6 +128,12 @@ struct FlowApp: App {
                             ownerID: session.ownerID,
                             name: session.currentUser?.fullName ?? "Instructor"
                         )
+                    } else if session.authState == .student {
+                        data.ensureStudentProfile(
+                            ownerID: session.ownerID,
+                            name: session.currentUser?.fullName ?? "Student",
+                            memberSince: session.currentUser?.memberSince ?? Date()
+                        )
                     }
                     // The delegate is created by UIKit and can't see this environment, so the push
                     // service is handed the store (and the role its syncs need) from here.
@@ -142,6 +148,9 @@ struct FlowApp: App {
                     }
                     await data.syncBookings(asInstructor: isInstructor)
                     await data.syncMessages()
+                    // Pre-warm the instructor's cache of student profiles so photos are present on
+                    // the dashboard, calendar, and inbox before anything is tapped.
+                    if isInstructor { await data.syncStudentProfiles() }
 
                     // Re-arm APNs on every sign-in, not just at launch. `tearDown` unregisters the
                     // device token, and signing back in without relaunching would otherwise leave

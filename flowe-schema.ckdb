@@ -43,6 +43,20 @@ RECORD TYPE InstructorListing (
     GRANT READ TO "_world"
 );
 
+/* StudentProfile: a student's minimal PUBLIC profile (name/photo/bio), the counterpart to
+ * InstructorListing but never enumerated — instructors fetch a SPECIFIC student by recordName
+ * (== ownerID), so NO queryable index is required (no CKQuery, unlike the visibility feed). */
+RECORD TYPE StudentProfile (
+    name            STRING,
+    bio             STRING,
+    photo           ASSET,
+    memberSince     TIMESTAMP,
+    updatedAt       TIMESTAMP QUERYABLE,
+    GRANT WRITE TO "_creator",
+    GRANT CREATE TO "_icloud",
+    GRANT READ TO "_world"
+);
+
 RECORD TYPE SessionBooking (
     instructorID    STRING QUERYABLE,
     studentID       STRING QUERYABLE,

@@ -148,6 +148,13 @@ struct EditStudentProfileView: View {
         session.updateProfile(fullName: name, bio: bio, photo: .some(photo))
         // Refresh the denormalised name the store stamps onto new bookings/messages/posts/reviews.
         if let updated = session.currentUser?.fullName { data.currentUserName = updated }
+        // Publish the public profile so instructors can see the student's photo/name/bio.
+        data.saveStudentProfile(
+            name: name,
+            bio: bio.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : bio,
+            photo: photo,
+            memberSince: session.currentUser?.memberSince ?? Date()
+        )
         dismiss()
     }
 

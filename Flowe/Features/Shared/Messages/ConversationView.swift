@@ -6,11 +6,13 @@ struct ConversationView: View {
     let counterpart: Counterpart
 
     @Environment(MockDataStore.self) private var data
+    @Environment(AppSession.self) private var session
     @Environment(\.dismiss) private var dismiss
 
     @State private var draft = ""
     @State private var showReport = false
     @State private var confirmBlock = false
+    @State private var showStudentProfile = false
 
     private var messages: [Message] { data.thread(with: counterpart.id) }
 
@@ -59,12 +61,20 @@ struct ConversationView: View {
         .refreshable { await data.syncThread(with: counterpart.id) }
         .toolbar {
             ToolbarItem(placement: .principal) {
-                HStack(spacing: 10) {
-                    AvatarView(id: counterpart.avatarID, size: 30)
-                    Text(counterpart.firstName)
-                        .font(FloweFont.serif(15))
-                        .foregroundStyle(Color.floweInk)
+                Button {
+                    // Only an instructor opens a student's profile; a student's counterpart is the
+                    // instructor, whose profile is reached from Discover instead.
+                    if session.authState == .instructor { showStudentProfile = true }
+                } label: {
+                    HStack(spacing: 10) {
+                        AvatarView(id: counterpart.avatarID, photo: counterpart.photo, size: 30)
+                        Text(counterpart.firstName)
+                            .font(FloweFont.serif(15))
+                            .foregroundStyle(Color.floweInk)
+                    }
                 }
+                .buttonStyle(.plain)
+                .disabled(session.authState != .instructor)
             }
 
             ToolbarItem(placement: .topBarTrailing) {
@@ -90,6 +100,14 @@ struct ConversationView: View {
                 contentID: messages.last?.remoteID ?? "",
                 // Report the tail of the thread — a single message rarely carries the context.
                 snapshot: messages.suffix(10).map(\.text).joined(separator: "\n")
+            )
+        }
+        .sheet(isPresented: $showStudentProfile) {
+            StudentProfileView(
+                studentID: counterpart.id,
+                studentName: counterpart.name,
+                onMessage: { showStudentProfile = false },   // Message returns to this thread
+                onClose: { showStudentProfile = false }
             )
         }
         .confirmationDialog("Block \(counterpart.firstName)?",

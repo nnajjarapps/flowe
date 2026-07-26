@@ -68,6 +68,9 @@ struct Counterpart: Identifiable, Hashable {
     let name: String
     /// Optional image id — only instructors have a listing photo.
     var avatarID: String = ""
+    /// Uploaded photo when the counterpart is a student (resolved from their public StudentProfile).
+    /// Rides alongside `avatarID` so `AvatarView` can show a real image; nil → gradient placeholder.
+    var photo: Data? = nil
 
     var displayName: String { name.isEmpty ? "Someone" : name }
     var firstName: String { displayName.split(separator: " ").first.map(String.init) ?? displayName }

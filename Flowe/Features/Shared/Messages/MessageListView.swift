@@ -121,7 +121,7 @@ struct MessageListView: View {
 
     private func row(_ summary: ConversationSummary) -> some View {
         HStack(spacing: 14) {
-            AvatarView(id: summary.counterpart.avatarID, size: 50, ring: summary.hasUnread)
+            AvatarView(id: summary.counterpart.avatarID, photo: summary.counterpart.photo, size: 50, ring: summary.hasUnread)
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack {

@@ -66,6 +66,9 @@ struct WeekDayPill: View {
 struct CalendarSessionCard: View {
     let session: Booking
 
+    @Environment(MockDataStore.self) private var data
+    @State private var showStudent = false
+
     var body: some View {
         HStack(spacing: FlowSpacing.md) {
             VStack(alignment: .leading, spacing: 2) {
@@ -82,17 +85,24 @@ struct CalendarSessionCard: View {
                 .fill(Color.floweBorder)
                 .frame(width: 1, height: 40)
 
-            AvatarView(id: "", size: 42)
+            Button {
+                if session.studentID != nil { showStudent = true }
+            } label: {
+                HStack(spacing: FlowSpacing.md) {
+                    AvatarView(id: "", photo: data.studentPhoto(forOwnerID: session.studentID ?? ""), size: 42)
 
-            VStack(alignment: .leading, spacing: 3) {
-                Text(session.studentName.isEmpty ? "Student" : session.studentName)
-                    .font(FloweFont.serif(16, .medium))
-                    .foregroundStyle(Color.floweInk)
-                    .lineLimit(1)
-                Text(session.type.uppercased())
-                    .font(FloweFont.mono(10))
-                    .foregroundStyle(Color.floweMuted)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(session.studentName.isEmpty ? "Student" : session.studentName)
+                            .font(FloweFont.serif(16, .medium))
+                            .foregroundStyle(Color.floweInk)
+                            .lineLimit(1)
+                        Text(session.type.uppercased())
+                            .font(FloweFont.mono(10))
+                            .foregroundStyle(Color.floweMuted)
+                    }
+                }
             }
+            .buttonStyle(.plain)
 
             Spacer(minLength: FlowSpacing.sm)
 
@@ -100,6 +110,10 @@ struct CalendarSessionCard: View {
         }
         .padding(FlowSpacing.md)
         .floweCard()
+        .sheet(isPresented: $showStudent) {
+            StudentProfileView(studentID: session.studentID ?? "", studentName: session.studentName,
+                               onMessage: nil, onClose: { showStudent = false })
+        }
     }
 }
 
@@ -131,23 +145,31 @@ struct CalendarEmptyState: View {
 /// On decision the card collapses to a resolved confirmation line.
 struct BookingRequestCard: View {
     @Environment(MockDataStore.self) private var data
+    @State private var showStudent = false
 
     let request: Booking
 
     var body: some View {
         VStack(alignment: .leading, spacing: FlowSpacing.md) {
             HStack(spacing: FlowSpacing.md) {
-                AvatarView(id: "", size: 44)
+                Button {
+                    if request.studentID != nil { showStudent = true }
+                } label: {
+                    HStack(spacing: FlowSpacing.md) {
+                        AvatarView(id: "", photo: data.studentPhoto(forOwnerID: request.studentID ?? ""), size: 44)
 
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(request.studentName.isEmpty ? "A student" : request.studentName)
-                        .font(FloweFont.serif(16, .medium))
-                        .foregroundStyle(Color.floweInk)
-                        .lineLimit(1)
-                    Text("\(request.type.uppercased()) · \(request.duration.uppercased())")
-                        .font(FloweFont.mono(10))
-                        .foregroundStyle(Color.floweMuted)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(request.studentName.isEmpty ? "A student" : request.studentName)
+                                .font(FloweFont.serif(16, .medium))
+                                .foregroundStyle(Color.floweInk)
+                                .lineLimit(1)
+                            Text("\(request.type.uppercased()) · \(request.duration.uppercased())")
+                                .font(FloweFont.mono(10))
+                                .foregroundStyle(Color.floweMuted)
+                        }
+                    }
                 }
+                .buttonStyle(.plain)
 
                 Spacer(minLength: FlowSpacing.sm)
 
@@ -206,6 +228,10 @@ struct BookingRequestCard: View {
         }
         .padding(FlowSpacing.lg)
         .floweCard()
+        .sheet(isPresented: $showStudent) {
+            StudentProfileView(studentID: request.studentID ?? "", studentName: request.studentName,
+                               onMessage: nil, onClose: { showStudent = false })
+        }
     }
 
     private func resolvedRow(icon: String, text: String, tint: Color) -> some View {
