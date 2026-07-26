@@ -45,17 +45,24 @@ struct ProfileView: View {
         ]
     }
 
-    /// Minutes practiced per weekday, summed from real bookings' durations.
+    /// Minutes practiced per weekday **this week**, from sessions that actually happened.
+    ///
+    /// Was previously matched by weekday name alone (`date.hasPrefix("Mon")`), which counted every
+    /// Monday session ever, of any status — so the chart inflated for every returning user. Now each
+    /// bar is a specific date in the current Monday–Sunday week, and only a non-cancelled session
+    /// whose reconstructed end time has actually passed counts as "practiced".
     private var weekBars: [WeeklyBar] {
-        let weekdays: [(prefix: String, letter: String)] = [
-            ("Mon", "M"), ("Tue", "T"), ("Wed", "W"), ("Thu", "T"),
-            ("Fri", "F"), ("Sat", "S"), ("Sun", "S"),
-        ]
-        return weekdays.map { day in
-            let minutes = data.myBookings
-                .filter { $0.date.hasPrefix(day.prefix) }
-                .reduce(0) { $0 + (Int($1.duration.filter(\.isNumber)) ?? 0) }
-            return WeeklyBar(day: day.letter, minutes: minutes)
+        let now = Date()
+        let calendar = Calendar.current
+        let letters = ["M", "T", "W", "T", "F", "S", "S"]
+        let practiced = data.myBookings.filter { $0.status == .completed || $0.status == .confirmed }
+        return FloweWeek.mondayWeekDays(now: now, calendar: calendar).enumerated().map { index, dayDate in
+            let minutes = practiced.reduce(0) { total, booking in
+                guard let end = booking.sessionEnd(now: now), end <= now,
+                      calendar.isDate(end, inSameDayAs: dayDate) else { return total }
+                return total + (Int(booking.duration.filter(\.isNumber)) ?? 0)
+            }
+            return WeeklyBar(day: letters[index], minutes: minutes)
         }
     }
 

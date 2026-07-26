@@ -56,6 +56,34 @@ enum FloweWeek {
     /// Today's stored booking-date string — used to filter "today's" sessions.
     static var todayBookingDate: String { bookingDateString(for: Date()) }
 
+    // MARK: - Practice / earnings week (Monday-first calendar week)
+    //
+    // Distinct from `current()` (a rolling 7 days from today, for the booking picker): stats like the
+    // student practice chart and the instructor's weekly earnings are about *this calendar week*, and
+    // are bucketed Monday…Sunday to match the "M T W T F S S" chart regardless of the device's
+    // first-weekday setting.
+
+    /// Monday 00:00 of the calendar week containing `now`.
+    static func currentMonday(now: Date = Date(), calendar: Calendar = .current) -> Date {
+        let today = calendar.startOfDay(for: now)
+        let weekday = calendar.component(.weekday, from: today)   // 1 = Sun … 7 = Sat
+        let daysSinceMonday = (weekday + 5) % 7                   // Mon → 0 … Sun → 6
+        return calendar.date(byAdding: .day, value: -daysSinceMonday, to: today) ?? today
+    }
+
+    /// The seven `startOfDay` dates Monday…Sunday of the week containing `now`.
+    static func mondayWeekDays(now: Date = Date(), calendar: Calendar = .current) -> [Date] {
+        let monday = currentMonday(now: now, calendar: calendar)
+        return (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: monday) }
+    }
+
+    /// Whether `date` falls inside the Monday-first week containing `now`.
+    static func isInCurrentWeek(_ date: Date, now: Date = Date(), calendar: Calendar = .current) -> Bool {
+        let monday = currentMonday(now: now, calendar: calendar)
+        guard let nextMonday = calendar.date(byAdding: .day, value: 7, to: monday) else { return false }
+        return date >= monday && date < nextMonday
+    }
+
     // MARK: - Formatting
 
     /// Region-aware: `setLocalizedDateFormatFromTemplate` reorders fields for the device locale.

@@ -40,11 +40,20 @@ struct InstructorDashboardView: View {
         return accountFirst.isEmpty ? "there" : accountFirst
     }
 
-    /// This week's earnings from accepted sessions, priced at the instructor's rate.
-    /// Payment is collected directly from the student, so this is a projection, not a balance.
+    /// This week's earnings: accepted or completed sessions whose date falls in the current
+    /// Monday–Sunday week, priced at the instructor's rate. Was previously *every* outstanding
+    /// confirmed session with no date scope — which duplicated the profile's PROJECTED tile and made
+    /// the "THIS WEEK" label wrong. Payment is collected directly from the student, so this is a
+    /// projection, not a balance.
     private var weekEarnings: Int {
         let price = data.currentInstructor?.price ?? 0
-        return data.incomingBookings.filter { $0.status == .confirmed }.count * price
+        let now = Date()
+        let count = data.incomingBookings.filter { booking in
+            guard booking.status == .confirmed || booking.status == .completed,
+                  let end = booking.sessionEnd(now: now) else { return false }
+            return FloweWeek.isInCurrentWeek(end, now: now)
+        }.count
+        return count * price
     }
 
     private var ratingDisplay: String {
