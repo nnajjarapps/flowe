@@ -445,12 +445,14 @@ final class MockDataStore {
             guard let latest = thread.max(by: { $0.sentAt < $1.sentAt }) else { return nil }
             var counterpart = latest.counterpart(for: me)
             // Instructors carry a listing (Unsplash `img` for seeds, uploaded `photo` for real ones);
-            // students carry their published StudentProfile photo. Forward BOTH the id and the photo,
-            // and fall back to the listing's name if the message never captured one.
+            // students carry their published StudentProfile photo. Forward the id + photo, and PREFER
+            // the instructor's live listing name over the message-stored one — the message's senderName
+            // is a denormalised snapshot that can be stale or a sign-in fallback ("Member"), while the
+            // listing name is the authoritative identity the student already sees in Discover.
             if let listing = instructors.first(where: { $0.ownerID == counterpart.id }) {
                 counterpart = Counterpart(
                     id: counterpart.id,
-                    name: counterpart.name.isEmpty ? listing.name : counterpart.name,
+                    name: listing.name.isEmpty ? counterpart.name : listing.name,
                     avatarID: listing.img,
                     photo: listing.photo
                 )
