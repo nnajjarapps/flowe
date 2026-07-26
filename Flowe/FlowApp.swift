@@ -146,6 +146,9 @@ struct FlowApp: App {
                         await PushService.shared.tearDown()
                         return
                     }
+                    // Publish my end-to-end messaging key before syncing messages, so counterparts
+                    // can encrypt to me and my own sends can be sealed.
+                    await data.activateMessaging()
                     await data.syncBookings(asInstructor: isInstructor)
                     await data.syncMessages()
                     // Pre-warm the opposite party's profiles so names + photos are present in

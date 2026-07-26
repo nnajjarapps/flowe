@@ -31,6 +31,7 @@ final class MockDataStore {
     private let studentDirectory = StudentDirectoryService()
     private let bookingService = BookingService()
     private let messagingService = MessagingService()
+    private let messageCrypto = MessageCrypto()
     private let deletionService = AccountDeletionService()
     private let reportService = ReportService()
     private let reviewService = ReviewService()
@@ -505,13 +506,21 @@ final class MockDataStore {
     }
 
     private func upload(_ message: Message) async {
+        // Encrypt the text end-to-end before it touches the world-readable public database. The local
+        // `message.text` stays plaintext (this cache is on-device only); only the wire value is sealed.
+        // If the recipient hasn't published a key yet, fall back to plaintext for this one message.
+        let wireText = await messageCrypto.encrypt(
+            message.text,
+            conversationID: message.conversationID,
+            counterpartID: message.recipientID
+        ) ?? message.text
         let remoteID = await messagingService.send(
             conversationID: message.conversationID,
             senderID: message.senderID,
             senderName: message.senderName,
             recipientID: message.recipientID,
             recipientName: message.recipientName,
-            text: message.text,
+            text: wireText,
             sentAt: message.sentAt
         )
         message.remoteID = remoteID
@@ -589,7 +598,7 @@ final class MockDataStore {
             await upload(message)
         }
         let remote = await messagingService.fetchMessages(for: me)
-        merge(remote, me: me)
+        await merge(remote, me: me)
     }
 
     /// Refresh a single thread — cheaper than a full sync while a conversation is open.
@@ -598,10 +607,17 @@ final class MockDataStore {
         let remote = await messagingService.fetchThread(
             conversationID: Message.conversationID(me, counterpartID)
         )
-        merge(remote, me: me)
+        await merge(remote, me: me)
     }
 
-    private func merge(_ remote: [RemoteMessage], me: String) {
+    /// Ensure my end-to-end messaging keypair exists and my public key is published, so others can
+    /// send me encrypted messages. Cheap to call on every sign-in — the publish no-ops when unchanged.
+    func activateMessaging() async {
+        guard !isPreview, let me = currentUserID else { return }
+        await messageCrypto.activate(ownerID: me)
+    }
+
+    private func merge(_ remote: [RemoteMessage], me: String) async {
         guard !remote.isEmpty else { return }
         let known = Set(messages.compactMap(\.remoteID))
         // Tombstoned ids the user deleted — never re-insert them, or a sync would resurrect a
@@ -609,6 +625,12 @@ final class MockDataStore {
         let deleted = Set(UserDefaults.standard.stringArray(forKey: deletedMessagesKey) ?? [])
         var inserted = false
         for entry in remote where !known.contains(entry.id) && !deleted.contains(entry.id) {
+            // Decrypt the wire text into plaintext for the local (on-device-only) cache. The
+            // counterpart is whichever party isn't me — the shared secret is the same either way.
+            let counterpartID = entry.senderID == me ? entry.recipientID : entry.senderID
+            let plaintext = await messageCrypto.decrypt(
+                entry.text, conversationID: entry.conversationID, counterpartID: counterpartID
+            )
             context.insert(Message(
                 remoteID: entry.id,
                 conversationID: entry.conversationID,
@@ -616,7 +638,7 @@ final class MockDataStore {
                 senderName: entry.senderName,
                 recipientID: entry.recipientID,
                 recipientName: entry.recipientName,
-                text: entry.text,
+                text: plaintext,
                 sentAt: entry.sentAt,
                 // Anything I sent is implicitly read; anything received starts unread.
                 isRead: entry.senderID == me

@@ -110,6 +110,7 @@
 		B9E765D524BEBFAE495D618D /* 0AD9894E-764F-47AF-AC95-56485A70A3C4.PNG in Resources */ = {isa = PBXBuildFile; fileRef = ED2BC5AAEAE57BD8B4B05646 /* 0AD9894E-764F-47AF-AC95-56485A70A3C4.PNG */; };
 		BA845ED7BB33CB99331BC16A /* PostRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72D6B8E3948B89E8B171AF07 /* PostRowView.swift */; };
 		BC6AADB35930B1E34011D7C7 /* MessagingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AEA61C0D5A07FA6156A5B5F /* MessagingService.swift */; };
+		FEEDFACE000000000000AC01 /* MessageCrypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEEDFACE000000000000AC02 /* MessageCrypto.swift */; };
 		BD00F0125CDD9AEFD8EB42C6 /* Date+Flowe.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34F13E4C3B93F2B1A8D4706A /* Date+Flowe.swift */; };
 		C0CE885E52944562F46100D6 /* EmptyStateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0F3A0FB151C0F688534ACEF /* EmptyStateView.swift */; };
 		C153033035FA8E7A3BB94A43 /* BookingSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 737B91E7269C6447C335D02B /* BookingSheet.swift */; };
@@ -178,6 +179,7 @@
 		FEEDFACE000000000000CC02 /* HelpSupport.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = HelpSupport.html; sourceTree = "<group>"; };
 		FEEDFACE000000000000BB02 /* PrivacyPolicy.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = PrivacyPolicy.html; sourceTree = "<group>"; };
 		0AEA61C0D5A07FA6156A5B5F /* MessagingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessagingService.swift; sourceTree = "<group>"; };
+		FEEDFACE000000000000AC02 /* MessageCrypto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageCrypto.swift; sourceTree = "<group>"; };
 		0C6A6B72111739FB381005F1 /* LocalizationUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizationUITests.swift; sourceTree = "<group>"; };
 		0CE4F79CAA257F95E8F9B243 /* ReviewService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewService.swift; sourceTree = "<group>"; };
 		0D7CAF2291282ED6FAC4D459 /* bookings.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = bookings.json; sourceTree = "<group>"; };
@@ -393,6 +395,7 @@
 				489CC61A3C045B16825417BC /* LocationService.swift */,
 				07602D852806E083473292A0 /* LessonTypeService.swift */,
 				0AEA61C0D5A07FA6156A5B5F /* MessagingService.swift */,
+				FEEDFACE000000000000AC02 /* MessageCrypto.swift */,
 				A7363600B48D9D0491D076A9 /* MockDataStore.swift */,
 				8089C1D2681596AF48101FD3 /* PushService.swift */,
 				649FBC87C5167A90BDDBF19B /* ReportService.swift */,
@@ -950,6 +953,7 @@
 				DFD748F681DCD84E0CD8BFE4 /* MessageBubble.swift in Sources */,
 				E95011B178469C57A021A6D9 /* MessageListView.swift in Sources */,
 				BC6AADB35930B1E34011D7C7 /* MessagingService.swift in Sources */,
+				FEEDFACE000000000000AC01 /* MessageCrypto.swift in Sources */,
 				0F346C6CD319E875C3D3EAF4 /* MockDataStore.swift in Sources */,
 				24A9D9345D589AA3843DF653 /* NewMessageSheet.swift in Sources */,
 				8F005CECFE7C6E453C28CD31 /* NotificationSettingsView.swift in Sources */,
