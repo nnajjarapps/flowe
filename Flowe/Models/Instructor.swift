@@ -151,8 +151,30 @@ final class Instructor {
             guard parts.count == 2, parts[0] == day else { return nil }
             return parts[1]
         }
-        guard stored.isEmpty else { return FloweConstants.times.filter(stored.contains) }
+        // Return the instructor's own stored times, ordered by time of day. Must NOT intersect with
+        // `FloweConstants.times` — that preset only holds whole hours, so filtering through it
+        // silently dropped every custom time (9:10, 9:30, …) the availability editor now allows.
+        guard stored.isEmpty else { return Self.chronological(stored) }
         return available.contains(day) ? FloweConstants.times : []
+    }
+
+    /// Order year-less "h:mm a" time strings by time of day, so a day's slots read 8:00, 9:30,
+    /// 10:15 rather than in insertion order. Unparseable strings sort last.
+    private static func chronological(_ times: [String]) -> [String] {
+        times.sorted { minutesOfDay($0) < minutesOfDay($1) }
+    }
+
+    private static let timeParser: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US")
+        formatter.dateFormat = "h:mm a"
+        return formatter
+    }()
+
+    private static func minutesOfDay(_ time: String) -> Int {
+        guard let date = timeParser.date(from: time) else { return .max }
+        let comps = Calendar.current.dateComponents([.hour, .minute], from: date)
+        return (comps.hour ?? 0) * 60 + (comps.minute ?? 0)
     }
 
     /// Replace one day's hours, leaving the other days untouched.
