@@ -12,6 +12,10 @@ struct RemoteLessonType {
     /// Kept optional — a record with no `price` key is "not stated" (nil), a `0` is genuinely free.
     let price: Int?
     let order: Int
+    /// No-Show Shield policy, published so the student sees it before booking.
+    let cancelWindowHours: Int
+    let cancelFee: Int
+    let cancelFeeIsPercent: Bool
     /// Whether the record carries a highlight photo, known from the metadata query, which does not
     /// download the asset itself — see `LessonTypeService.lessonTypeMetadataKeys`.
     let hasHighlight: Bool
@@ -33,6 +37,9 @@ struct RemoteLessonType {
         // `as? Int` on a missing key yields nil — exactly the "not stated" state we want to keep.
         price = record["price"] as? Int
         order = record["order"] as? Int ?? 0
+        cancelWindowHours = record["cancelWindowHours"] as? Int ?? 0
+        cancelFee = record["cancelFee"] as? Int ?? 0
+        cancelFeeIsPercent = (record["cancelFeeIsPercent"] as? Int ?? 0) == 1
         hasHighlight = (record["hasHighlight"] as? Int ?? 0) == 1
         createdAt = record["createdAt"] as? Date ?? .distantPast
         updatedAt = record["updatedAt"] as? Date ?? .distantPast
@@ -63,7 +70,8 @@ final class LessonTypeService {
     /// Photos come afterwards from `fetchPhotos`, once, per type.
     static let lessonTypeMetadataKeys = [
         "ownerID", "name", "details", "durationMinutes", "capacity", "price",
-        "order", "hasHighlight", "createdAt", "updatedAt",
+        "order", "cancelWindowHours", "cancelFee", "cancelFeeIsPercent",
+        "hasHighlight", "createdAt", "updatedAt",
     ]
 
     #if CLOUDKIT_ENABLED
@@ -84,6 +92,7 @@ final class LessonTypeService {
                 capacity: Int,
                 price: Int?,
                 order: Int,
+                policy: CancellationPolicy,
                 createdAt: Date,
                 highlight: Data?) async -> String? {
         #if CLOUDKIT_ENABLED
@@ -98,7 +107,7 @@ final class LessonTypeService {
         Self.apply(
             to: record, ownerID: ownerID, name: name, details: details,
             durationMinutes: durationMinutes, capacity: capacity, price: price,
-            order: order, createdAt: createdAt, staged: staged
+            order: order, policy: policy, createdAt: createdAt, staged: staged
         )
 
         do {
@@ -114,7 +123,7 @@ final class LessonTypeService {
             Self.apply(
                 to: server, ownerID: ownerID, name: name, details: details,
                 durationMinutes: durationMinutes, capacity: capacity, price: price,
-                order: order, createdAt: createdAt, staged: staged
+                order: order, policy: policy, createdAt: createdAt, staged: staged
             )
             let saved = try? await database.save(server)
             return saved?.recordID.recordName
@@ -213,6 +222,7 @@ final class LessonTypeService {
                               capacity: Int,
                               price: Int?,
                               order: Int,
+                              policy: CancellationPolicy,
                               createdAt: Date,
                               staged: URL?) {
         record["ownerID"] = ownerID
@@ -224,6 +234,10 @@ final class LessonTypeService {
         // free type writes 0.
         record["price"] = price
         record["order"] = order
+        // No-Show Shield policy — published so the student sees it pre-booking.
+        record["cancelWindowHours"] = policy.windowHours
+        record["cancelFee"] = policy.fee
+        record["cancelFeeIsPercent"] = policy.feeIsPercent ? 1 : 0
         record["createdAt"] = createdAt
         record["updatedAt"] = Date()
         record["highlight"] = staged.map { CKAsset(fileURL: $0) }

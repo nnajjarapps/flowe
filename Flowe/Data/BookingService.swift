@@ -13,6 +13,10 @@ struct RemoteBooking {
     let duration: String
     let createdAt: Date
     let cancelled: Bool
+    /// The record's last server modification time. Since `cancel()` is the last write a booking ever
+    /// receives, for a cancelled booking this IS the cancellation time — which lets No-Show Shield
+    /// measure a late-cancel against the policy window without adding a `cancelledAt` schema field.
+    let modifiedAt: Date?
 
     init?(record: CKRecord) {
         guard let instructorID = record["instructorID"] as? String,
@@ -27,6 +31,7 @@ struct RemoteBooking {
         duration = record["duration"] as? String ?? ""
         createdAt = record["createdAt"] as? Date ?? .distantPast
         cancelled = (record["cancelled"] as? Int ?? 0) == 1
+        modifiedAt = record.modificationDate
     }
 }
 

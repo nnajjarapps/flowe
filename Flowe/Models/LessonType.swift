@@ -1,6 +1,24 @@
 import Foundation
 import SwiftData
 
+/// A lesson type's cancellation / no-show policy. Off-app by design: Flowe TRACKS the fee owed for the
+/// instructor to collect directly, it never charges anything. `windowHours == 0` means no policy.
+struct CancellationPolicy: Hashable {
+    var windowHours: Int = 0
+    var fee: Int = 0
+    var feeIsPercent: Bool = false
+
+    /// A policy only bites if there's both a notice window and a fee.
+    var isActive: Bool { windowHours > 0 && fee > 0 }
+
+    /// The fee owed for a session priced at `sessionPrice`. A percent policy scales with the price; a
+    /// flat fee ignores it. Rounded to whole currency units.
+    func amount(sessionPrice: Int) -> Int {
+        guard isActive else { return 0 }
+        return feeIsPercent ? Int((Double(sessionPrice) * Double(fee) / 100).rounded()) : fee
+    }
+}
+
 /// A rich, instructor-authored lesson type — "Sunrise Reformer", "Prenatal Mat", "Rehab 1-on-1".
 ///
 /// This replaces the old flat `Instructor.sessionTypes: [String]` chip list, where every instructor
@@ -66,6 +84,20 @@ final class LessonType {
     /// the fixed canonical-list ordering the deleted `["Private","Duet","Group","Online"]` menu gave.
     var order: Int = 0
 
+    // MARK: No-Show Shield policy (PUBLISHED — the student sees it before booking)
+    /// Hours of notice required to cancel without a fee. 0 = no cancellation policy at all.
+    var cancelWindowHours: Int = 0
+    /// The late-cancel / no-show fee. A percent (0–100) of the session price when `cancelFeeIsPercent`,
+    /// otherwise a flat currency amount. 0 = no fee. Off-app: Flowe only TRACKS what's owed.
+    var cancelFee: Int = 0
+    /// Whether `cancelFee` is a percentage of the session price (true) or a flat amount (false).
+    var cancelFeeIsPercent: Bool = false
+
+    /// The resolved policy value used by both the student-facing display and the fee ledger.
+    var cancellationPolicy: CancellationPolicy {
+        CancellationPolicy(windowHours: cancelWindowHours, fee: cancelFee, feeIsPercent: cancelFeeIsPercent)
+    }
+
     // MARK: Highlight photo
     @Attribute(.externalStorage) var highlight: Data?
     /// Whether the shared record carries a photo, known without downloading it — set from whether the
@@ -92,6 +124,9 @@ final class LessonType {
         capacity: Int = 0,
         price: Int? = nil,
         order: Int = 0,
+        cancelWindowHours: Int = 0,
+        cancelFee: Int = 0,
+        cancelFeeIsPercent: Bool = false,
         highlight: Data? = nil,
         hasHighlight: Bool = false,
         pendingUpload: Bool = false,
@@ -109,6 +144,9 @@ final class LessonType {
         self.capacity = capacity
         self.price = price
         self.order = order
+        self.cancelWindowHours = cancelWindowHours
+        self.cancelFee = cancelFee
+        self.cancelFeeIsPercent = cancelFeeIsPercent
         self.highlight = highlight
         self.hasHighlight = hasHighlight
         self.pendingUpload = pendingUpload
@@ -135,6 +173,8 @@ struct ResolvedLessonType: Identifiable, Hashable {
     let durationMinutes: Int
     let capacity: Int
     let price: Int?
+    /// The cancellation policy, so the booking flow can show it to the student before they commit.
+    let cancellationPolicy: CancellationPolicy
     /// Whether a photo exists to show (from the row's `hasHighlight`), so the card can reserve the
     /// photo band before the asset itself has been fetched.
     let hasPhoto: Bool
@@ -148,6 +188,7 @@ struct ResolvedLessonType: Identifiable, Hashable {
         durationMinutes: Int = 0,
         capacity: Int = 0,
         price: Int? = nil,
+        cancellationPolicy: CancellationPolicy = CancellationPolicy(),
         hasPhoto: Bool = false,
         photo: Data? = nil
     ) {
@@ -158,6 +199,7 @@ struct ResolvedLessonType: Identifiable, Hashable {
         self.durationMinutes = durationMinutes
         self.capacity = capacity
         self.price = price
+        self.cancellationPolicy = cancellationPolicy
         self.hasPhoto = hasPhoto
         self.photo = photo
     }

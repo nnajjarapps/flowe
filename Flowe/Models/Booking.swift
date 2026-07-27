@@ -1,6 +1,23 @@
 import Foundation
 import SwiftData
 
+/// The instructor's attendance judgment for a session whose time has passed. Instructor-local only —
+/// never written to the shared booking record (a student never sees "you were marked a no-show").
+enum Attendance: String, Codable {
+    case unknown   // not yet judged (or still upcoming)
+    case attended
+    case noShow
+}
+
+/// How a no-show / late-cancel fee has been resolved. Off-app: the instructor collects directly, Flowe
+/// only tracks the state.
+enum FeeStatus: String, Codable {
+    case none       // no fee applies
+    case owed       // flagged, not yet collected
+    case collected
+    case waived
+}
+
 enum BookingStatus: String, Codable {
     case confirmed
     case pending
@@ -55,6 +72,23 @@ final class Booking {
     /// A local accept/decline (or cancellation) that has not been pushed yet.
     var pendingDecision: Bool = false
 
+    // MARK: No-Show Shield (instructor-local — NEVER uploaded to the shared record, so it stays private
+    // and adds no exposure to the world-readable booking record). Persists in the private-mirrored cache.
+    var attendanceRaw: String = Attendance.unknown.rawValue
+    var feeStatusRaw: String = FeeStatus.none.rawValue
+    /// The fee owed, resolved from the lesson type's policy at the moment it was flagged (so a later
+    /// policy edit doesn't silently rewrite history).
+    var feeAmount: Int = 0
+
+    var attendance: Attendance {
+        get { Attendance(rawValue: attendanceRaw) ?? .unknown }
+        set { attendanceRaw = newValue.rawValue }
+    }
+    var feeStatus: FeeStatus {
+        get { FeeStatus(rawValue: feeStatusRaw) ?? .none }
+        set { feeStatusRaw = newValue.rawValue }
+    }
+
     init(
         legacyId: Int = 0,
         instructorId: Int = 0,
@@ -95,6 +129,14 @@ final class Booking {
     /// Absolute end of this session, or nil if the strings can't be parsed.
     func sessionEnd(now: Date = Date()) -> Date? {
         Self.sessionEnd(date: date, time: time, duration: duration, now: now)
+    }
+
+    /// Absolute start of this session — the end minus the parsed duration. Used by No-Show Shield to
+    /// measure a cancellation against the policy window.
+    func sessionStart(now: Date = Date()) -> Date? {
+        guard let end = sessionEnd(now: now) else { return nil }
+        let minutes = Int(duration.prefix(while: \.isNumber)) ?? 60
+        return end.addingTimeInterval(TimeInterval(-(minutes > 0 ? minutes : 60) * 60))
     }
 
     /// Reconstruct a session's end `Date` from the stored strings.

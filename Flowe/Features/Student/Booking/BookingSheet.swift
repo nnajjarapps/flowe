@@ -502,11 +502,34 @@ struct BookingSheet: View {
             }
             .padding(.bottom, 20)
 
+            if let policyLine {
+                HStack(alignment: .top, spacing: 6) {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color.floweMuted)
+                    Text(policyLine)
+                        .font(FloweFont.sans(11))
+                        .foregroundStyle(Color.floweMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.bottom, 14)
+            }
+
             GradientButton(title: "Request · \(settings.money(instructor.price))", enabled: !time.isEmpty) {
                 confirmBooking()
                 step = 3
             }
         }
+    }
+
+    /// The cancellation policy for the currently selected session type, shown before the student
+    /// commits — the deterrent half of No-Show Shield. Nil when the type has no policy.
+    private var policyLine: String? {
+        let policy = data.lessonTypes(for: instructor)
+            .first { $0.name == type }?.cancellationPolicy ?? CancellationPolicy()
+        guard policy.isActive else { return nil }
+        let fee = policy.feeIsPercent ? "\(policy.fee)% of the session" : settings.money(policy.fee)
+        return "Free cancellation up to \(policy.windowHours)h before — after that, a \(fee) late-cancel / no-show fee applies."
     }
 
     /// Persist the booking exactly once when the user confirms.

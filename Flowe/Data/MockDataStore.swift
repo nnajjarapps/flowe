@@ -399,6 +399,8 @@ final class MockDataStore {
                 // Pending and re-prompt the instructor for something they already answered.
                 let losesLocalDecision = status == .pending && cached.status != .pending
                 if !losesLocalDecision { cached.status = status }
+                // No-Show Shield: flag a fee-worthy late cancellation (instructor side only).
+                if asInstructor { flagLateCancelIfNeeded(cached, entry: entry) }
                 continue
             }
             nextId += 1; nextOrder += 1
@@ -418,6 +420,7 @@ final class MockDataStore {
                 studentName: entry.studentName
             )
             context.insert(booking)
+            if asInstructor { flagLateCancelIfNeeded(booking, entry: entry) }
         }
         save()
     }
@@ -445,6 +448,91 @@ final class MockDataStore {
         guard let first = parts.first else { return day }
         let rest = parts.dropFirst().joined(separator: " ")
         return rest.isEmpty ? String(first) : "\(first), \(rest)"
+    }
+
+    // MARK: - No-Show Shield
+
+    /// The cancellation policy for a booking, resolved from the signed-in instructor's own lesson type
+    /// whose name matches the booking's `type`. No matching type or no policy set → an inactive policy.
+    func policy(for booking: Booking) -> CancellationPolicy {
+        guard let me = currentInstructor else { return CancellationPolicy() }
+        return ownedLessonTypes(for: me).first { $0.name == booking.type }?.cancellationPolicy
+            ?? CancellationPolicy()
+    }
+
+    /// Price used to resolve a percentage fee — the matching lesson type's price, else the rate.
+    private func sessionPrice(for booking: Booking) -> Int {
+        guard let me = currentInstructor else { return 0 }
+        return ownedLessonTypes(for: me).first { $0.name == booking.type }?.price ?? me.price
+    }
+
+    /// Sessions that have happened but the instructor hasn't judged yet — the "Did they show?" queue.
+    var sessionsAwaitingAttendance: [Booking] {
+        let now = Date()
+        return incomingBookings
+            .filter { $0.status == .completed && $0.attendance == .unknown }
+            .sorted { ($0.sessionEnd(now: now) ?? .distantPast) > ($1.sessionEnd(now: now) ?? .distantPast) }
+    }
+
+    /// Mark whether a client showed. A no-show flags the policy fee as owed (for off-app collection);
+    /// marking attended clears any fee tentatively owed for that session.
+    func markAttendance(_ booking: Booking, attended: Bool) {
+        booking.attendance = attended ? .attended : .noShow
+        if attended {
+            if booking.feeStatus == .owed { booking.feeStatus = .none; booking.feeAmount = 0 }
+        } else {
+            let fee = policy(for: booking).amount(sessionPrice: sessionPrice(for: booking))
+            if fee > 0 { booking.feeAmount = fee; booking.feeStatus = .owed }
+        }
+        save()
+    }
+
+    /// Resolve an owed fee once the instructor has collected or waived it off-app.
+    func resolveFee(_ booking: Booking, to status: FeeStatus) {
+        guard booking.feeStatus == .owed, status == .collected || status == .waived else { return }
+        booking.feeStatus = status
+        save()
+    }
+
+    /// Fees currently owed to the instructor, newest session first.
+    var owedFees: [Booking] {
+        incomingBookings.filter { $0.feeStatus == .owed }
+            .sorted { ($0.sessionEnd() ?? .distantPast) > ($1.sessionEnd() ?? .distantPast) }
+    }
+
+    /// Total currency owed across all outstanding fees.
+    var totalOwed: Int { owedFees.reduce(0) { $0 + $1.feeAmount } }
+
+    /// How many times this client has no-showed or been a fee-worthy late-cancel — the signal behind
+    /// the risk flag on an upcoming booking.
+    func noShowStrikes(forStudentID studentID: String) -> Int {
+        incomingBookings
+            .filter { $0.studentID == studentID }
+            .filter { $0.attendance == .noShow || ($0.status == .cancelled && $0.feeStatus != .none) }
+            .count
+    }
+
+    /// Whether an upcoming booking is worth a confirmation nudge — this client has prior strikes.
+    func isRisky(_ booking: Booking) -> Bool {
+        guard let sid = booking.studentID, booking.status.isUpcoming else { return false }
+        return noShowStrikes(forStudentID: sid) > 0
+    }
+
+    /// Flag a late cancellation for a fee. Called during the instructor's booking sync: a booking is a
+    /// late-cancel when it was cancelled inside the policy's notice window before the session start.
+    /// The cancel time is the record's last modification (cancel is the last write it ever receives).
+    /// Idempotent — once flagged, collected or waived, it is never re-flagged.
+    private func flagLateCancelIfNeeded(_ booking: Booking, entry: RemoteBooking) {
+        guard booking.status == .cancelled, booking.feeStatus == .none, booking.attendance == .unknown,
+              let cancelledAt = entry.modifiedAt, let start = booking.sessionStart() else { return }
+        let policy = policy(for: booking)
+        guard policy.isActive else { return }
+        let windowStart = start.addingTimeInterval(TimeInterval(-policy.windowHours * 3600))
+        guard cancelledAt >= windowStart else { return }   // cancelled on time → no fee
+        let fee = policy.amount(sessionPrice: sessionPrice(for: booking))
+        guard fee > 0 else { return }
+        booking.feeAmount = fee
+        booking.feeStatus = .owed
     }
 
     // MARK: - Messaging
@@ -1853,6 +1941,7 @@ final class MockDataStore {
                 ResolvedLessonType(
                     legacyId: $0.legacyId, name: $0.name, details: $0.details,
                     durationMinutes: $0.durationMinutes, capacity: $0.capacity, price: $0.price,
+                    cancellationPolicy: $0.cancellationPolicy,
                     hasPhoto: $0.hasHighlight, photo: $0.highlight
                 )
             }
@@ -1867,6 +1956,7 @@ final class MockDataStore {
                        durationMinutes: Int,
                        capacity: Int,
                        price: Int?,
+                       policy: CancellationPolicy = CancellationPolicy(),
                        image: Data?) {
         guard let owner = currentUserID, let me = currentInstructor else { return }
         let owned = ownedLessonTypes(for: me)
@@ -1879,6 +1969,9 @@ final class MockDataStore {
             capacity: capacity,
             price: price,
             order: (owned.map(\.order).max() ?? -1) + 1,
+            cancelWindowHours: policy.windowHours,
+            cancelFee: policy.fee,
+            cancelFeeIsPercent: policy.feeIsPercent,
             highlight: image,
             // Set true only once the asset actually stages, in `uploadLessonType` — never from `image`.
             hasHighlight: false,
@@ -1908,6 +2001,7 @@ final class MockDataStore {
                           durationMinutes: Int,
                           capacity: Int,
                           price: Int?,
+                          policy: CancellationPolicy = CancellationPolicy(),
                           image: Data?) {
         guard let me = currentInstructor, type.ownerID == me.ownerID else { return }
         type.name = name
@@ -1915,6 +2009,9 @@ final class MockDataStore {
         type.durationMinutes = durationMinutes
         type.capacity = capacity
         type.price = price
+        type.cancelWindowHours = policy.windowHours
+        type.cancelFee = policy.fee
+        type.cancelFeeIsPercent = policy.feeIsPercent
         type.highlight = image
         type.updatedAt = Date()
         type.pendingUpload = true
@@ -2036,6 +2133,7 @@ final class MockDataStore {
             capacity: type.capacity,
             price: type.price,
             order: type.order,
+            policy: type.cancellationPolicy,
             createdAt: type.createdAt,
             highlight: type.highlight
         )
@@ -2118,6 +2216,9 @@ final class MockDataStore {
         type.capacity = r.capacity
         type.price = r.price
         type.order = r.order
+        type.cancelWindowHours = r.cancelWindowHours
+        type.cancelFee = r.cancelFee
+        type.cancelFeeIsPercent = r.cancelFeeIsPercent
         type.hasHighlight = r.hasHighlight
         type.createdAt = r.createdAt
         type.updatedAt = r.updatedAt

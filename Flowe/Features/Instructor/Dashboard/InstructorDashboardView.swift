@@ -13,7 +13,23 @@ struct InstructorDashboardView: View {
     @State private var showEditProfile = false
     @State private var showPaywall = false
     @State private var showComposeEvent = false
+    @State private var showShield = false
     @State private var selectedEvent: CommunityEvent?
+
+    /// The No-Show Shield card surfaces only when there's something to act on — a session to judge,
+    /// a fee to reconcile, or a risky upcoming booking worth a nudge.
+    private var shieldSignal: Bool {
+        !data.sessionsAwaitingAttendance.isEmpty || data.totalOwed > 0
+            || data.incomingBookings.contains { data.isRisky($0) }
+    }
+
+    private var shieldSubtitle: String {
+        var parts: [String] = []
+        let awaiting = data.sessionsAwaitingAttendance.count
+        if awaiting > 0 { parts.append("\(awaiting) to review") }
+        if data.totalOwed > 0 { parts.append("\(settings.money(data.totalOwed)) owed") }
+        return parts.isEmpty ? "Cancellation protection" : parts.joined(separator: " · ")
+    }
 
     /// Accepted sessions scheduled for today — not the whole book of business. Pending requests
     /// live in their own section; declined and cancelled ones drop off entirely.
@@ -75,6 +91,10 @@ struct InstructorDashboardView: View {
                     visibilityBanner
                 }
 
+                if shieldSignal {
+                    shieldCard
+                }
+
                 if !pendingRequests.isEmpty {
                     VStack(alignment: .leading, spacing: FlowSpacing.md) {
                         SectionHeader(text: "REQUESTS")
@@ -129,11 +149,37 @@ struct InstructorDashboardView: View {
         .sheet(isPresented: $showEditProfile) { EditProfileView() }
         .sheet(isPresented: $showPaywall) { PaywallView() }
         .sheet(isPresented: $showComposeEvent) { ComposeEventSheet() }
+        .sheet(isPresented: $showShield) { NavigationStack { NoShowShieldView() } }
         .sheet(item: $selectedEvent) { event in
             // The instructor manages their own events from here — the one context that may edit /
             // cancel / delete. Everywhere else (the student Community browse) leaves this false.
             EventDetailView(event: event, manageable: true)
         }
+    }
+
+    /// No-Show Shield entry — sessions to judge, fees owed, or a risky booking to nudge.
+    private var shieldCard: some View {
+        Button { showShield = true } label: {
+            HStack(spacing: FlowSpacing.md) {
+                Image(systemName: "checkmark.shield.fill")
+                    .font(.system(size: 22))
+                    .foregroundStyle(Color.flowePinkDeep)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("No-Show Shield")
+                        .font(FloweFont.serif(16))
+                        .foregroundStyle(Color.floweInk)
+                    Text(shieldSubtitle)
+                        .font(FloweFont.sans(12))
+                        .foregroundStyle(Color.floweMuted)
+                }
+                Spacer()
+                Image(systemName: "chevron.right").foregroundStyle(Color.floweMuted)
+            }
+            .padding(FlowSpacing.lg)
+            .floweCard(cornerRadius: 18)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("dashboard.noShowShield")
     }
 
     /// Promo shown until the instructor subscribes — they're hidden from the feed until they do.

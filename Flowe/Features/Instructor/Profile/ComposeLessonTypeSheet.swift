@@ -21,6 +21,11 @@ struct ComposeLessonTypeSheet: View {
     @State private var isFree: Bool
     @State private var priceText: String
 
+    // No-Show Shield policy
+    @State private var cancelWindowHours: Int
+    @State private var feeIsPercent: Bool
+    @State private var feeText: String
+
     @State private var image: Data?
     @State private var pickerItem: PhotosPickerItem?
     @State private var isLoadingImage = false
@@ -41,6 +46,9 @@ struct ComposeLessonTypeSheet: View {
         // nil (not stated) and n both leave the toggle off; only a genuine 0 is "Free".
         _isFree = State(initialValue: editing?.price == 0)
         _priceText = State(initialValue: (editing?.price).flatMap { $0 > 0 ? String($0) : nil } ?? "")
+        _cancelWindowHours = State(initialValue: editing?.cancelWindowHours ?? 0)
+        _feeIsPercent = State(initialValue: editing?.cancelFeeIsPercent ?? false)
+        _feeText = State(initialValue: (editing?.cancelFee).flatMap { $0 > 0 ? String($0) : nil } ?? "")
         _image = State(initialValue: editing?.highlight)
     }
 
@@ -118,6 +126,40 @@ struct ComposeLessonTypeSheet: View {
                     Text("Price")
                 } footer: {
                     Text("Flowe takes no payment. Students settle with you directly.")
+                }
+
+                Section {
+                    Picker("Free cancellation up to", selection: $cancelWindowHours) {
+                        Text("No policy").tag(0)
+                        Text("12 hours before").tag(12)
+                        Text("24 hours before").tag(24)
+                        Text("48 hours before").tag(48)
+                    }
+                    .font(FloweFont.sans(14))
+                    .accessibilityIdentifier("lessonType.cancelWindow")
+                    if cancelWindowHours > 0 {
+                        Picker("Late-cancel / no-show fee", selection: $feeIsPercent) {
+                            Text("Flat amount").tag(false)
+                            Text("% of price").tag(true)
+                        }
+                        .pickerStyle(.segmented)
+                        HStack(spacing: 4) {
+                            Text(verbatim: feeIsPercent ? "%" : settings.currencySymbol)
+                                .font(FloweFont.serif(18, .medium))
+                                .foregroundStyle(Color.floweInk)
+                            TextField(feeIsPercent ? "50" : "30", text: $feeText)
+                                .font(FloweFont.serif(18, .medium))
+                                .foregroundStyle(Color.floweInk)
+                                .keyboardType(.numberPad)
+                                .accessibilityIdentifier("lessonType.cancelFee")
+                        }
+                    }
+                } header: {
+                    Text("Cancellation policy")
+                } footer: {
+                    Text(cancelWindowHours > 0
+                         ? "Cancel within \(cancelWindowHours)h or no-show and Flowe tracks the fee for you to collect directly — it never charges it. Students see this before they book."
+                         : "Protect your income from late cancellations and no-shows. Flowe only tracks what's owed; you collect it yourself.")
                 }
 
                 Section {
@@ -221,16 +263,23 @@ struct ComposeLessonTypeSheet: View {
         let price: Int? = isFree ? 0 : Int(priceText.trimmingCharacters(in: .whitespaces))
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedDetails = details.trimmingCharacters(in: .whitespacesAndNewlines)
+        let policy = CancellationPolicy(
+            windowHours: cancelWindowHours,
+            fee: cancelWindowHours > 0 ? (Int(feeText.trimmingCharacters(in: .whitespaces)) ?? 0) : 0,
+            feeIsPercent: feeIsPercent
+        )
 
         if let editing {
             data.updateLessonType(
                 editing, name: trimmedName, details: trimmedDetails,
-                durationMinutes: durationMinutes, capacity: capacity, price: price, image: image
+                durationMinutes: durationMinutes, capacity: capacity, price: price,
+                policy: policy, image: image
             )
         } else {
             data.addLessonType(
                 name: trimmedName, details: trimmedDetails,
-                durationMinutes: durationMinutes, capacity: capacity, price: price, image: image
+                durationMinutes: durationMinutes, capacity: capacity, price: price,
+                policy: policy, image: image
             )
         }
         dismiss()
