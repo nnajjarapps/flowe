@@ -11,6 +11,7 @@ enum PushTopic: String, Sendable {
     case messages
     case community
     case reviews
+    case coverage
 
     /// Key a *local* notification carries its topic under. CloudKit pushes have no room for custom
     /// payload, so those are identified by the subscription id that fired instead.
@@ -28,6 +29,7 @@ enum NotificationPreference {
     static let reviews   = "notif.reviews"
     static let community = "notif.community"
     static let reminders = "notif.reminders"
+    static let coverage  = "notif.coverage"
 
     /// Everything on by default — but the *system* prompt is still what actually turns alerts on,
     /// and that is asked for separately (see `PushService.requestAuthorizationIfWarranted`).
@@ -35,7 +37,8 @@ enum NotificationPreference {
     /// values would make this shared mutable state under strict concurrency. It still converts
     /// implicitly at the `register(defaults:)` call site, which wants `[String: Any]`.
     static let defaults: [String: Bool] = [
-        bookings: true, messages: true, reviews: true, community: true, reminders: true
+        bookings: true, messages: true, reviews: true, community: true, reminders: true,
+        coverage: true
     ]
 
     /// Retired keys, removed on launch so a stale `true` can't linger in `UserDefaults`.
@@ -216,6 +219,11 @@ final class PushService {
             await store.syncCommunity()
         case .reviews:
             await store.syncReviews(asInstructor: isInstructor)
+        case .coverage:
+            // Both roles have coverage state to reconcile: an instructor resolves the two-sided
+            // approval and materialises the 50% ledger, a student picks up the `CoverageSession`
+            // that tells them who is standing in. `syncCoverage` branches on the flag internally.
+            await store.syncCoverage(asInstructor: isInstructor)
         }
         return true
     }
@@ -340,6 +348,68 @@ final class PushService {
                 titleKey: "push.community.reply.title", titleArgs: [],
                 bodyKey: "push.community.reply.body", bodyArgs: ["authorName"]
             ))
+        }
+
+        // Out-of-Studio coverage. The auto-fan matcher writes a record addressed to each party in
+        // turn, and — exactly like every predicate above — each subscription targets the *recipient*
+        // field the counterpart wrote, never a field the receiver could have written themselves.
+        // Each predicate is a single equality on a QUERYABLE field: CloudKit has no geo predicate,
+        // so "near you" is decided on-device by the matcher, not here.
+        if isEnabled(NotificationPreference.coverage) {
+            if isInstructor {
+                // An addressed offer from someone else's OOS report. `candidateID` is the covering
+                // instructor; the requester is the record's creator, so this never self-fires.
+                plans.append(Plan(
+                    id: Self.subscriptionID(.coverage, "offer", ownerID),
+                    recordType: CoverageService.offerRecordType,
+                    predicate: NSPredicate(
+                        format: "\(CoverageService.offerRecipientField) == %@", ownerID
+                    ),
+                    options: [.firesOnRecordCreation],
+                    titleKey: "push.coverage.offer.title", titleArgs: [],
+                    bodyKey: "push.coverage.offer.body", bodyArgs: ["sessionType", "sessionDate"]
+                ))
+                // A candidate claimed my OOS window. `requesterID` addresses me, the OOS owner, and
+                // `accepted == 1` keeps a withdrawn claim (0) from alerting — the same split the
+                // booking decision uses on `confirmed`.
+                plans.append(Plan(
+                    id: Self.subscriptionID(.coverage, "claim", ownerID),
+                    recordType: CoverageService.claimRecordType,
+                    predicate: NSPredicate(
+                        format: "\(CoverageService.claimRecipientField) == %@ AND accepted == 1",
+                        ownerID
+                    ),
+                    options: [.firesOnRecordCreation],
+                    titleKey: "push.coverage.claim.title", titleArgs: [],
+                    bodyKey: "push.coverage.claim.body", bodyArgs: ["replacerName"]
+                ))
+                // The OOS owner awarded me the slot by writing my id into `filledByID` on the
+                // request they own — an *update*, since the request already existed open.
+                plans.append(Plan(
+                    id: Self.subscriptionID(.coverage, "confirmed", ownerID),
+                    recordType: CoverageService.requestRecordType,
+                    predicate: NSPredicate(
+                        format: "\(CoverageService.requestRecipientField) == %@", ownerID
+                    ),
+                    options: [.firesOnRecordUpdate],
+                    titleKey: "push.coverage.confirmed.title", titleArgs: [],
+                    bodyKey: "push.coverage.confirmed.body", bodyArgs: []
+                ))
+            } else {
+                // The one Coverage* record a student ever receives: an informational note that their
+                // session will be taught by someone else. It carries `coveringInstructorName` for the
+                // alert; the student's own booking is never touched (see COVERAGE-SYSTEM.md).
+                plans.append(Plan(
+                    id: Self.subscriptionID(.coverage, "covered", ownerID),
+                    recordType: CoverageService.sessionRecordType,
+                    predicate: NSPredicate(
+                        format: "\(CoverageService.sessionRecipientField) == %@", ownerID
+                    ),
+                    options: [.firesOnRecordCreation],
+                    titleKey: "push.coverage.covered.title", titleArgs: [],
+                    bodyKey: "push.coverage.covered.body", bodyArgs: ["coveringInstructorName"]
+                ))
+            }
         }
 
         return plans

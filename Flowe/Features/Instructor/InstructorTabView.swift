@@ -38,6 +38,8 @@ struct InstructorTabView: View {
                 router.selectedTab = 3
             case .community:
                 break                          // no Community tab on the instructor side
+            case .coverage:
+                router.selectedTab = 0         // Dashboard — the coverage cards live there
             }
             push.pendingTopic = nil
         }

@@ -18,6 +18,14 @@ enum FeeStatus: String, Codable {
     case waived
 }
 
+/// This instructor's role in an Out-of-Studio cover for a session. Instructor-local only — like the
+/// No-Show Shield block, it never touches the world-readable booking record.
+enum CoverRole: String, Codable {
+    case none        // no cover involved
+    case handedOff   // this instructor reported OOS; a replacer is covering the session
+    case covering    // this instructor is covering someone else's session
+}
+
 enum BookingStatus: String, Codable {
     case confirmed
     case pending
@@ -87,6 +95,24 @@ final class Booking {
     var feeStatus: FeeStatus {
         get { FeeStatus(rawValue: feeStatusRaw) ?? .none }
         set { feeStatusRaw = newValue.rawValue }
+    }
+
+    // MARK: Out of Studio (instructor-local — NEVER uploaded to the shared record, exactly like the
+    // No-Show Shield block above: it stays private and adds no exposure to the world-readable booking
+    // record). Persists in the private-mirrored cache.
+    var coverRoleRaw: String = CoverRole.none.rawValue
+    /// Half the session price, frozen when the swap is confirmed (so a later price edit doesn't
+    /// silently rewrite what the replacer is owed) — the same freezing `feeAmount` does above.
+    var coverAmount: Int = 0
+    var coverStatusRaw: String = FeeStatus.none.rawValue
+
+    var coverRole: CoverRole {
+        get { CoverRole(rawValue: coverRoleRaw) ?? .none }
+        set { coverRoleRaw = newValue.rawValue }
+    }
+    var coverStatus: FeeStatus {
+        get { FeeStatus(rawValue: coverStatusRaw) ?? .none }
+        set { coverStatusRaw = newValue.rawValue }
     }
 
     init(

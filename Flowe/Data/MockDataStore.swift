@@ -38,6 +38,7 @@ final class MockDataStore {
     private let communityService = CommunityService()
     private let eventService = EventService()
     private let lessonTypeService = LessonTypeService()
+    private let coverageService = CoverageService()
 
     // MARK: - Feed load state
 
@@ -2527,6 +2528,317 @@ final class MockDataStore {
         // Only overwrite a cached image when the server actually has one — protects the owner's own
         // not-yet-uploaded photo, exactly like the Instructor rule.
         if let photo = l.photo { p.photo = photo }
+    }
+
+    // MARK: - Out of Studio (coverage)
+    //
+    // Auto-fan matching with two-sided approval, cloned structurally from No-Show Shield and Bookings.
+    // When an instructor reports OOS for a window, the app ranks eligible instructors on-device and
+    // writes one addressed CoverageOffer per top candidate (K ≤ 10). A candidate *claims* (their
+    // approval); the owner *awards* by flipping the request's `filledByID` (their approval). A swap is
+    // confirmed only when both are true — then a 50% ledger materialises on each side (owner owes /
+    // replacer is owed), tracked off-app exactly like the No-Show fee. The student's SessionBooking is
+    // never mutated: the owner writes a CoverageSession addressed to the student, and their card just
+    // reads "Covered by <name>".
+    //
+    // PILOT-ONLY PRIVACY NOTE. This deepens the world-readable booking exposure documented in
+    // BOOKING-SYSTEM.md. No Coverage* record ever carries studentName/studentID or a coordinate — the
+    // ONE exception is CoverageSession, which is addressed to the student it concerns (studentID is its
+    // recipient key). Offers carry only bookingID + coarse-area-by-reference, so a replacer never learns
+    // whose session they are covering (see the empty `studentName` on the cover shadow below).
+    //
+    // These caches are network-derived and in-memory (like `bookingsPhase`): a sync repopulates them,
+    // and they drive the owner picker (`myCoverRequests` + `myClaims`) and the replacer inbox
+    // (`myOffers`). The persisted state is only the per-booking ledger (`coverRole` / `coverAmount`
+    // / `coverStatus`), which survives offline like the No-Show ledger it clones.
+
+    /// The signed-in owner's own OOS requests (addressed by `requesterID`).
+    private var coverRequests: [RemoteCoverageRequest] = []
+    /// Candidate claims filed against my requests (addressed by `requesterID`).
+    private var coverClaims: [RemoteCoverageClaim] = []
+    /// Offers addressed to me as a candidate (`candidateID`).
+    private var coverOffers: [RemoteCoverageOffer] = []
+    /// Cover sessions concerning my own bookings, fetched student-side (addressed by `studentID`).
+    private var coverSessions: [RemoteCoverageSession] = []
+
+    /// Top ≤ 10 instructors who could cover this session, ranked exactly as Discover ranks the feed.
+    ///
+    /// Filtered to instructors whose published hours on the session's weekday actually contain its
+    /// time, minus myself. `visibleInstructors` is already Boost → rating → order, so distance only
+    /// reorders peers *within* a tier (and does nothing when there is no fix) — the same rule
+    /// `DiscoverView.byDistance` applies, so a boosted instructor is never overtaken by a closer free one.
+    func oosCandidates(for booking: Booking, location: LocationService?) -> [Instructor] {
+        guard let weekday = Self.weekday(from: booking.date) else { return [] }
+        let eligible = visibleInstructors.filter { ins in
+            ins.ownerID != currentUserID && ins.hours(on: weekday).contains(booking.time)
+        }
+        let measured = eligible.map {
+            (instructor: $0,
+             distanceMetres: location?.distance(toLatitude: $0.latitude, longitude: $0.longitude))
+        }
+        let ranked = measured.sorted(by: Self.byCoverageDistance).map(\.instructor)
+        return Array(ranked.prefix(Self.maxCoverageCandidates))
+    }
+
+    /// Confirmed, still-upcoming incoming sessions whose start falls inside the OOS window — the
+    /// sessions the instructor is asking to hand off. Soonest first.
+    func sessionsToCoverInWindow(start: Date, end: Date) -> [Booking] {
+        incomingBookings
+            .filter { booking in
+                guard booking.status == .confirmed, let sessionStart = booking.sessionStart() else { return false }
+                return sessionStart >= start && sessionStart <= end
+            }
+            .sorted { ($0.sessionStart() ?? .distantPast) < ($1.sessionStart() ?? .distantPast) }
+    }
+
+    /// Report OOS for one session: publish the request, then fan out one addressed offer per candidate.
+    ///
+    /// Initiating OOS is gated behind `subscription.isVisible` at the call site (the store has no
+    /// SubscriptionService) — here we only guard that this is my own incoming, published booking.
+    func requestCoverage(for booking: Booking, windowStart: Date, windowEnd: Date, candidates: [Instructor]) {
+        guard !isPreview, let me = currentUserID,
+              booking.instructorOwnerID == me,
+              let bookingID = booking.remoteID else { return }
+        let candidateIDs = candidates.compactMap(\.ownerID).filter { $0 != me }
+        Task {
+            guard await coverageService.publishRequest(
+                bookingID: bookingID,
+                sessionDate: booking.date, sessionTime: booking.time,
+                sessionDuration: booking.duration, sessionType: booking.type,
+                windowStart: windowStart, windowEnd: windowEnd
+            ) != nil else { return }
+            await coverageService.fanOutOffers(
+                bookingID: bookingID, requesterID: me, candidateIDs: candidateIDs,
+                sessionType: booking.type, sessionDate: booking.date
+            )
+            await syncCoverage(asInstructor: true)
+        }
+    }
+
+    /// A candidate accepts (or declines) an offer to cover — their side of the two-sided approval.
+    func claimCoverage(bookingID: String, requesterID: String, accept: Bool) {
+        guard !isPreview, let me = currentUserID else { return }
+        Task {
+            _ = await coverageService.claim(
+                bookingID: bookingID, replacerID: me, replacerName: currentUserName,
+                requesterID: requesterID, accepted: accept
+            )
+            await syncCoverage(asInstructor: true)
+        }
+    }
+
+    /// The owner picks a winner — their side of the approval. Flips the request's `filledByID`, tells
+    /// the student who is covering (CoverageSession), and materialises the owner-side ledger: the
+    /// session is handed off and the replacer is owed half, frozen now.
+    func awardCoverage(bookingID: String, replacerID: String, replacerName: String, studentID: String) {
+        guard let me = currentUserID else { return }
+        if let booking = bookings.first(where: { $0.remoteID == bookingID }) {
+            materializeCover(booking, role: .handedOff, instructorID: me, sessionType: booking.type)
+        }
+        save()
+        guard !isPreview else { return }
+        Task {
+            _ = await coverageService.award(bookingID: bookingID, replacerID: replacerID)
+            _ = await coverageService.publishCoverSession(
+                bookingID: bookingID, studentID: studentID,
+                coveringInstructorID: replacerID, coveringInstructorName: replacerName, requesterID: me
+            )
+            await syncCoverage(asInstructor: true)
+        }
+    }
+
+    /// Pull whichever side the user is on, resolve confirmed swaps, and cache what the surfaces read.
+    /// Mirrors `syncBookings`: a nil fetch is a *failed* query, so the cache is kept rather than wiped.
+    func syncCoverage(asInstructor: Bool) async {
+        guard !isPreview, let me = currentUserID else { return }
+        if asInstructor {
+            // Owner side: my requests + the claims filed against them; settle any confirmed swap onto
+            // my own booking (I owe the replacer half).
+            let requests = await coverageService.fetchMyRequests(requesterID: me) ?? coverRequests
+            let claims = await coverageService.fetchClaims(requesterID: me) ?? coverClaims
+            coverRequests = requests
+            coverClaims = claims
+            for request in requests { resolveHandOff(request, claims: claims) }
+
+            // Replacer side: offers addressed to me drive the inbox; a session I was picked for becomes
+            // a cover I'm owed for.
+            let offers = await coverageService.fetchOffers(candidateID: me) ?? coverOffers
+            coverOffers = offers
+            for offer in offers {
+                guard let request = await coverageService.fetchRequest(bookingID: offer.bookingID) else { continue }
+                resolveCovering(request, me: me)
+            }
+        } else {
+            // Student side: informational only. Learn whether any of my bookings is being covered — the
+            // booking itself is never touched (it is student-`_creator`-write).
+            for booking in myBookings {
+                guard let bookingID = booking.remoteID,
+                      let cover = await coverageService.fetchCoverSession(bookingID: bookingID) else { continue }
+                cacheCoverSession(cover)
+            }
+        }
+        save()
+    }
+
+    // MARK: 50% ledger (cloned from the No-Show `markAttendance` / `resolveFee` / `owedFees` / `totalOwed`)
+
+    /// Every session with an outstanding cover balance — the owner's handed-off sessions (money out)
+    /// and the replacer's covered sessions (money in), which is why this reads the whole cache rather
+    /// than `incomingBookings`: the two roles live on different rows. Newest session first.
+    var coverOwed: [Booking] {
+        bookings.filter { $0.coverStatus == .owed }
+            .sorted { ($0.sessionEnd() ?? .distantPast) > ($1.sessionEnd() ?? .distantPast) }
+    }
+
+    /// Total currency outstanding across all covers.
+    var totalCoverOwed: Int { coverOwed.reduce(0) { $0 + $1.coverAmount } }
+
+    /// Resolve an outstanding cover balance once it has been settled off-app (collected or waived).
+    func resolveCover(_ booking: Booking, to status: FeeStatus) {
+        guard booking.coverStatus == .owed, status == .collected || status == .waived else { return }
+        booking.coverStatus = status
+        save()
+    }
+
+    // MARK: Picker + inbox accessors
+
+    /// The signed-in owner's own OOS requests — drives the picker. Newest first.
+    var myCoverRequests: [RemoteCoverageRequest] {
+        coverRequests.sorted { $0.createdAt > $1.createdAt }
+    }
+
+    /// Accepted candidate claims filed against my requests — the shortlist the picker awards from.
+    var myClaims: [RemoteCoverageClaim] {
+        coverClaims.filter { $0.accepted }.sorted { $0.claimedAt > $1.claimedAt }
+    }
+
+    /// Sessions I've been asked to cover — the replacer inbox. Newest first.
+    var myOffers: [RemoteCoverageOffer] {
+        coverOffers.sorted { $0.createdAt > $1.createdAt }
+    }
+
+    /// Accepted claims for one request, so the picker can list the candidates under it.
+    func claims(forBookingID bookingID: String) -> [RemoteCoverageClaim] {
+        coverClaims.filter { $0.bookingID == bookingID && $0.accepted }
+            .sorted { $0.claimedAt > $1.claimedAt }
+    }
+
+    /// For the student's booking card: the CoverageSession covering this booking, or nil. Read from the
+    /// separate, student-addressed record — the booking itself is never mutated. The card checks the
+    /// record's `status` (0 == covered) itself, so this returns the raw cached record.
+    func coverSession(forBookingID bookingID: String) -> RemoteCoverageSession? {
+        coverSessions.first { $0.bookingID == bookingID }
+    }
+
+    // MARK: Coverage internals
+
+    private static let maxCoverageCandidates = 10
+
+    /// A swap is confirmed once a candidate has claimed (accepted) AND the owner has picked them
+    /// (`filledByID`) — the two-sided approval the whole flow turns on.
+    private func isSwapConfirmed(request: RemoteCoverageRequest, claims: [RemoteCoverageClaim]) -> Bool {
+        guard !request.filledByID.isEmpty else { return false }
+        return claims.contains {
+            $0.bookingID == request.bookingID && $0.replacerID == request.filledByID && $0.accepted
+        }
+    }
+
+    /// Owner side: a confirmed swap on one of my requests hands that session off — I owe the replacer half.
+    private func resolveHandOff(_ request: RemoteCoverageRequest, claims: [RemoteCoverageClaim]) {
+        guard isSwapConfirmed(request: request, claims: claims),
+              let booking = bookings.first(where: { $0.remoteID == request.bookingID }) else { return }
+        materializeCover(booking, role: .handedOff, instructorID: request.requesterID, sessionType: request.sessionType)
+    }
+
+    /// Replacer side: a request the owner filled with *me* is a session I'm covering — I'm owed half.
+    /// The session belongs to the original instructor, so there is no local booking to attach to until
+    /// we materialise a private shadow for it.
+    private func resolveCovering(_ request: RemoteCoverageRequest, me: String) {
+        guard request.filledByID == me else { return }
+        let booking = bookings.first(where: { $0.remoteID == request.bookingID }) ?? materializeCoverShadow(for: request)
+        materializeCover(booking, role: .covering, instructorID: request.requesterID, sessionType: request.sessionType)
+    }
+
+    /// A private, instructor-local booking for a session I'm covering. Deliberately kept OUT of both
+    /// `incomingBookings` (addressed to the original instructor, not me on the record) and `myBookings`
+    /// (a synthetic student id that is neither nil nor mine), so a covered session surfaces only through
+    /// the cover ledger and never pollutes earnings, the calendar or the student's own booking lists.
+    /// The student's identity is absent by design — an offer/request never carries it (privacy).
+    private func materializeCoverShadow(for request: RemoteCoverageRequest) -> Booking {
+        let nextId = (bookings.map(\.legacyId).max() ?? 0) + 1
+        let nextOrder = (bookings.map(\.order).max() ?? 0) + 1
+        let booking = Booking(
+            legacyId: nextId,
+            date: request.sessionDate,
+            time: request.sessionTime,
+            type: request.sessionType,
+            duration: request.sessionDuration,
+            status: .confirmed,
+            ownerID: currentUserID,
+            order: nextOrder,
+            remoteID: request.bookingID,
+            instructorOwnerID: request.requesterID,
+            studentID: "cover-\(request.bookingID)",
+            studentName: ""
+        )
+        context.insert(booking)
+        refresh()
+        return booking
+    }
+
+    /// Set (or re-affirm) a booking's cover role and, the first time, its frozen 50% balance. The role
+    /// is idempotent; the amount/status are written once and then left to the ledger (owed → collected
+    /// / waived), exactly like `feeAmount` never being re-priced after it is first owed.
+    private func materializeCover(_ booking: Booking, role: CoverRole, instructorID: String, sessionType: String) {
+        booking.coverRole = role
+        guard booking.coverStatus == .none else { return }
+        booking.coverAmount = coverPrice(instructorID: instructorID, sessionType: sessionType) / 2
+        booking.coverStatus = .owed
+    }
+
+    /// Price behind a cover, resolved like the No-Show fee: the matching lesson type's price, else the
+    /// instructor's rate. Priced against the *session's* instructor so both sides agree — on the owner's
+    /// device that is their own listing (so this equals `sessionPrice(for:)`); on the replacer's it is
+    /// the cached original listing, falling back to its rate when its lesson types aren't cached.
+    private func coverPrice(instructorID: String, sessionType: String) -> Int {
+        guard let ins = instructors.first(where: { $0.ownerID == instructorID }) else { return 0 }
+        return ownedLessonTypes(for: ins).first { $0.name == sessionType }?.price ?? ins.price
+    }
+
+    private func cacheCoverSession(_ cover: RemoteCoverageSession) {
+        if let index = coverSessions.firstIndex(where: { $0.bookingID == cover.bookingID }) {
+            coverSessions[index] = cover
+        } else {
+            coverSessions.append(cover)
+        }
+    }
+
+    /// Rank cover candidates like `DiscoverView.byDistance`: visibility tier first (a paid Boost is
+    /// never overtaken), then proximity among peers, then rating, then order. A candidate we can't
+    /// measure sorts after measured peers *within its tier* rather than out of the list.
+    private static func byCoverageDistance(
+        _ lhs: (instructor: Instructor, distanceMetres: Double?),
+        _ rhs: (instructor: Instructor, distanceMetres: Double?)
+    ) -> Bool {
+        let left = lhs.instructor, right = rhs.instructor
+        if left.visibilityRaw != right.visibilityRaw { return left.visibilityRaw > right.visibilityRaw }
+        if let a = lhs.distanceMetres, let b = rhs.distanceMetres {
+            if a != b { return a < b }
+        } else if lhs.distanceMetres != nil {
+            return true
+        } else if rhs.distanceMetres != nil {
+            return false
+        }
+        if left.rating != right.rating { return left.rating > right.rating }
+        return left.order < right.order
+    }
+
+    /// "Thu, Jul 17" → "Thu": the weekday token `Instructor.hours(on:)` keys by. Nil for anything that
+    /// isn't one of `FloweConstants.weekdays`.
+    private static func weekday(from date: String) -> String? {
+        let token = date.split(separator: ",").first.map { $0.trimmingCharacters(in: .whitespaces) }
+        guard let token, FloweConstants.weekdays.contains(token) else { return nil }
+        return token
     }
 
     // MARK: - Persistence

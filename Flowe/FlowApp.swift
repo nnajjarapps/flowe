@@ -150,6 +150,7 @@ struct FlowApp: App {
                     // can encrypt to me and my own sends can be sealed.
                     await data.activateMessaging()
                     await data.syncBookings(asInstructor: isInstructor)
+                    await data.syncCoverage(asInstructor: isInstructor)
                     await data.syncMessages()
                     // Pre-warm the opposite party's profiles so names + photos are present in
                     // Messages/Bookings before anything is tapped: an instructor caches the students

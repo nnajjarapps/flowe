@@ -26,9 +26,21 @@ struct BookingCard: View {
 
     private var instructor: Instructor? { data.instructor(id: booking.instructorId) }
 
+    /// The instructor going out of studio addresses the student a `CoverageSession` — the ONE coverage
+    /// record that names the student, and only the student it concerns can read it. The booking itself
+    /// is never mutated (it's student-creator-write), so this is how a covered session shows up on the
+    /// card the student already has. `status == 0` is an active cover; a cancelled one drops the badge.
+    private var coverSession: RemoteCoverageSession? {
+        guard let id = booking.remoteID,
+              let session = data.coverSession(forBookingID: id),
+              session.status == 0 else { return nil }
+        return session
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             header
+            if let coverSession { coveredBanner(coverSession) }
             bodyRow
         }
         .floweCard()
@@ -90,6 +102,27 @@ struct BookingCard: View {
             .padding(.horizontal, 16)
         }
         .frame(height: 68)
+    }
+
+    // MARK: Covered banner
+    //
+    // Informational only — v1 has no student decline. Their session still happens, just with a
+    // stand-in, so the card says who without turning into an action.
+
+    private func coveredBanner(_ session: RemoteCoverageSession) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "airplane")
+                .font(.system(size: 12))
+                .foregroundStyle(Color.flowePinkDeep)
+            Text("Covered by \(session.coveringInstructorName)")
+                .font(FloweFont.sans(12, .medium))
+                .foregroundStyle(Color.flowePinkDeep)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity)
+        .background(Color.flowePink.opacity(0.10))
     }
 
     // MARK: Body row

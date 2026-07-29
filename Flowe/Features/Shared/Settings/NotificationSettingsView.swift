@@ -28,6 +28,7 @@ struct NotificationSettingsView: View {
     @AppStorage(NotificationPreference.reviews)   private var reviews = true
     @AppStorage(NotificationPreference.community) private var community = true
     @AppStorage(NotificationPreference.reminders) private var reminders = true
+    @AppStorage(NotificationPreference.coverage)  private var coverage = true
 
     private var isInstructor: Bool { session.authState == .instructor }
 
@@ -45,6 +46,9 @@ struct NotificationSettingsView: View {
                     } else {
                         toggle("Community replies", "person.3", $community, id: "notifications.community")
                     }
+                    // Both roles: an instructor is offered cover and told when a claim lands; a
+                    // student is told when their session will be taught by someone else.
+                    toggle("Coverage", "arrow.triangle.2.circlepath", $coverage, id: "notifications.coverage")
                 } header: {
                     Text("Activity")
                 } footer: {
@@ -72,7 +76,7 @@ struct NotificationSettingsView: View {
             .task { await push.refreshAuthorizationStatus() }
             // One observer for all five: each change is applied the same way, and grouping them
             // keeps a toggle from ever being added without being wired up.
-            .onChange(of: [bookings, messages, reviews, community, reminders]) { apply() }
+            .onChange(of: [bookings, messages, reviews, community, reminders, coverage]) { apply() }
         }
     }
 

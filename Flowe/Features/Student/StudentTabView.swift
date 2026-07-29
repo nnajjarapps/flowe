@@ -37,6 +37,7 @@ struct StudentTabView: View {
             case .bookings:  selectedTab = 2
             case .messages:  selectedTab = 3
             case .reviews:   break   // students receive no review notifications
+            case .coverage:  selectedTab = 2   // "your session will be covered" → Bookings
             }
             push.pendingTopic = nil
         }

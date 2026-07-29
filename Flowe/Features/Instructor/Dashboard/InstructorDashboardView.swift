@@ -14,6 +14,8 @@ struct InstructorDashboardView: View {
     @State private var showPaywall = false
     @State private var showComposeEvent = false
     @State private var showShield = false
+    @State private var showCoveragePicker = false
+    @State private var showCoverageInbox = false
     @State private var selectedEvent: CommunityEvent?
 
     /// The No-Show Shield card surfaces only when there's something to act on — a session to judge,
@@ -29,6 +31,28 @@ struct InstructorDashboardView: View {
         if awaiting > 0 { parts.append("\(awaiting) to review") }
         if data.totalOwed > 0 { parts.append("\(settings.money(data.totalOwed)) owed") }
         return parts.isEmpty ? "Cancellation protection" : parts.joined(separator: " · ")
+    }
+
+    /// The OWNER coverage card surfaces once someone has claimed a session this instructor handed off —
+    /// there's a winner to pick. (Requesting cover itself happens in Out of Studio; nothing to act on
+    /// until a claim lands.)
+    private var ownerCoverageSignal: Bool { !data.myClaims.isEmpty }
+
+    private var ownerCoverageSubtitle: String {
+        let n = data.myClaims.count
+        return n == 1 ? "1 instructor can cover — pick one" : "\(n) instructors can cover — pick one"
+    }
+
+    /// The REPLACER inbox surfaces when there's an inbound offer to claim, or cover pay still owed for
+    /// one already taught.
+    private var coverInboxSignal: Bool { !data.myOffers.isEmpty || data.totalCoverOwed > 0 }
+
+    private var coverInboxSubtitle: String {
+        var parts: [String] = []
+        let offers = data.myOffers.count
+        if offers > 0 { parts.append(offers == 1 ? "1 to claim" : "\(offers) to claim") }
+        if data.totalCoverOwed > 0 { parts.append("\(settings.money(data.totalCoverOwed)) owed") }
+        return parts.isEmpty ? "Cover for nearby instructors" : parts.joined(separator: " · ")
     }
 
     /// Accepted sessions scheduled for today — not the whole book of business. Pending requests
@@ -95,6 +119,14 @@ struct InstructorDashboardView: View {
                     shieldCard
                 }
 
+                if ownerCoverageSignal {
+                    ownerCoverageCard
+                }
+
+                if coverInboxSignal {
+                    coverInboxCard
+                }
+
                 if !pendingRequests.isEmpty {
                     VStack(alignment: .leading, spacing: FlowSpacing.md) {
                         SectionHeader(text: "REQUESTS")
@@ -141,15 +173,19 @@ struct InstructorDashboardView: View {
         }
         .background(Color.flowWhite.ignoresSafeArea())
         .task { await data.syncEvents(asOrganizer: true) }
+        .task { await data.syncCoverage(asInstructor: true) }
         .refreshable {
             await data.syncBookings(asInstructor: true)
             await data.syncEvents(asOrganizer: true)
+            await data.syncCoverage(asInstructor: true)
         }
         .sheet(isPresented: $showAvailability) { AvailabilityView() }
         .sheet(isPresented: $showEditProfile) { EditProfileView() }
         .sheet(isPresented: $showPaywall) { PaywallView() }
         .sheet(isPresented: $showComposeEvent) { ComposeEventSheet() }
         .sheet(isPresented: $showShield) { NavigationStack { NoShowShieldView() } }
+        .sheet(isPresented: $showCoveragePicker) { CoveragePickerView() }
+        .sheet(isPresented: $showCoverageInbox) { CoverageInboxView() }
         .sheet(item: $selectedEvent) { event in
             // The instructor manages their own events from here — the one context that may edit /
             // cancel / delete. Everywhere else (the student Community browse) leaves this false.
@@ -180,6 +216,58 @@ struct InstructorDashboardView: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("dashboard.noShowShield")
+    }
+
+    /// Out-of-Studio OWNER entry — a session this instructor handed off has been claimed and needs a
+    /// winner picked. Cloned from `shieldCard`.
+    private var ownerCoverageCard: some View {
+        Button { showCoveragePicker = true } label: {
+            HStack(spacing: FlowSpacing.md) {
+                Image(systemName: "airplane.circle.fill")
+                    .font(.system(size: 22))
+                    .foregroundStyle(Color.flowePinkDeep)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Coverage")
+                        .font(FloweFont.serif(16))
+                        .foregroundStyle(Color.floweInk)
+                    Text(ownerCoverageSubtitle)
+                        .font(FloweFont.sans(12))
+                        .foregroundStyle(Color.floweMuted)
+                }
+                Spacer()
+                Image(systemName: "chevron.right").foregroundStyle(Color.floweMuted)
+            }
+            .padding(FlowSpacing.lg)
+            .floweCard(cornerRadius: 18)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("dashboard.coverageOwner")
+    }
+
+    /// Out-of-Studio REPLACER entry — sessions nearby to claim, plus 50% cover pay owed. Cloned from
+    /// `shieldCard`.
+    private var coverInboxCard: some View {
+        Button { showCoverageInbox = true } label: {
+            HStack(spacing: FlowSpacing.md) {
+                Image(systemName: "hand.raised.fill")
+                    .font(.system(size: 22))
+                    .foregroundStyle(Color.flowePinkDeep)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Cover for others")
+                        .font(FloweFont.serif(16))
+                        .foregroundStyle(Color.floweInk)
+                    Text(coverInboxSubtitle)
+                        .font(FloweFont.sans(12))
+                        .foregroundStyle(Color.floweMuted)
+                }
+                Spacer()
+                Image(systemName: "chevron.right").foregroundStyle(Color.floweMuted)
+            }
+            .padding(FlowSpacing.lg)
+            .floweCard(cornerRadius: 18)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("dashboard.coverInbox")
     }
 
     /// Promo shown until the instructor subscribes — they're hidden from the feed until they do.

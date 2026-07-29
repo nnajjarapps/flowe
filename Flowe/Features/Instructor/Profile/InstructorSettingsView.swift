@@ -11,6 +11,7 @@ struct InstructorSettingsView: View {
 
     @State private var showEditProfile = false
     @State private var showAvailability = false
+    @State private var showOutOfStudio = false
     @State private var showPaywall = false
     @State private var showNotifications = false
     @State private var showManageSubscriptions = false
@@ -39,6 +40,12 @@ struct InstructorSettingsView: View {
                 Section("Profile") {
                     button("Edit Profile", icon: "person.crop.circle") { showEditProfile = true }
                     button("Availability", icon: "calendar.badge.clock") { showAvailability = true }
+                    // Handing a session to another instructor is only meaningful for a bookable listing —
+                    // a hidden instructor has no students to cover for and can't be found as cover either.
+                    // Gated on visibility for the same reason hosting an event is.
+                    if subscription.isVisible {
+                        button("Out of Studio", icon: "airplane") { showOutOfStudio = true }
+                    }
                 }
 
                 // MARK: Visibility & plan
@@ -150,6 +157,7 @@ struct InstructorSettingsView: View {
             }
             .sheet(isPresented: $showEditProfile) { EditProfileView() }
             .sheet(isPresented: $showAvailability) { AvailabilityView() }
+            .sheet(isPresented: $showOutOfStudio) { OutOfStudioView() }
             .sheet(isPresented: $showPaywall) { PaywallView() }
             .sheet(isPresented: $showNotifications) { NotificationSettingsView() }
             .sheet(isPresented: $showDeleteAccount) { DeleteAccountView() }

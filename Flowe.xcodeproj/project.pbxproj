@@ -96,6 +96,7 @@
 		D198EC49666711875E8BD7DF /* LessonType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33B2A5B491EB5AD21E1D53D5 /* LessonType.swift */; };
 		BCF7948F3B7D3F74C9AC67FF /* LessonTypeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07602D852806E083473292A0 /* LessonTypeService.swift */; };
 		F1E2D3C4B5A6978869574635 /* ComposeLessonTypeSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6354473869A5B4C3D2E1F0A9 /* ComposeLessonTypeSheet.swift */; };
+		FEEDFACE000000000000AF01 /* OutOfStudioView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEEDFACE000000000000AF02 /* OutOfStudioView.swift */; };
 		AAE895D3AA0E84243D96DC8A /* FlowLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = E055796162D11DF1E7B8D52D /* FlowLayout.swift */; };
 		AB05550DCEF4EEF50E9E57E9 /* InstructorTabsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B36038D7F8CF809375873BCC /* InstructorTabsUITests.swift */; };
 		B029AD2888183B7786C5B22F /* Fraunces-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 9AC3550079CA887E6CF28838 /* Fraunces-Regular.ttf */; };
@@ -111,6 +112,7 @@
 		B9E765D524BEBFAE495D618D /* 0AD9894E-764F-47AF-AC95-56485A70A3C4.PNG in Resources */ = {isa = PBXBuildFile; fileRef = ED2BC5AAEAE57BD8B4B05646 /* 0AD9894E-764F-47AF-AC95-56485A70A3C4.PNG */; };
 		BA845ED7BB33CB99331BC16A /* PostRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72D6B8E3948B89E8B171AF07 /* PostRowView.swift */; };
 		BC6AADB35930B1E34011D7C7 /* MessagingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AEA61C0D5A07FA6156A5B5F /* MessagingService.swift */; };
+		FEEDFACE000000000000AE01 /* CoverageService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEEDFACE000000000000AE02 /* CoverageService.swift */; };
 		FEEDFACE000000000000AC01 /* MessageCrypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEEDFACE000000000000AC02 /* MessageCrypto.swift */; };
 		BD00F0125CDD9AEFD8EB42C6 /* Date+Flowe.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34F13E4C3B93F2B1A8D4706A /* Date+Flowe.swift */; };
 		C0CE885E52944562F46100D6 /* EmptyStateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0F3A0FB151C0F688534ACEF /* EmptyStateView.swift */; };
@@ -180,6 +182,7 @@
 		FEEDFACE000000000000CC02 /* HelpSupport.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = HelpSupport.html; sourceTree = "<group>"; };
 		FEEDFACE000000000000BB02 /* PrivacyPolicy.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = PrivacyPolicy.html; sourceTree = "<group>"; };
 		0AEA61C0D5A07FA6156A5B5F /* MessagingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessagingService.swift; sourceTree = "<group>"; };
+		FEEDFACE000000000000AE02 /* CoverageService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageService.swift; sourceTree = "<group>"; };
 		FEEDFACE000000000000AC02 /* MessageCrypto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageCrypto.swift; sourceTree = "<group>"; };
 		0C6A6B72111739FB381005F1 /* LocalizationUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizationUITests.swift; sourceTree = "<group>"; };
 		0CE4F79CAA257F95E8F9B243 /* ReviewService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewService.swift; sourceTree = "<group>"; };
@@ -294,6 +297,7 @@
 		33B2A5B491EB5AD21E1D53D5 /* LessonType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LessonType.swift; sourceTree = "<group>"; };
 		07602D852806E083473292A0 /* LessonTypeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LessonTypeService.swift; sourceTree = "<group>"; };
 		6354473869A5B4C3D2E1F0A9 /* ComposeLessonTypeSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposeLessonTypeSheet.swift; sourceTree = "<group>"; };
+		FEEDFACE000000000000AF02 /* OutOfStudioView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutOfStudioView.swift; sourceTree = "<group>"; };
 		D02BBF683FC16C7795428F78 /* InstructorCalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstructorCalendarView.swift; sourceTree = "<group>"; };
 		D095FAA6B074F1AF2221AE6A /* AppSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSession.swift; sourceTree = "<group>"; };
 		D3527B833A544893B28CE722 /* AppRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRouter.swift; sourceTree = "<group>"; };
@@ -397,6 +401,7 @@
 				489CC61A3C045B16825417BC /* LocationService.swift */,
 				07602D852806E083473292A0 /* LessonTypeService.swift */,
 				0AEA61C0D5A07FA6156A5B5F /* MessagingService.swift */,
+				FEEDFACE000000000000AE02 /* CoverageService.swift */,
 				FEEDFACE000000000000AC02 /* MessageCrypto.swift */,
 				A7363600B48D9D0491D076A9 /* MockDataStore.swift */,
 				8089C1D2681596AF48101FD3 /* PushService.swift */,
@@ -554,6 +559,7 @@
 				DF88155B514DE388CAED43C6 /* AvailabilityView.swift */,
 				C6FD9EE5DA26FD915263821D /* EditProfileView.swift */,
 				6354473869A5B4C3D2E1F0A9 /* ComposeLessonTypeSheet.swift */,
+				FEEDFACE000000000000AF02 /* OutOfStudioView.swift */,
 				65268B66DE3AFF92DA3C484D /* InstructorBarChart.swift */,
 				540B00E56D89BF2B030B5185 /* InstructorProfileView.swift */,
 				6D8AAB7DA8B7C8BE80DFEEC5 /* InstructorSettingsView.swift */,
@@ -903,6 +909,7 @@
 				D198EC49666711875E8BD7DF /* LessonType.swift in Sources */,
 				BCF7948F3B7D3F74C9AC67FF /* LessonTypeService.swift in Sources */,
 				F1E2D3C4B5A6978869574635 /* ComposeLessonTypeSheet.swift in Sources */,
+				FEEDFACE000000000000AF01 /* OutOfStudioView.swift in Sources */,
 				1C47F28F1536D627C6E96E25 /* CommunityView.swift in Sources */,
 				8BFA1E13242E616172AE5E18 /* ComposePostSheet.swift in Sources */,
 				9D9B1348B900A774F88C4945 /* EventsListView.swift in Sources */,
@@ -956,6 +963,7 @@
 				DFD748F681DCD84E0CD8BFE4 /* MessageBubble.swift in Sources */,
 				E95011B178469C57A021A6D9 /* MessageListView.swift in Sources */,
 				BC6AADB35930B1E34011D7C7 /* MessagingService.swift in Sources */,
+				FEEDFACE000000000000AE01 /* CoverageService.swift in Sources */,
 				FEEDFACE000000000000AC01 /* MessageCrypto.swift in Sources */,
 				0F346C6CD319E875C3D3EAF4 /* MockDataStore.swift in Sources */,
 				24A9D9345D589AA3843DF653 /* NewMessageSheet.swift in Sources */,
