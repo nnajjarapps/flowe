@@ -22,10 +22,10 @@ extension Color {
     static let flowePinkPale = Color(hex: 0xFFC2D4)
     static let floweCardBg   = Color(hex: 0xFFF0F4)
     static let floweInk      = Color(hex: 0x2D1520)
-    static let floweMuted    = Color(hex: 0xB08090)
+    static let floweMuted    = Color(hex: 0x86586A)   // WCAG AA >=4.5:1 on white (was 0xB08090)
     static let floweBorder   = Color(hex: 0xE8789A).opacity(0.18)
 
     // Status badges (bookings)
-    static let floweSuccess  = Color(hex: 0x4CAF50)
+    static let floweSuccess  = Color(hex: 0x2F6E4F)   // warmer, darker on-palette green (was 0x4CAF50 stock Material)
     static let floweCancel   = Color(hex: 0xE05070)
 }

@@ -4,6 +4,7 @@ import SwiftUI
 /// status badge, over a body row with date / time and a trailing action button.
 struct BookingCard: View {
     @Environment(MockDataStore.self) private var data
+    @Environment(\.locale) private var locale
 
     let booking: Booking
 
@@ -21,8 +22,12 @@ struct BookingCard: View {
         }
     }
 
+    /// The cancel confirmation is ONE dialog driven by this enum (a second `.confirmationDialog` shadows
+    /// the first, the same trap as `.sheet`). One-off → `.oneOff`; a standing week → `.skip` (this week
+    /// only) or `.endSeries` (all future weeks).
+    private enum CancelKind { case oneOff, skip, endSeries }
     @State private var route: Route?
-    @State private var confirmingCancel = false
+    @State private var cancelKind: CancelKind?
 
     private var instructor: Instructor? { data.instructor(id: booking.instructorId) }
 
@@ -54,13 +59,42 @@ struct BookingCard: View {
                 ReviewSheet(booking: booking)
             }
         }
-        .confirmationDialog("Cancel this session?",
-                            isPresented: $confirmingCancel, titleVisibility: .visible) {
-            Button("Cancel session", role: .destructive) { data.cancel(booking) }
-            Button("Keep it", role: .cancel) { }
+        .confirmationDialog(cancelTitle,
+                            isPresented: cancelDialogBinding, titleVisibility: .visible) {
+            switch cancelKind {
+            case .skip:
+                Button("Skip this week", role: .destructive) { data.cancel(booking) }
+                Button("Keep it", role: .cancel) { }
+            case .endSeries:
+                Button("End series", role: .destructive) { data.endSeriesAsStudent(booking) }
+                Button("Keep it", role: .cancel) { }
+            default:
+                Button("Cancel session", role: .destructive) { data.cancel(booking) }
+                Button("Keep it", role: .cancel) { }
+            }
         } message: {
-            Text("Your instructor will be notified that you can no longer make it.")
+            switch cancelKind {
+            case .skip:
+                Text("This cancels only this week. Your weekly slot stays booked.")
+            case .endSeries:
+                Text("This cancels all upcoming weeks. Past sessions stay.")
+            default:
+                Text("Your instructor will be notified that you can no longer make it.")
+            }
         }
+    }
+
+    /// Title for the shared cancel dialog, chosen by the pending `cancelKind`.
+    private var cancelTitle: String {
+        switch cancelKind {
+        case .skip:      return String(localized: "Skip just this week?")
+        case .endSeries: return String(localized: "End this weekly series?")
+        default:         return String(localized: "Cancel this session?")
+        }
+    }
+
+    private var cancelDialogBinding: Binding<Bool> {
+        Binding(get: { cancelKind != nil }, set: { if !$0 { cancelKind = nil } })
     }
 
     // MARK: Header band
@@ -90,14 +124,21 @@ struct BookingCard: View {
                     Text(instructor?.name ?? "")
                         .font(FloweFont.serif(14, .medium))
                         .foregroundStyle(.white)
-                    Text("\(booking.type) · \(booking.duration)")
+                    (Text(localizedTag: booking.type) + Text(" · ") + Text("\(booking.durationMinutes) min"))
                         .font(FloweFont.mono(11))
                         .foregroundStyle(.white.opacity(0.8))
                 }
 
                 Spacer(minLength: 8)
 
-                StatusBadge(status: booking.status)
+                // On the waitlist (an overflow seat on a full group class) the row reads "Waitlisted #N"
+                // instead of the plain status badge; it auto-flips to Pending/Confirmed on promotion
+                // (derived from the seat index — no stored state).
+                if data.isWaitlisted(booking) {
+                    WaitlistBadge(rank: data.waitlistRank(for: booking))
+                } else {
+                    StatusBadge(status: booking.status)
+                }
             }
             .padding(.horizontal, 16)
         }
@@ -134,8 +175,8 @@ struct BookingCard: View {
                     // Honest about delivery: the request hasn't reached the instructor yet.
                     metaLabel(icon: "arrow.clockwise", text: "Not sent yet")
                 } else {
-                    metaLabel(icon: "calendar", text: booking.date)
-                    metaLabel(icon: "clock", text: booking.time)
+                    metaLabel(icon: "calendar", text: booking.localizedDate(locale))
+                    metaLabel(icon: "clock", text: booking.localizedTime(locale))
                 }
             }
 
@@ -164,10 +205,12 @@ struct BookingCard: View {
                     .accessibilityIdentifier("booking.bookAgain")
                 }
             } else if booking.status != .cancelled {
+                // A waitlisted row leaves the waitlist (the same one-off cancel path — it releases
+                // the overflow hold via `releaseSeat`); everything else cancels the session.
                 Button {
-                    confirmingCancel = true
+                    cancelKind = .oneOff
                 } label: {
-                    Text("Cancel")
+                    Text(data.isWaitlisted(booking) ? "Leave waitlist" : "Cancel")
                         .font(FloweFont.sans(11))
                         .foregroundStyle(Color.floweMuted)
                 }
@@ -176,6 +219,10 @@ struct BookingCard: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+        // Standard Flowe press feedback for the row's action buttons (review / book again / cancel),
+        // which were plain-styled and had none. Scoped to bodyRow so it never reaches the card's
+        // sheet or confirmation-dialog buttons, which keep their system styling.
+        .flowePressable()
     }
 
     private func metaLabel(icon: String, text: String) -> some View {
@@ -188,20 +235,4 @@ struct BookingCard: View {
                 .foregroundStyle(Color.floweInk)
         }
     }
-}
-
-#Preview {
-    let data = MockDataStore.preview
-    return VStack(spacing: 12) {
-        if let upcoming = data.upcomingBookings.first {
-            BookingCard(booking: upcoming)
-        }
-        if let past = data.pastBookings.first {
-            BookingCard(booking: past)
-        }
-    }
-    .padding()
-    .background(Color.flowWhite)
-    .environment(data)
-    .environment(AppSession())
 }

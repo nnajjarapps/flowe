@@ -6,11 +6,22 @@ struct DiscoverView: View {
     @Environment(MockDataStore.self) private var data
     @Environment(AppSession.self) private var session
     @Environment(\.openURL) private var openURL
+    /// Bumped by the tab shell when the already-selected Discover tab is re-tapped;
+    /// scrolls the list to the top (see `ScrollToTop` in FloweCommon). A no-op in Map mode.
+    @Environment(\.tabReselectTrigger) private var reselectTick
 
     @State private var search = ""
     @State private var filter = "All"
     @State private var retakeQuiz = false
     @State private var showNotifications = false
+    @State private var showOpportunities = false
+    /// Natural-language search interpretation in flight (Flowe Intelligence).
+    @State private var interpreting = false
+
+    /// List (the scrolling feed) vs Map (the same instructors plotted at their exact studio points). A view
+    /// toggle, not a data one — both sides read the exact same visible-instructor query.
+    private enum DiscoverMode { case list, map }
+    @State private var viewMode: DiscoverMode = .list
     /// The tapped row, not just its instructor — carrying `distanceMetres` so the profile can show the
     /// same "~N km" the card did without recomputing (there is no `LocationService` inside the profile).
     @State private var selected: Row?
@@ -37,7 +48,7 @@ struct DiscoverView: View {
             (filter == "All" || ins.specialties.contains(filter)) &&
             (search.isEmpty
              || ins.name.lowercased().contains(search.lowercased())
-             || ins.city.lowercased().contains(search.lowercased()))
+             || ins.address.lowercased().contains(search.lowercased()))
         }
         let measured = matches.map {
             Row(instructor: $0,
@@ -47,6 +58,21 @@ struct DiscoverView: View {
         // distance makes: nothing when we can't measure.
         guard isSortingByDistance else { return measured }
         return measured.sorted(by: Self.byDistance)
+    }
+
+    /// The instructors to plot on the map: the SAME `rows` predicate — visibility-filtered source,
+    /// specialty match, name/address search — but keeping featured instructors (the map shows everyone)
+    /// and adding the `studioCoordinate != nil` gate, since a pin needs a point. Most instructors have
+    /// never set a studio location, so this is legitimately shorter than the list; the map's count badge
+    /// reports only what's plotted. No sort: pins have no order.
+    private var mapInstructors: [Instructor] {
+        data.visibleInstructors.filter { ins in
+            ins.studioCoordinate != nil &&
+            (filter == "All" || ins.specialties.contains(filter)) &&
+            (search.isEmpty
+             || ins.name.lowercased().contains(search.lowercased())
+             || ins.address.lowercased().contains(search.lowercased()))
+        }
     }
 
     /// Distance ranks **inside** a visibility tier, never across one.
@@ -84,24 +110,51 @@ struct DiscoverView: View {
     /// a different message from "the catalog is empty".
     private var isSearchingOrFiltering: Bool { !search.isEmpty || filter != "All" }
 
-    /// A `LocalizedStringKey` rather than a composed `String`, so the pattern
-    /// ("%@ · %lld INSTRUCTORS") is extracted and can be translated — and reordered, since other
-    /// languages won't want the count in this position.
-    private var listLabel: LocalizedStringKey {
-        let prefix = filter == "All" ? "NEAR YOU" : filter.uppercased()
-        return "\(prefix) · \(rows.count) INSTRUCTORS"
+    /// Composed from separate localized `Text` pieces (not a substituted string) so BOTH the prefix
+    /// — "NEAR YOU" or the selected category — and the "%lld INSTRUCTORS" count localize through the
+    /// catalog against the environment locale. Substituting a raw `filter` into a `%@` key left the
+    /// prefix in English; concatenation keeps every piece translatable (and RTL-mirrors correctly).
+    private var listLabel: Text {
+        let prefix: LocalizedStringKey = filter == "All" ? "NEAR YOU" : LocalizedStringKey(filter)
+        return Text(prefix) + Text(verbatim: " · ") + Text("\(rows.count) INSTRUCTORS")
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                header
-                    .padding(.horizontal, 20)
-                    .padding(.top, 12)
-                    .padding(.bottom, 12)
+        // The greeting + List/Map toggle stays put across both modes; only what sits under it swaps.
+        VStack(spacing: 0) {
+            titleRow
+                .padding(.horizontal, 20)
+                .padding(.top, 12)
+                .padding(.bottom, 12)
 
-                FilterChipsBar(items: FloweConstants.discoverCategories, selection: $filter)
-                    .padding(.bottom, 16)
+            if viewMode == .map {
+                // The map owns its own floating search + chips (bound to the same `search`/`filter`),
+                // and reports selections back through the SAME `selected`/`.sheet(item:)` the list uses.
+                InstructorMapView(instructors: mapInstructors,
+                                  filter: $filter,
+                                  search: $search,
+                                  location: location) { ins in
+                    selected = Row(instructor: ins,
+                                   distanceMetres: location.distance(toLatitude: ins.latitude,
+                                                                     longitude: ins.longitude))
+                }
+            } else {
+                ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        // Top anchor for active-tab-reselect scroll-to-top.
+                        Color.clear.frame(height: 0).id(ScrollToTop.anchorID)
+
+                        header
+                            .padding(.horizontal, 20)
+                            .padding(.top, 12)
+                            .padding(.bottom, 12)
+
+                        FilterChipsBar(items: FloweConstants.discoverCategories, selection: $filter)
+                            .padding(.bottom, 16)
+                            // Selection feedback for the category chips (the chip's own pop-scale
+                            // lives in FilterChipsBar). `filter` only changes on a chip tap here.
+                            .onChange(of: filter) { Haptic.selection() }
 
                 // Personalized matches — only on the default, unfiltered view (owns its own insets).
                 if filter == "All", search.isEmpty {
@@ -113,6 +166,17 @@ struct DiscoverView: View {
                         },
                         onTakeQuiz: { retakeQuiz = true }
                     )
+                    .floweAppear()
+                }
+
+                // Opportunities nudge — the student on-ramp into the Flowe Pro career marketplace. Only on
+                // the default view, and only when there's actually something open to browse, so it never
+                // leads to an empty list (the Profile card is the evergreen entry). See [[FlowePro]].
+                if filter == "All", search.isEmpty, !data.studentBrowsableOpportunities.isEmpty {
+                    opportunitiesBanner
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 20)
+                        .floweAppear()
                 }
 
                 if let featured = featuredInstructor {
@@ -124,6 +188,7 @@ struct DiscoverView: View {
                                                                              longitude: featured.longitude))
                         }
                             .accessibilityIdentifier("discover.instructorCard")
+                            .floweAppear()
                     }
                     .padding(.horizontal, 20)
                     .padding(.bottom, 20)
@@ -161,19 +226,28 @@ struct DiscoverView: View {
                     }
                 } else {
                     VStack(alignment: .leading, spacing: 10) {
-                        SectionHeader(text: listLabel)
+                        listLabel
+                            .font(FloweFont.mono(11))
+                            .foregroundStyle(Color.floweMuted)
                         VStack(spacing: 12) {
-                            ForEach(rows) { row in
+                            ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
                                 InstructorCard(instructor: row.instructor,
                                                distanceMetres: row.distanceMetres) {
                                     selected = row
                                 }
                                 .accessibilityIdentifier("discover.instructorCard")
+                                .floweAppear(index)
                             }
                         }
+                        // Reflow the list smoothly when the category filter changes.
+                        .animation(FloweMotion.spring, value: filter)
                     }
                     .padding(.horizontal, 20)
                     .padding(.bottom, 24)
+                        }
+                    }
+                }
+                .scrollToTopOnTabReselect(trigger: reselectTick, proxy: proxy)
                 }
             }
         }
@@ -193,12 +267,59 @@ struct DiscoverView: View {
             }
         }
         .sheet(isPresented: $showNotifications) { NotificationSettingsView() }
+        .sheet(isPresented: $showOpportunities) { StudentOpportunitiesView() }
+        // Keep the open feed fresh so the banner's show/hide (gated on there being something to browse)
+        // reflects reality — otherwise it only appears after the student opens the sheet once.
+        .task { await data.syncOpportunities() }
         .task { await data.syncCatalog() }
         // Only when the student has already agreed. This never raises the prompt — that is the
         // "Use my location" button's job, and a permission sheet on top of a feed the user just
         // opened is exactly the ambush this app shouldn't spring.
         .task { if location.isAuthorized { await location.refresh() } }
-        .refreshable { await data.syncCatalog() }
+        // Manual pull-to-refresh: pulls the latest published instructor catalog + re-fixes distance.
+        .refreshable {
+            await data.syncCatalog()
+            if location.isAuthorized { await location.refresh() }
+        }
+    }
+
+    // MARK: - Opportunities banner (Flowe Pro student on-ramp)
+
+    /// A brand-tinted nudge into the opportunity browse, deliberately distinct from the white instructor
+    /// cards so it doesn't read as "another instructor". Gated at the call site on there being something
+    /// to browse; the tap opens `StudentOpportunitiesView` (same sheet as the Profile entry).
+    private var opportunitiesBanner: some View {
+        Button {
+            Haptic.tap()
+            showOpportunities = true
+        } label: {
+            HStack(spacing: 14) {
+                Image(systemName: "briefcase.fill")
+                    .font(.system(size: 16))
+                    .foregroundStyle(.white)
+                    .frame(width: 42, height: 42)
+                    .background(FlowGradients.gradDark, in: RoundedRectangle(cornerRadius: 12))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Find a role or apprenticeship")
+                        .font(FloweFont.sans(15, .medium))
+                        .foregroundStyle(Color.floweInk)
+                    Text("Studios near you are hiring assistants & apprentices")
+                        .font(FloweFont.sans(12))
+                        .foregroundStyle(Color.floweMuted)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14))
+                    .foregroundStyle(Color.floweMuted)
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.flowePink.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
+            .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.flowePink.opacity(0.18), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("discover.opportunities")
     }
 
     // MARK: - Header
@@ -213,43 +334,97 @@ struct DiscoverView: View {
         }
     }
 
+    /// Greeting on the left, the List/Map toggle + notifications bell on the right. Lives outside
+    /// `header` so it stays pinned above both the scrolling list and the full-bleed map.
+    private var titleRow: some View {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(LocalizedStringKey(greeting))
+                    .font(FloweFont.mono(11))
+                    .foregroundStyle(Color.flowePinkDeep)
+                (Text("Find your ")
+                    .font(FloweFont.serif(22))
+                 + Text("instructor.")
+                    .font(FloweFont.serif(22, .regular, italic: true)))
+                    .foregroundStyle(Color.floweInk)
+            }
+            Spacer()
+            viewToggle
+            Button {
+                showNotifications = true
+            } label: {
+                Image(systemName: "bell")
+                    .font(.system(size: 16))
+                    .foregroundStyle(Color.floweInk)
+                    .frame(width: 36, height: 36)
+                    .background(Color.floweCardBg)
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(Color.floweBorder, lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Notifications")
+        }
+    }
+
+    /// Two-segment icon toggle mirroring `locationPill`'s fill/tint: the active segment carries the
+    /// dark gradient and a white glyph, the inactive one the card background and muted glyph.
+    private var viewToggle: some View {
+        HStack(spacing: 0) {
+            toggleSegment(icon: "line.3.horizontal", mode: .list, label: "List view")
+            toggleSegment(icon: "map", mode: .map, label: "Map view")
+        }
+        .background(Color.floweCardBg)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.floweBorder, lineWidth: 1))
+    }
+
+    private func toggleSegment(icon: String, mode: DiscoverMode, label: String) -> some View {
+        let isOn = viewMode == mode
+        return Button {
+            withAnimation(FloweMotion.spring) { viewMode = mode }
+        } label: {
+            Image(systemName: icon)
+                .font(.system(size: 15))
+                .foregroundStyle(isOn ? .white : Color.floweMuted)
+                .frame(width: 36, height: 36)
+                .background { if isOn { FlowGradients.gradDark } }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+    }
+
     private var header: some View {
         VStack(spacing: 16) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(LocalizedStringKey(greeting))
-                        .font(FloweFont.mono(11))
-                        .foregroundStyle(Color.flowePinkDeep)
-                    (Text("Find your ")
-                        .font(FloweFont.serif(22))
-                     + Text("instructor.")
-                        .font(FloweFont.serif(22, .regular, italic: true)))
-                        .foregroundStyle(Color.floweInk)
-                }
-                Spacer()
-                Button {
-                    showNotifications = true
-                } label: {
-                    Image(systemName: "bell")
-                        .font(.system(size: 16))
-                        .foregroundStyle(Color.floweInk)
-                        .frame(width: 36, height: 36)
-                        .background(Color.floweCardBg)
-                        .clipShape(Circle())
-                        .overlay(Circle().stroke(Color.floweBorder, lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Notifications")
-            }
-
             HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 15))
                     .foregroundStyle(Color.floweMuted)
-                TextField("", text: $search, prompt: Text("Name or city…").foregroundColor(Color.floweMuted))
+                // With on-device AI available, the field doubles as a natural-language search — the hint
+                // invites it. The plain name/address contains-match still runs live as you type.
+                TextField("", text: $search,
+                          prompt: Text(FloweAI.isAvailable ? "Try “reformer near me”" : "Name or address…")
+                            .foregroundColor(Color.floweMuted))
                     .font(FloweFont.sans(14))
                     .foregroundStyle(Color.floweInk)
                     .autocorrectionDisabled()
+                    .onSubmit { interpretSearch() }
+                // ✨ Interpret the free-text query into filters (category + place + near-me). Shown only
+                // when the model is available and there's something to interpret. See [[FloweIntelligence]].
+                if FloweAI.isAvailable, !search.trimmingCharacters(in: .whitespaces).isEmpty {
+                    Button { interpretSearch() } label: {
+                        if interpreting {
+                            ProgressView().controlSize(.mini).tint(Color.flowePinkDeep)
+                        } else {
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 14))
+                                .foregroundStyle(Color.flowePinkDeep)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(interpreting)
+                    .accessibilityLabel("Search with AI")
+                    .accessibilityIdentifier("discover.aiSearch")
+                }
                 if !search.isEmpty {
                     Button {
                         search = ""
@@ -275,7 +450,7 @@ struct DiscoverView: View {
     // MARK: - Location control
     //
     // Three states, all of them normal. Refusal is not an error path: the feed keeps working, the
-    // cards keep showing cities, and nothing here ever blocks the list from rendering.
+    // cards keep showing studio addresses, and nothing here ever blocks the list from rendering.
 
     @ViewBuilder
     private var locationBar: some View {
@@ -283,7 +458,7 @@ struct DiscoverView: View {
             HStack(spacing: 6) {
                 Image(systemName: "location.slash")
                     .font(.system(size: 11))
-                Text("Location off — sorted by rating. Search by city instead.")
+                Text("Location off — sorted by rating. Search by address instead.")
                     .font(FloweFont.sans(11))
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 8)
@@ -296,7 +471,7 @@ struct DiscoverView: View {
         } else if location.hasFix {
             HStack(spacing: 8) {
                 locationPill(icon: "location.fill", title: "Nearest first", isOn: nearestFirst) {
-                    withAnimation(.easeInOut(duration: 0.15)) { nearestFirst.toggle() }
+                    withAnimation(FloweMotion.spring) { nearestFirst.toggle() }
                 }
                 .accessibilityIdentifier("discover.nearestToggle")
                 Spacer(minLength: 0)
@@ -351,11 +526,33 @@ struct DiscoverView: View {
         guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
         openURL(url)
     }
-}
 
-#Preview {
-    DiscoverView()
-        .environment(MockDataStore.preview)
-        .environment(AppSettings())
-        .environment(AppSession())
+    // MARK: - Natural-language search (Flowe Intelligence)
+
+    /// Interpret the current free-text query into Discover filters **on-device**: pick a real category,
+    /// pull out a place/name to search, and honour a "near me". Falls back silently when the model is
+    /// unavailable or can't parse — the plain text search is untouched. See [[FloweIntelligence]].
+    private func interpretSearch() {
+        let query = search.trimmingCharacters(in: .whitespaces)
+        guard !query.isEmpty, !interpreting else { return }
+        interpreting = true
+        Task {
+            defer { interpreting = false }
+            if #available(iOS 26, *), FloweAI.isAvailable,
+               let parsed = try? await FloweIntelligence.shared.parseSearch(query, categories: FloweConstants.discoverCategories) {
+                // The model aims at the real list, but validate anyway — an unknown category → "All".
+                let matched = FloweAI.resolveCategory(parsed.category, in: FloweConstants.discoverCategories)
+                withAnimation(FloweMotion.spring) {
+                    filter = matched
+                    search = parsed.locationOrName
+                    if parsed.nearMe { nearestFirst = true }
+                }
+                Haptic.selection()
+                // Asked for nearby and we can get a fix → warm it so the distance sort actually bites.
+                if parsed.nearMe, !location.hasFix, location.isAuthorized {
+                    await location.refresh()
+                }
+            }
+        }
+    }
 }

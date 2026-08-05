@@ -70,6 +70,26 @@ struct RemoteRegistration {
     }
 }
 
+/// An organizer's accept/decline for one student's event request. Written by the ORGANIZER — the
+/// student can't change their own registration's status (creator-write), so the answer is a separate
+/// creator-owned record, exactly like `SessionDecision` answers a `SessionBooking`. Deterministic
+/// recordName → one decision per (event, student), upserted on re-answer.
+struct RemoteEventDecision {
+    let eventID: String
+    let studentID: String
+    let accepted: Bool
+    let respondedAt: Date
+
+    init?(record: CKRecord) {
+        guard let eventID = record["eventID"] as? String,
+              let studentID = record["studentID"] as? String else { return nil }
+        self.eventID = eventID
+        self.studentID = studentID
+        accepted = (record["accepted"] as? Int ?? 0) == 1
+        respondedAt = record["respondedAt"] as? Date ?? record.creationDate ?? .distantPast
+    }
+}
+
 /// Community events over CloudKit's **public** database, shaped exactly like `CommunityService`:
 /// an instructor-authored `CommunityEvent` record read by everyone, and an `EventRegistration`
 /// record written by each student who joins. SwiftData can only mirror the *private* database, which
@@ -272,6 +292,41 @@ final class EventService {
     /// and so the student stays the creator of the record they later delete.
     static func registrationRecordName(eventID: String, studentID: String) -> String {
         "reg-\(eventID)-\(studentID)"
+    }
+
+    static let decisionRecordType = "EventDecision"
+    /// The recipient field a student's push predicate tests (`studentID == me`), mirroring bookings.
+    static let decisionRecipientField = "studentID"
+    static func decisionRecordName(eventID: String, studentID: String) -> String {
+        "evdec-\(eventID)-\(studentID)"
+    }
+
+    /// Organizer answers ONE student's request. Upsert by deterministic recordName so a re-answer
+    /// updates in place and the organizer stays the record's creator.
+    func setEventDecision(accepted: Bool, eventID: String, studentID: String, organizerID: String) async -> Bool {
+        #if CLOUDKIT_ENABLED
+        let id = CKRecord.ID(recordName: Self.decisionRecordName(eventID: eventID, studentID: studentID))
+        let record = (try? await database.record(for: id))
+            ?? CKRecord(recordType: Self.decisionRecordType, recordID: id)
+        record["eventID"] = eventID
+        record["studentID"] = studentID          // recipient — powers the student's push predicate
+        record["accepted"] = accepted ? 1 : 0
+        record["organizerID"] = organizerID
+        record["respondedAt"] = Date()
+        return (try? await database.save(record)) != nil
+        #else
+        return false
+        #endif
+    }
+
+    /// Every decision for the given events. nil = the query itself failed (≠ "no decisions").
+    func fetchEventDecisions(eventIDs: [String]) async -> [RemoteEventDecision]? {
+        #if CLOUDKIT_ENABLED
+        let records = await fetchAll(recordType: Self.decisionRecordType, eventIDs: eventIDs)
+        return records.map { $0.compactMap(RemoteEventDecision.init) }
+        #else
+        return nil
+        #endif
     }
 
     /// Add or remove this student's registration. Returns whether the change reached the server.

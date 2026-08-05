@@ -23,9 +23,9 @@ import UIKit
 /// wire step) present this one by its full name.
 struct StudentInstructorProfileView: View {
     let instructor: Instructor
-    /// Metres to the instructor's coarse teaching area, threaded in from Discover (which owns the
+    /// Metres to the instructor's exact studio location, threaded in from Discover (which owns the
     /// `LocationService` fix). Nil at the other two entry points and whenever either side has no
-    /// location — the profile renders fine without it, showing a city and nothing else.
+    /// location — the profile renders fine without it, showing an address and nothing else.
     var distanceMetres: Double? = nil
     let onClose: () -> Void
 
@@ -35,19 +35,31 @@ struct StudentInstructorProfileView: View {
     @State private var showReport = false
     @State private var confirmBlock = false
     @State private var showCertificate = false
+    @State private var showHeroZoom = false
     @State private var showBooking = false
 
     /// Payment methods we know how to render, in canonical order — an unknown one never reaches a chip.
     private var methods: [String] { PaymentMethod.known(instructor.paymentMethods) }
 
-    /// The derived rating summary — nil until the first real review, which is a different state from
-    /// a 0.0 score and must render differently everywhere.
+    /// The rating summary. PREFER the summary derived from real `Review` rows this device has cached
+    /// (freshest, review-backed). A browsing student usually has none cached, so FALL BACK to the
+    /// listing's PUBLISHED aggregate (`instructor.rating`/`.reviews`) whenever it carries at least one
+    /// review — that published number IS the real, review-derived aggregate (see `syncReviews` →
+    /// `me.rating = summary.average`), and it is exactly what Discover cards and the booking sheet show,
+    /// so the profile no longer contradicts them with "New". Only a genuinely review-less instructor
+    /// (published count 0) reads "New" — never a fabricated 0.0.
     private var ratingSummary: (average: Double, count: Int)? {
-        instructor.ownerID.flatMap { data.rating(for: $0) }
+        if let derived = instructor.ownerID.flatMap({ data.rating(for: $0) }) { return derived }
+        return instructor.reviews > 0 ? (instructor.rating, instructor.reviews) : nil
     }
 
     private var reviews: [Review] {
         instructor.ownerID.map { data.reviews(for: $0) } ?? []
+    }
+
+    /// Peer recommendations of this instructor (Flowe Pro) — social proof from fellow instructors.
+    private var recommendations: [InstructorRecommendation] {
+        instructor.ownerID.map { data.recommendations(for: $0) } ?? []
     }
 
     var body: some View {
@@ -63,6 +75,8 @@ struct StudentInstructorProfileView: View {
                         .padding(.top, 24)
                     reviewsSection
                         .padding(.top, 24)
+                    recommendationsSection
+                        .padding(.top, 24)
                 }
                 .padding(.bottom, 24)
             }
@@ -74,7 +88,15 @@ struct StudentInstructorProfileView: View {
         .presentationDragIndicator(.hidden)   // the hero owns a custom xmark; no grabber over the photo
         .accessibilityIdentifier("instructor.profile")
         .task {
-            if let id = instructor.ownerID { await data.syncReviews(forInstructor: id) }
+            if let id = instructor.ownerID {
+                await data.syncReviews(forInstructor: id)
+                // Warm the reviewers' live identities by their KNOWN ownerIDs so a renamed reviewer
+                // resolves fresh instead of the frozen `Review.studentName` snapshot. `syncStudentProfiles`
+                // is instructor-only, so on this student-facing wall nothing else populates that cache.
+                await data.fetchAuthorProfiles(Set(data.reviews(for: id).compactMap { $0.studentID }))
+                // Peer recommendations shown on this profile (Flowe Pro social proof).
+                await data.syncRecommendations(forInstructor: id)
+            }
             // Pull the instructor's rich lesson types so the OFFERS cards and the booking picker show
             // capacity/details/photos, not just the denormalised name cache. Same non-pruning pattern
             // as reviews: a student viewing this profile fetches all of one instructor's types.
@@ -86,12 +108,16 @@ struct StudentInstructorProfileView: View {
                 reportedName: instructor.name,
                 content: .instructorListing,
                 contentID: instructor.ownerID ?? "",
-                snapshot: [instructor.name, instructor.city, instructor.cert, instructor.bio ?? ""]
+                snapshot: [instructor.name, instructor.address, instructor.cert, instructor.bio ?? ""]
                     .filter { !$0.isEmpty }
                     .joined(separator: " · ")
             )
         }
-        .fullScreenCover(isPresented: $showCertificate) { certificateViewer }
+        // The certificate photo, and the full-bleed listing hero, both open the shared
+        // pinch/double-tap/drag-down zoomable viewer instead of a plain full-screen still.
+        .fullScreenImageZoom(source: .data(instructor.certPhoto), isPresented: $showCertificate)
+        .fullScreenImageZoom(source: .remote(id: instructor.img, photo: instructor.photo),
+                             isPresented: $showHeroZoom)
         .sheet(isPresented: $showBooking) {
             // Sheet-on-sheet, the proven EventDetailView→BookingSheet pattern. startStep:1 skips the
             // orphaned intro and lands on the day picker, since this profile IS the intro.
@@ -130,11 +156,23 @@ struct StudentInstructorProfileView: View {
             .clipped()
             .overlay(alignment: .bottomLeading) { heroCaption }
             .overlay(alignment: .topTrailing) { heroButtons }
+            // Tap the listing photo to open it full-screen and zoomable. The overlaid xmark /
+            // moderation Buttons take hit priority in their own corners, so this only fires on the
+            // photo itself; guarded so an image-less gradient hero stays inert.
+            .contentShape(Rectangle())
+            .onTapGesture {
+                guard instructor.photo != nil || !instructor.img.isEmpty else { return }
+                Haptic.tap()
+                showHeroZoom = true
+            }
     }
 
     @ViewBuilder
     private var heroPhoto: some View {
-        if instructor.photo != nil || !instructor.img.isEmpty {
+        if let cover = instructor.coverPhoto, let ui = UIImage(data: cover) {
+            // Flowe Pro brand cover wins the hero when set — it's a wide brand banner, exactly this slot.
+            Image(uiImage: ui).resizable().scaledToFill()
+        } else if instructor.photo != nil || !instructor.img.isEmpty {
             RemoteImage(id: instructor.img, photo: instructor.photo, width: 800, height: 600)
         } else {
             // RemoteImage would already fall back to the flat gradient, but a full-bleed hero earns a
@@ -163,6 +201,15 @@ struct StudentInstructorProfileView: View {
                 .lineLimit(2)
                 .multilineTextAlignment(.leading)
                 .shadow(color: Color.floweInk.opacity(0.35), radius: 8, y: 2)
+            // Flowe Pro: the professional headline sits under the name on the hero. See [[FlowePro]].
+            if !instructor.headline.isEmpty {
+                Text(instructor.headline)
+                    .font(FloweFont.sans(13, .medium))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                    .shadow(color: Color.floweInk.opacity(0.35), radius: 6, y: 1)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(20)
@@ -172,11 +219,31 @@ struct StudentInstructorProfileView: View {
         HStack(spacing: 10) {
             circleButton("xmark") { onClose() }
                 .accessibilityLabel(Text("Close"))
+            Spacer(minLength: 0)
+            saveButton
             moderationMenu
         }
         .padding(.horizontal, 16)
         // Push clear of the status bar — the hero ignores the top safe area.
         .padding(.top, 56)
+    }
+
+    /// Save this instructor to the local wishlist (heart). Filled + pink when saved.
+    private var saveButton: some View {
+        let saved = data.isSaved(instructor.ownerID)
+        return Button {
+            Haptic.tap()
+            withAnimation(FloweMotion.pop) { data.toggleSaved(instructor.ownerID) }
+        } label: {
+            Image(systemName: saved ? "heart.fill" : "heart")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(saved ? Color.flowePinkDeep : Color.floweInk)
+                .frame(width: 32, height: 32)
+                .background(.ultraThinMaterial, in: Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(saved ? "Saved — tap to remove" : "Save instructor"))
+        .accessibilityIdentifier("instructor.save")
     }
 
     private func circleButton(_ icon: String, action: @escaping () -> Void) -> some View {
@@ -192,7 +259,7 @@ struct StudentInstructorProfileView: View {
 
     private var moderationMenu: some View {
         Menu {
-            // A listing's name, city, bio and certification are user-written and public, so students
+            // A listing's name, address, bio and certification are user-written and public, so students
             // need a way to flag one (App Store Review Guideline 1.2).
             Button("Report this profile", systemImage: "flag") { showReport = true }
             Button("Block \(instructor.firstName)", systemImage: "hand.raised",
@@ -207,13 +274,13 @@ struct StudentInstructorProfileView: View {
         .accessibilityIdentifier("instructor.moderation")
     }
 
-    /// City · distance, built from SEPARATE `Text` runs so the system lays it out bidirectionally —
-    /// a baked "City · ~2 km" string would read backwards in Arabic. Distance only appears when it was
-    /// threaded in; `city` is user text and passes through unlocalized. Mirrors InstructorCard.
+    /// Address · distance, built from SEPARATE `Text` runs so the system lays it out bidirectionally —
+    /// a baked "Address · ~2 km" string would read backwards in Arabic. Distance only appears when it was
+    /// threaded in; `address` is user text and passes through unlocalized. Mirrors InstructorCard.
     private var metaText: Text {
-        var run = Text(instructor.city)
+        var run = Text(instructor.address)
         if let d = distanceMetres {
-            if !instructor.city.isEmpty { run = run + Text(verbatim: " · ") }
+            if !instructor.address.isEmpty { run = run + Text(verbatim: " · ") }
             run = run + Text(FloweDistance.label(metres: d))
         }
         return run
@@ -276,15 +343,17 @@ struct StudentInstructorProfileView: View {
                 StatTile(value: String(format: "%.1f", summary.average),
                          label: "RATING", accent: .flowePinkDeep)
             } else {
-                StatTile(value: "New", label: "RATING", accent: .floweMuted)
+                StatTile(value: String(localized: "New"), label: "RATING", accent: .floweMuted)
             }
 
             StatTile(value: instructor.yearsExp > 0 ? "\(instructor.yearsExp)" : "—",
                      label: "YEARS",
                      accent: instructor.yearsExp > 0 ? .flowePinkDeep : .floweMuted)
 
-            StatTile(value: instructor.price == 0 ? String(localized: "Free") : settings.money(instructor.price),
-                     label: "PER SESSION", accent: .flowePinkDeep)
+            // Derived "starting from" price (cheapest lesson type). "—" when no type is priced yet,
+            // never a fabricated 0. A specific type's price is shown once one is chosen in BookingSheet.
+            StatTile(value: instructor.price == 0 ? "—" : settings.money(instructor.price),
+                     label: "STARTING", accent: .flowePinkDeep)
         }
         .padding(.horizontal, 20)
     }
@@ -305,11 +374,25 @@ struct StudentInstructorProfileView: View {
                 }
             }
 
+            brandStoryBlock
+
             if !instructor.specialties.isEmpty {
                 section("SPECIALTIES") {
                     FlowLayout(spacing: 6) {
                         // Raw user strings — passed through, never localized.
                         ForEach(instructor.specialties, id: \.self) { SpecialtyTag(text: $0) }
+                    }
+                }
+            }
+
+            // Flowe Pro: the instructor's work history, same pink-dot timeline as their own profile.
+            let experience = instructor.experience
+            if !experience.isEmpty {
+                section("EXPERIENCE") {
+                    VStack(alignment: .leading, spacing: 12) {
+                        ForEach(experience) { entry in
+                            experienceRow(entry)
+                        }
                     }
                 }
             }
@@ -329,7 +412,7 @@ struct StudentInstructorProfileView: View {
                 }
             }
 
-            teachingArea
+            studioLocation
             availability
             certificationBlock
             paymentBlock
@@ -348,32 +431,77 @@ struct StudentInstructorProfileView: View {
         }
     }
 
-    // MARK: - Teaching area
+    /// Flowe Pro brand kit: the studio "story" in a brand-accented card (left rule + faint brand tint),
+    /// mirroring the instructor's own profile. Only when a story is set. See [[FlowePro]].
+    @ViewBuilder
+    private var brandStoryBlock: some View {
+        if !instructor.story.isEmpty {
+            let tint = Color(hexString: instructor.brandColor) ?? Color.flowePink
+            section("MY STUDIO") {
+                HStack(alignment: .top, spacing: 12) {
+                    RoundedRectangle(cornerRadius: 2).fill(tint).frame(width: 3)
+                    Text(instructor.story)
+                        .font(FloweFont.sans(15))
+                        .foregroundStyle(Color.floweInk.opacity(0.9))
+                        .lineSpacing(4)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(14)
+                .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
+            }
+        }
+    }
+
+    /// One work-history row: a pink timeline dot, the role + place, and the period. Flowe Pro — mirrors
+    /// the instructor's own-profile timeline so a student sees the same résumé.
+    private func experienceRow(_ entry: Instructor.ExperienceEntry) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Circle()
+                .fill(Color.flowePink)
+                .frame(width: 8, height: 8)
+                .padding(.top, 5)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.role.isEmpty ? entry.place : entry.role)
+                    .font(FloweFont.sans(14, .medium))
+                    .foregroundStyle(Color.floweInk)
+                Text(entry.role.isEmpty ? "" : entry.place)
+                    .font(FloweFont.sans(13))
+                    .foregroundStyle(Color.floweInk.opacity(0.7))
+                if !entry.period.isEmpty {
+                    Text(entry.period)
+                        .font(FloweFont.mono(10))
+                        .foregroundStyle(Color.floweMuted)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    // MARK: - Studio location
 
     @ViewBuilder
-    private var teachingArea: some View {
-        // With neither a distance fix nor a city there is nothing true to show, so omit the block
+    private var studioLocation: some View {
+        // With neither a distance fix nor an address there is nothing true to show, so omit the block
         // rather than print an empty pin.
-        if distanceMetres != nil || !instructor.city.isEmpty {
-            section("TEACHING AREA") {
+        if distanceMetres != nil || !instructor.address.isEmpty {
+            section("STUDIO LOCATION") {
                 HStack(spacing: 8) {
                     Image(systemName: "mappin.circle")
                         .font(.system(size: 16))
                         .foregroundStyle(Color.flowePinkDeep)
-                    // Separate runs (RTL-safe): distance, then city — never coarseLocation.displayText,
-                    // never a precise figure.
+                    // Separate runs (RTL-safe): distance, then the exact studio address.
                     if let d = distanceMetres {
                         Text(FloweDistance.label(metres: d))
                             .font(FloweFont.mono(12))
                             .foregroundStyle(Color.flowePinkDeep)
                     }
-                    if !instructor.city.isEmpty {
-                        Text(instructor.city)
+                    if !instructor.address.isEmpty {
+                        Text(instructor.address)
                             .font(FloweFont.sans(14))
                             .foregroundStyle(Color.floweInk)
                     }
                 }
-                Text("Approximate teaching area.")
+                Text("The studio where you'll meet.")
                     .font(FloweFont.mono(9))
                     .foregroundStyle(Color.floweMuted)
             }
@@ -435,7 +563,7 @@ struct StudentInstructorProfileView: View {
                 }
 
                 if let bytes = instructor.certPhoto, let image = UIImage(data: bytes) {
-                    Button { showCertificate = true } label: {
+                    Button { Haptic.tap(); showCertificate = true } label: {
                         Image(uiImage: image)
                             .resizable()
                             .scaledToFit()
@@ -459,44 +587,6 @@ struct StudentInstructorProfileView: View {
                     .font(FloweFont.mono(10))
                     .foregroundStyle(Color.floweMuted)
             }
-        }
-    }
-
-    /// Full-screen look at the certificate — the credential and its date are often small print. The
-    /// disclaimer follows it here too, where the photo fills the screen and reads most like an
-    /// endorsement.
-    private var certificateViewer: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-            VStack(spacing: 12) {
-                Spacer(minLength: 0)
-                if let bytes = instructor.certPhoto, let image = UIImage(data: bytes) {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFit()
-                }
-                Spacer(minLength: 0)
-                Text("Flowe doesn't verify certifications.")
-                    .font(FloweFont.mono(10))
-                    .foregroundStyle(.white.opacity(0.7))
-            }
-            .padding(20)
-
-            VStack {
-                HStack {
-                    Spacer()
-                    Button { showCertificate = false } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .frame(width: 32, height: 32)
-                            .background(.ultraThinMaterial, in: Circle())
-                    }
-                    .accessibilityIdentifier("instructor.certPhotoClose")
-                }
-                Spacer()
-            }
-            .padding(16)
         }
     }
 
@@ -535,12 +625,25 @@ struct StudentInstructorProfileView: View {
     // MARK: - Reviews
 
     /// The centrepiece. Real reviews, newest first, blocked authors already filtered by the accessor.
+    /// Non-empty review bodies — input to the on-device "What students say" digest.
+    private var reviewTextsForDigest: [String] { reviews.map(\.text).filter { !$0.isEmpty } }
+
     private var reviewsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
+            // ✨ On-device review digest (Flowe Intelligence) — a summary a student can read at a glance.
+            // Only when the model is available and there's enough to summarize.
+            if #available(iOS 26, *), FloweAI.isAvailable, reviewTextsForDigest.count >= 3 {
+                ReviewDigestCard(reviewTexts: reviewTextsForDigest)
+            }
             HStack {
                 SectionHeader(text: "REVIEWS")
                 Spacer()
-                if let summary = ratingSummary {
+                // Gate the header star cluster on ACTUAL cached review rows, not just `ratingSummary`:
+                // the published-aggregate fallback fires exactly when no Review rows are cached, which is
+                // the same state the body renders "No reviews yet" — so keying the header on the aggregate
+                // put "★ N reviews" directly above "No reviews yet". The hero/statTrio still shows the
+                // aggregate (there is no review LIST there to contradict).
+                if !reviews.isEmpty, let summary = ratingSummary {
                     StarRatingView(rating: summary.average)
                     Text("^[\(summary.count) review](inflect: true)")
                         .font(FloweFont.mono(9))
@@ -586,6 +689,30 @@ struct StudentInstructorProfileView: View {
         }
     }
 
+    // MARK: - Peer recommendations (Flowe Pro)
+
+    /// Peer endorsements from fellow instructors — strong social proof for a student choosing who to book.
+    /// Self-hides when there are none. See [[FlowePro]].
+    @ViewBuilder
+    private var recommendationsSection: some View {
+        if !recommendations.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                SectionHeader(text: "PEER RECOMMENDATIONS")
+                VStack(spacing: 12) {
+                    ForEach(recommendations.prefix(3)) { RecommendationRow(recommendation: $0) }
+                }
+                if recommendations.count > 3 {
+                    Text("^[\(recommendations.count) recommendation](inflect: true) from fellow instructors")
+                        .font(FloweFont.mono(9))
+                        .foregroundStyle(Color.floweMuted)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 20)
+            .accessibilityIdentifier("instructor.recommendations")
+        }
+    }
+
     // MARK: - Action rail
 
     /// Booking is always available for a visible listing — no unavailable state — so this is a real
@@ -594,7 +721,12 @@ struct StudentInstructorProfileView: View {
         VStack(spacing: 0) {
             Rectangle().fill(Color.floweBorder).frame(height: 1)
             VStack(spacing: 8) {
-                GradientButton(title: "Book a session · \(settings.money(instructor.price))") {
+                // Pre-type CTA: the price hint is the "from" starting price (cheapest lesson type), and
+                // is dropped entirely when no type is priced. The nested localization reuses the
+                // existing "from %@" + "Book a session · %@" keys.
+                GradientButton(title: instructor.price > 0
+                    ? "Book a session · \(String(localized: "from \(settings.money(instructor.price))"))"
+                    : "Book a session") {
                     showBooking = true
                 }
                 .accessibilityIdentifier("instructor.book")
@@ -629,11 +761,4 @@ private struct AllReviewsView: View {
         .navigationTitle(Text(verbatim: instructorName))
         .navigationBarTitleDisplayMode(.inline)
     }
-}
-
-#Preview {
-    StudentInstructorProfileView(instructor: MockDataStore.preview.instructors[0], distanceMetres: 1400) {}
-        .environment(MockDataStore.preview)
-        .environment(AppSettings())
-        .environment(AppSession())
 }

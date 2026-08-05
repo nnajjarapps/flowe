@@ -24,14 +24,6 @@ struct SettingsView: View {
                     } label: {
                         Label("Language", systemImage: "globe")
                     }
-
-                    Picker(selection: $settings.currency) {
-                        ForEach(Currency.allCases) { currency in
-                            Text("\(currency.code) · \(currency.name)").tag(currency)
-                        }
-                    } label: {
-                        Label("Currency", systemImage: "coloncurrencysign.circle")
-                    }
                 }
 
                 Section("Notifications") {
@@ -41,7 +33,7 @@ struct SettingsView: View {
                         HStack {
                             Label("Notification settings", systemImage: "bell")
                             Spacer()
-                            Image(systemName: "chevron.right")
+                            Image(systemName: "chevron.forward")
                                 .font(.system(size: 13))
                                 .foregroundStyle(Color.floweMuted)
                         }
@@ -56,7 +48,7 @@ struct SettingsView: View {
                         HStack {
                             Label("Blocked users", systemImage: "hand.raised")
                             Spacer()
-                            Image(systemName: "chevron.right")
+                            Image(systemName: "chevron.forward")
                                 .font(.system(size: 13))
                                 .foregroundStyle(Color.floweMuted)
                         }
@@ -111,10 +103,4 @@ struct SettingsView: View {
             .sheet(item: $legalDoc) { LegalDocumentView(resource: $0.resource, title: $0.title) }
         }
     }
-}
-
-#Preview {
-    SettingsView()
-        .environment(AppSettings())
-        .environment(AppSession())
 }

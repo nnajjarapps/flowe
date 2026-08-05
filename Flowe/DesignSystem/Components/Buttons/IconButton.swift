@@ -2,13 +2,14 @@ import SwiftUI
 
 struct IconButton: View {
     let systemName: String
+    var accessibilityLabel: String? = nil
     let action: () -> Void
     var size: CGFloat = 44
     var foregroundColor: Color = .floweInk
     var backgroundColor: Color = .flowSoftBeige
 
     var body: some View {
-        Button(action: action) {
+        let button = Button(action: action) {
             Image(systemName: systemName)
                 .font(.system(size: 18, weight: .medium))
                 .foregroundStyle(foregroundColor)
@@ -16,10 +17,11 @@ struct IconButton: View {
                 .background(backgroundColor)
                 .clipShape(Circle())
         }
+        .flowePressable()
+        if let accessibilityLabel {
+            button.accessibilityLabel(accessibilityLabel)
+        } else {
+            button
+        }
     }
-}
-
-#Preview {
-    IconButton(systemName: "heart.fill") {}
-        .padding()
 }

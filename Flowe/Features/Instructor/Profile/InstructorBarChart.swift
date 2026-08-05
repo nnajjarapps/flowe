@@ -47,7 +47,8 @@ struct InstructorBarChart: View {
                               : AnyShapeStyle(Color.floweBorder))
                         .frame(height: height(for: bar.value))
 
-                    Text(bar.label)
+                    Text(localizedTag: bar.label)
+                        .textCase(.uppercase)
                         .font(FloweFont.mono(9))
                         .foregroundStyle(Color.floweMuted)
                 }
@@ -56,19 +57,4 @@ struct InstructorBarChart: View {
         }
         .frame(height: maxHeight + 40, alignment: .bottom)
     }
-}
-
-#Preview {
-    InstructorBarChart(
-        bars: [
-            .init(label: "MAR", value: 32),
-            .init(label: "APR", value: 41),
-            .init(label: "MAY", value: 28),
-            .init(label: "JUN", value: 47),
-            .init(label: "JUL", value: 39)
-        ],
-        showValues: true
-    )
-    .padding()
-    .background(Color.flowWhite)
 }

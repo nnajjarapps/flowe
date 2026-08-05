@@ -18,12 +18,16 @@ struct InstructorProfileView: View {
 
     @State private var showSettings = false
     @State private var showEditProfile = false
+    @State private var showCertZoom = false
 
     /// The signed-in instructor's own (possibly-empty) listing.
     private var me: Instructor? { data.currentInstructor }
 
     /// Real reviews of this instructor, newest first — earned from completed bookings, not seeded.
     private var reviews: [Review] { data.myReviews }
+
+    /// Peer recommendations of this instructor (Flowe Pro), newest first.
+    private var recommendations: [InstructorRecommendation] { data.myRecommendations }
 
     /// Average rating and count, derived from those reviews. Nil until the first one lands, because
     /// "no reviews yet" is a different thing from a 0.0 rating.
@@ -33,8 +37,8 @@ struct InstructorProfileView: View {
 
     private var hasRating: Bool { ratingSummary != nil }
 
-    /// Whether a city has been entered yet.
-    private var hasCity: Bool { !(me?.city ?? "").isEmpty }
+    /// Whether a studio address has been entered yet.
+    private var hasAddress: Bool { !(me?.address ?? "").isEmpty }
 
     /// Display name from signup, with a gentle fallback if somehow blank.
     private var displayName: String {
@@ -42,27 +46,30 @@ struct InstructorProfileView: View {
         return name.isEmpty ? "Your Profile" : name
     }
 
-    /// Certification line, defaulting to a neutral label when not set.
+    /// Certification line. Falls back to a role-neutral label — NOT "Certified Instructor", which
+    /// would assert a credential the instructor never entered. Real cert text takes over once set.
     private var certLine: String {
         let cert = me?.cert ?? ""
-        return cert.isEmpty ? "CERTIFIED INSTRUCTOR" : cert.uppercased()
+        return cert.isEmpty ? String(localized: "INSTRUCTOR") : cert.uppercased()
     }
 
     var body: some View {
         @Bindable var router = router
         ScrollView {
             VStack(spacing: 0) {
+                coverBand
                 header
 
                 Picker("", selection: $router.profileTab) {
                     ForEach(Tab.allCases) { t in
-                        Text(t.rawValue).tag(t)
+                        Text(localizedTag: t.rawValue).tag(t)
                     }
                 }
                 .pickerStyle(.segmented)
                 .padding(.horizontal, 20)
                 .padding(.top, 16)
                 .padding(.bottom, 20)
+                .onChange(of: router.profileTab) { _, _ in Haptic.selection() }
 
                 Group {
                     switch router.profileTab {
@@ -74,6 +81,7 @@ struct InstructorProfileView: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 32)
+                .animation(FloweMotion.gentle, value: router.profileTab)
             }
         }
         .background(Color.flowWhite.ignoresSafeArea())
@@ -82,13 +90,39 @@ struct InstructorProfileView: View {
             // The owner's own device pulls its lesson types too, so a type authored on another device
             // (delivered via the private mirror, or re-fetched from the public store) shows here.
             if let me { await data.syncLessonTypes(for: me) }
+            await data.syncMyRecommendations()
         }
+        // Manual pull-to-refresh: pulls newly-posted reviews (no student→instructor push), lesson
+        // types authored on another device, and peer recommendations. Mirrors the .task.
         .refreshable {
             await data.syncReviews(asInstructor: true)
             if let me { await data.syncLessonTypes(for: me) }
+            await data.syncMyRecommendations()
         }
         .sheet(isPresented: $showSettings) { InstructorSettingsView() }
         .sheet(isPresented: $showEditProfile) { EditProfileView() }
+    }
+
+    // MARK: - Brand cover (Flowe Pro)
+
+    /// The brand cover banner atop the instructor's own profile, only when set. A thin brand-color
+    /// underline ties it to the accent. See [[FlowePro]].
+    @ViewBuilder
+    private var coverBand: some View {
+        if let cover = me?.coverPhoto, let ui = UIImage(data: cover) {
+            Image(uiImage: ui)
+                .resizable()
+                .scaledToFill()
+                .frame(height: 132)
+                .frame(maxWidth: .infinity)
+                .clipped()
+                .overlay(alignment: .bottom) {
+                    Rectangle()
+                        .fill(Color(hexString: me?.brandColor ?? "") ?? Color.flowePink)
+                        .frame(height: 3)
+                }
+                .padding(.bottom, 8)
+        }
     }
 
     // MARK: - Header
@@ -106,7 +140,7 @@ struct InstructorProfileView: View {
                         .padding(.vertical, 7)
                         .background(Color.flowePink.opacity(0.10), in: Capsule())
                 }
-                .buttonStyle(.plain)
+                .flowePressable()
                 .accessibilityIdentifier("instructor.editProfile")
 
                 Spacer()
@@ -132,22 +166,35 @@ struct InstructorProfileView: View {
                     .font(FloweFont.serif(24))
                     .foregroundStyle(Color.floweInk)
 
+                // Flowe Pro: the professional headline sits under the name (the LinkedIn-style tagline),
+                // distinct from the bio. Only when set — see [[FlowePro]].
+                if let headline = me?.headline, !headline.isEmpty {
+                    Text(headline)
+                        .font(FloweFont.sans(13, .medium))
+                        // Flowe Pro brand kit: the headline takes the instructor's brand accent (falls
+                        // back to the app pink when unset/invalid). See [[FlowePro]].
+                        .foregroundStyle(Color(hexString: me?.brandColor ?? "") ?? Color.flowePinkDeep)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 20)
+                }
+
                 Text(certLine)
                     .font(FloweFont.mono(10))
                     .foregroundStyle(Color.floweMuted)
 
-                if hasCity || hasRating {
+                if hasAddress || hasRating {
                     HStack(spacing: 6) {
-                        if hasCity {
+                        if hasAddress {
                             Image(systemName: "mappin.and.ellipse")
                                 .font(.system(size: 11))
                                 .foregroundStyle(Color.floweMuted)
-                            Text(me?.city ?? "")
+                            Text(me?.address ?? "")
                                 .font(FloweFont.sans(12))
                                 .foregroundStyle(Color.floweMuted)
                         }
 
-                        if hasCity && hasRating {
+                        if hasAddress && hasRating {
                             Text("·")
                                 .foregroundStyle(Color.floweMuted)
                         }
@@ -178,18 +225,11 @@ struct InstructorProfileView: View {
 
     // MARK: - Profile completeness
 
-    /// The listing fields a student actually judges an instructor on. A profile missing these gets
-    /// booked less, so the gaps are surfaced rather than left for the instructor to notice.
+    /// The listing fields a student actually judges an instructor on. Reads the SINGLE completion
+    /// signal hoisted onto `Instructor` (`profileMissingPieces`), so this card and the Studio Setup
+    /// wizard's step-1 gate share one definition rather than each computing their own.
     private var missingPieces: [String] {
-        guard let me else { return [] }
-        var missing: [String] = []
-        if me.photo == nil && me.img.isEmpty { missing.append("photo") }
-        if me.city.isEmpty { missing.append("city") }
-        if (me.bio ?? "").isEmpty { missing.append("bio") }
-        if me.cert.isEmpty { missing.append("certification") }
-        if me.specialties.isEmpty { missing.append("specialties") }
-        if me.price == 0 { missing.append("rate") }
-        return missing
+        me?.profileMissingPieces ?? []
     }
 
     private var completenessCard: some View {
@@ -222,11 +262,57 @@ struct InstructorProfileView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .floweCard()
         }
-        .buttonStyle(.plain)
+        .flowePressable()
         .accessibilityIdentifier("instructor.completeness")
     }
 
     // MARK: - Overview
+
+    /// One work-history row: a pink timeline dot, the role + place, and the period. Flowe Pro.
+    private func experienceRow(_ entry: Instructor.ExperienceEntry) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Circle()
+                .fill(Color.flowePink)
+                .frame(width: 8, height: 8)
+                .padding(.top, 5)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.role.isEmpty ? entry.place : entry.role)
+                    .font(FloweFont.sans(14, .medium))
+                    .foregroundStyle(Color.floweInk)
+                Text(entry.role.isEmpty ? "" : entry.place)
+                    .font(FloweFont.sans(13))
+                    .foregroundStyle(Color.floweInk.opacity(0.7))
+                if !entry.period.isEmpty {
+                    Text(entry.period)
+                        .font(FloweFont.mono(10))
+                        .foregroundStyle(Color.floweMuted)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    /// Flowe Pro brand kit: the studio "story" in a card carrying the instructor's brand accent — a
+    /// left rule + a faint tint of their brand color. Only when a story is set. See [[FlowePro]].
+    @ViewBuilder
+    private func brandStoryCard(_ me: Instructor) -> some View {
+        if !me.story.isEmpty {
+            let tint = Color(hexString: me.brandColor) ?? Color.flowePink
+            VStack(alignment: .leading, spacing: 10) {
+                SectionHeader(text: "MY STUDIO")
+                HStack(alignment: .top, spacing: 12) {
+                    RoundedRectangle(cornerRadius: 2).fill(tint).frame(width: 3)
+                    Text(me.story)
+                        .font(FloweFont.sans(14))
+                        .foregroundStyle(Color.floweInk.opacity(0.85))
+                        .lineSpacing(4)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(14)
+                .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
+            }
+        }
+    }
 
     private var overviewTab: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -246,6 +332,8 @@ struct InstructorProfileView: View {
                 }
             }
 
+            if let me { brandStoryCard(me) }
+
             HStack(spacing: 12) {
                 StatTile(value: "\(me?.students ?? 0)", label: "STUDENTS")
                 StatTile(value: "\(me?.yearsExp ?? 0)", label: "YEARS", accent: .flowePink)
@@ -263,10 +351,28 @@ struct InstructorProfileView: View {
                 }
             }
 
+            // Flowe Pro: work history (the résumé spine). Only rendered when the instructor has added
+            // entries — no empty-state nag in this first phase (the editor lands next). See [[FlowePro]].
+            if let entries = me?.experience, !entries.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    SectionHeader(text: "EXPERIENCE")
+                    VStack(alignment: .leading, spacing: 12) {
+                        ForEach(entries) { entry in
+                            experienceRow(entry)
+                        }
+                    }
+                }
+            }
+
             VStack(alignment: .leading, spacing: 10) {
                 SectionHeader(text: "OFFERS")
-                if let types = me?.sessionTypes, !types.isEmpty {
-                    FlowChipRow(items: types)
+                // Read the LIVE `LessonType` rows (the same source Edit Profile shows), not the
+                // denormalised `me.sessionTypes` name cache — that cache only re-derives on a lesson-type
+                // mutation, so types added before the derivation fix (or on another device) never appear
+                // here even though the rows exist. The rows are authoritative for the owner's own screen.
+                let offers = me.map { data.ownedLessonTypes(for: $0).filter { !$0.pendingDelete }.map(\.name) } ?? []
+                if !offers.isEmpty {
+                    FlowChipRow(items: offers)
                 } else {
                     Text("Add the lesson types you offer in Edit Profile.")
                         .font(FloweFont.sans(13))
@@ -278,14 +384,42 @@ struct InstructorProfileView: View {
 
             VStack(alignment: .leading, spacing: 10) {
                 SectionHeader(text: "CERTIFICATION")
-                if let cert = me?.cert, !cert.isEmpty {
-                    HStack(spacing: 8) {
-                        Image(systemName: "rosette")
-                            .font(.system(size: 13))
-                            .foregroundStyle(Color.flowePinkDeep)
-                        Text(cert)
-                            .font(FloweFont.sans(14))
-                            .foregroundStyle(Color.floweInk)
+                // Show the text claim AND/OR the uploaded certificate photo — the empty state only when
+                // BOTH are absent. A photo-only certification previously read as "empty" here even though
+                // it showed in Edit Profile and to students (parity with StudentInstructorProfileView).
+                let cert = me?.cert ?? ""
+                let certImage = me?.certPhoto.flatMap { UIImage(data: $0) }
+                if !cert.isEmpty || certImage != nil {
+                    if !cert.isEmpty {
+                        HStack(spacing: 8) {
+                            Image(systemName: "rosette")
+                                .font(.system(size: 13))
+                                .foregroundStyle(Color.flowePinkDeep)
+                            Text(cert)
+                                .font(FloweFont.sans(14))
+                                .foregroundStyle(Color.floweInk)
+                        }
+                    }
+                    if let certImage {
+                        Button { Haptic.tap(); showCertZoom = true } label: {
+                            Image(uiImage: certImage)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(maxWidth: .infinity, maxHeight: 160)
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                                .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.floweBorder, lineWidth: 1))
+                                .overlay(alignment: .bottomTrailing) {
+                                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                                        .font(.system(size: 11, weight: .semibold))
+                                        .foregroundStyle(.white)
+                                        .frame(width: 26, height: 26)
+                                        .background(.ultraThinMaterial, in: Circle())
+                                        .padding(8)
+                                }
+                        }
+                        .buttonStyle(.plain)
+                        // Tap to open the certificate full-screen with pinch / double-tap zoom.
+                        .fullScreenImageZoom(source: .uiImage(certImage), isPresented: $showCertZoom)
                     }
                 } else {
                     Text("Add your certification in Edit Profile.")
@@ -311,8 +445,8 @@ struct InstructorProfileView: View {
     private var rateCard: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                SectionHeader(text: "RATE PER SESSION")
-                Text(me.map { $0.price > 0 ? settings.money($0.price) : "Not set" } ?? "Not set")
+                SectionHeader(text: "STARTING RATE")
+                Text(me.map { $0.price > 0 ? settings.money($0.price) : "—" } ?? "—")
                     .font(FloweFont.serif(22, .medium))
                     .foregroundStyle(me?.price ?? 0 > 0 ? Color.floweInk : Color.floweMuted)
             }
@@ -358,7 +492,7 @@ struct InstructorProfileView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         SectionHeader(text: "SESSIONS BY TYPE")
                         InstructorBarChart(
-                            bars: sessionsByType.map { .init(label: $0.type.uppercased(), value: $0.count) },
+                            bars: sessionsByType.map { .init(label: $0.type, value: $0.count) },
                             showValues: true
                         )
                     }
@@ -376,34 +510,54 @@ struct InstructorProfileView: View {
 
     // MARK: - Reviews
 
+    /// Non-empty review bodies — the input to the on-device "What students say" digest.
+    private var reviewTextsForDigest: [String] { reviews.map(\.text).filter { !$0.isEmpty } }
+
     @ViewBuilder
     private var reviewsTab: some View {
-        if reviews.isEmpty {
-            EmptyStateView(
-                icon: "star",
-                title: "No reviews yet",
-                // One literal, not a `+` concatenation — a concatenation is an expression, so it
-                // can't be a LocalizedStringKey and would never be extracted.
-                message: "After a session, students can review it from their Bookings tab. Their reviews will show up here."
-            )
-        } else {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack {
-                    SectionHeader(text: "STUDENT REVIEWS")
-                    Spacer()
-                    if let summary = ratingSummary {
-                        StarRatingView(rating: summary.average, size: 12)
-                        Text("(\(summary.count))")
-                            .font(FloweFont.mono(10))
-                            .foregroundStyle(Color.floweMuted)
+        VStack(alignment: .leading, spacing: 20) {
+            // ✨ On-device review digest (Flowe Intelligence) — social proof atop the reviews. Only when
+            // the model is available and there's enough to summarize; renders nothing otherwise.
+            if #available(iOS 26, *), FloweAI.isAvailable, reviewTextsForDigest.count >= 3 {
+                ReviewDigestCard(reviewTexts: reviewTextsForDigest)
+            }
+            if reviews.isEmpty {
+                EmptyStateView(
+                    icon: "star",
+                    title: "No reviews yet",
+                    // One literal, not a `+` concatenation — a concatenation is an expression, so it
+                    // can't be a LocalizedStringKey and would never be extracted.
+                    message: "After a session, students can review it from their Bookings tab. Their reviews will show up here."
+                )
+            } else {
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack {
+                        SectionHeader(text: "STUDENT REVIEWS")
+                        Spacer()
+                        if let summary = ratingSummary {
+                            StarRatingView(rating: summary.average, size: 12)
+                            Text("(\(summary.count))")
+                                .font(FloweFont.mono(10))
+                                .foregroundStyle(Color.floweMuted)
+                        }
+                    }
+
+                    ForEach(reviews) { review in
+                        ReviewRow(review: review)
                     }
                 }
-
-                ForEach(reviews) { review in
-                    ReviewRow(review: review)
-                }
+                .accessibilityIdentifier("instructor.reviewsList")
             }
-            .accessibilityIdentifier("instructor.reviewsList")
+
+            // Peer recommendations (Flowe Pro Phase 5) — instructor↔instructor endorsements, shown
+            // whenever there are any, independent of student reviews. See [[FlowePro]].
+            if !recommendations.isEmpty {
+                VStack(alignment: .leading, spacing: 14) {
+                    SectionHeader(text: "PEER RECOMMENDATIONS")
+                    ForEach(recommendations) { RecommendationRow(recommendation: $0) }
+                }
+                .accessibilityIdentifier("instructor.recommendationsList")
+            }
         }
     }
 
@@ -420,7 +574,7 @@ struct InstructorProfileView: View {
                 icon: "banknote",
                 title: "No earnings yet",
                 message: price == 0
-                    ? "Set your rate in Edit Profile, then completed sessions will show up here."
+                    ? "Set a price on your lesson types, then completed sessions will show up here."
                     : "Earnings from your completed sessions will appear here."
             )
         } else {
@@ -432,14 +586,17 @@ struct InstructorProfileView: View {
                         SectionHeader(text: "BY SESSION TYPE")
                         ForEach(byType, id: \.type) { entry in
                             HStack {
-                                Text(entry.type)
+                                Text(localizedTag: entry.type)
                                     .font(FloweFont.sans(14))
                                     .foregroundStyle(Color.floweInk)
                                 Text("· \(entry.count)")
                                     .font(FloweFont.mono(11))
                                     .foregroundStyle(Color.floweMuted)
                                 Spacer()
-                                Text(settings.money(entry.count * price))
+                                // Priced at THIS type's own price, not a single rate — keeps the
+                                // per-type totals consistent with the collected/projected headline,
+                                // which also sums each booking's actual lesson-type price.
+                                Text(settings.money(entry.count * data.priceForType(entry.type)))
                                     .font(FloweFont.serif(15, .medium))
                                     .foregroundStyle(Color.floweInk)
                             }
@@ -452,7 +609,7 @@ struct InstructorProfileView: View {
                 }
 
                 Text("Payment is arranged directly with your students, so these are session "
-                     + "totals at your current rate — Flowe doesn't process payments.")
+                     + "totals at each lesson type's price — Flowe doesn't process payments.")
                     .font(FloweFont.sans(12))
                     .foregroundStyle(Color.floweMuted)
                     .fixedSize(horizontal: false, vertical: true)
@@ -489,7 +646,7 @@ private extension Array where Element == String {
     /// "photo, city and bio" — reads as a sentence in the completeness nudge.
     var listed: String {
         guard count > 1 else { return first ?? "" }
-        return dropLast().joined(separator: ", ") + " and " + (last ?? "")
+        return dropLast().joined(separator: ", ") + String(localized: " and ") + (last ?? "")
     }
 }
 
@@ -504,13 +661,4 @@ private struct FlowChipRow: View {
             ForEach(items, id: \.self) { SpecialtyTag(text: $0) }
         }
     }
-}
-
-#Preview {
-    InstructorProfileView()
-        .environment(MockDataStore.preview)
-        .environment(SubscriptionService())
-        .environment(AppSettings())
-        .environment(AppSession())
-        .environment(InstructorRouter())
 }

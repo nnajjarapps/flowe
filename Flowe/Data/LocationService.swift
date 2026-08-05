@@ -62,6 +62,14 @@ struct CoarseLocation: Equatable, Sendable {
     var displayText: String {
         String(format: "%.2f, %.2f", latitude, longitude)
     }
+
+    /// Great-circle metres between two published teaching areas. Both endpoints are ~1km-snapped, so
+    /// this is a deliberately coarse distance — right for coverage radius filtering and ranking, never
+    /// for anything that needs precision. No device fix involved: the teaching area IS the location.
+    func distanceMetres(to other: CoarseLocation) -> Double {
+        CLLocation(latitude: latitude, longitude: longitude)
+            .distance(from: CLLocation(latitude: other.latitude, longitude: other.longitude))
+    }
 }
 
 // MARK: - Location service
@@ -157,10 +165,79 @@ final class LocationService {
     }
 
     /// A fix reduced to something publishable. The precise coordinate is snapped *here*, inside the
-    /// service, so it is never returned to a caller in the first place.
+    /// service, so it is never returned to a caller in the first place. LEGACY coarse path — the
+    /// studio location uses `requestExactLocation()` instead.
     func requestCoarseLocation() async -> CoarseLocation? {
         guard await refresh(), let precise else { return nil }
         return CoarseLocation(snapping: precise.coordinate)
+    }
+
+    /// The device's **exact** one-shot coordinate, for the "use my current location" studio path.
+    /// Acquires (or refreshes) a fix and returns the precise point with NO snapping. This deliberately
+    /// reverses the coarsening rule that governs `requestCoarseLocation`: the instructor is setting a
+    /// studio/business location they intend to publish, so there is nothing to blur. Returns nil when
+    /// no fix is available (denied / timed out). Callers reverse-geocode it into an address for display
+    /// and store it via `Instructor.setStudioLocation`.
+    func requestExactLocation() async -> CLLocationCoordinate2D? {
+        guard await refresh(), let precise else { return nil }
+        return precise.coordinate
+    }
+
+    // MARK: - Studio geocoding
+
+    /// Forward-geocode a typed studio address to an EXACT coordinate plus a cleaned, formatted address
+    /// string — the "type your studio address" path. Full precision: a studio location is published as
+    /// entered, not blurred. Returns nil when the address can't be resolved (empty / no match / offline).
+    func geocode(address: String) async -> (latitude: Double, longitude: Double, formattedAddress: String)? {
+        await Self.forwardGeocode(address: address)
+    }
+
+    /// Reverse-geocode an exact coordinate to a human address string — the "use my current location"
+    /// path fills the address field from the device's exact fix. Returns nil when the point can't be named.
+    func reverseGeocode(latitude: Double, longitude: Double) async -> String? {
+        await Self.resolveAddress(latitude: latitude, longitude: longitude)
+    }
+
+    /// Off the main actor, returning only scalars + a `String`, so no non-Sendable placemark crosses
+    /// an isolation boundary (mirrors `resolveAreaName`).
+    private nonisolated static func forwardGeocode(
+        address: String
+    ) async -> (latitude: Double, longitude: Double, formattedAddress: String)? {
+        let trimmed = address.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        guard let placemark = try? await CLGeocoder().geocodeAddressString(trimmed).first,
+              let coordinate = placemark.location?.coordinate,
+              coordinate.latitude.isFinite, coordinate.longitude.isFinite
+        else { return nil }
+        let formatted = Self.formattedAddress(from: placemark) ?? trimmed
+        return (coordinate.latitude, coordinate.longitude, formatted)
+    }
+
+    private nonisolated static func resolveAddress(latitude: Double, longitude: Double) async -> String? {
+        let point = CLLocation(latitude: latitude, longitude: longitude)
+        guard let placemark = try? await CLGeocoder().reverseGeocodeLocation(point).first else { return nil }
+        return Self.formattedAddress(from: placemark)
+    }
+
+    /// A single-line street address from a placemark: "12 Dizengoff, Tel Aviv-Yafo". Composed from
+    /// components rather than pulling in the Contacts postal formatter, matching this file's lean
+    /// CoreLocation-only surface. Returns nil when nothing usable resolves.
+    private nonisolated static func formattedAddress(from placemark: CLPlacemark) -> String? {
+        var parts: [String] = []
+        let street = [placemark.subThoroughfare, placemark.thoroughfare]
+            .compactMap { $0 }
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if !street.isEmpty {
+            parts.append(street)
+        } else if let name = placemark.name?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
+            parts.append(name)
+        }
+        if let locality = placemark.locality?.trimmingCharacters(in: .whitespacesAndNewlines), !locality.isEmpty {
+            parts.append(locality)
+        }
+        let joined = parts.joined(separator: ", ").trimmingCharacters(in: .whitespacesAndNewlines)
+        return joined.isEmpty ? nil : joined
     }
 
     // MARK: - Measurement

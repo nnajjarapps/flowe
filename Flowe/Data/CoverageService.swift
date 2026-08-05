@@ -260,6 +260,39 @@ final class CoverageService {
         #endif
     }
 
+    /// Cancel an open coverage request — flip status to cancelled (2) and clear any winner, on the record
+    /// the owner already wrote (`_creator`-write). The request row is kept (not deleted) so a candidate
+    /// resolving `swapConfirmed` reads a definite cancelled state rather than a vanished record. Pair with
+    /// `withdrawOffers` to actually remove it from candidates' inboxes. Returns whether it reached the server.
+    @discardableResult
+    func cancelRequest(bookingID: String) async -> Bool {
+        #if CLOUDKIT_ENABLED
+        let id = CKRecord.ID(recordName: "coverage-\(bookingID)")
+        guard let record = try? await database.record(for: id) else { return false }
+        record["status"] = 2
+        record["filledByID"] = ""
+        return (try? await database.save(record)) != nil
+        #else
+        return false
+        #endif
+    }
+
+    /// Withdraw every offer fanned out for a booking — the "cancel the swap I sent the other instructors"
+    /// half. Deletes the offer records (queried by `bookingID`, which is QUERYABLE) so they leave every
+    /// candidate's inbox. The owner created each offer, so `_creator`-write permits the delete.
+    func withdrawOffers(bookingID: String) async {
+        #if CLOUDKIT_ENABLED
+        let query = CKQuery(recordType: Self.offerRecordType,
+                            predicate: NSPredicate(format: "bookingID == %@", bookingID))
+        guard let (matches, _) = try? await database.records(
+            matching: query, desiredKeys: [], resultsLimit: Self.fetchLimit
+        ) else { return }
+        for (recordID, _) in matches {
+            _ = try? await database.deleteRecord(withID: recordID)
+        }
+        #endif
+    }
+
     /// Publish the student-facing cover record for a booking, addressed to the student by `studentID`.
     /// The recordName is derived from the booking so a re-award updates rather than duplicates. This is
     /// the only place a student identifier touches a Coverage* record, and only because the record is

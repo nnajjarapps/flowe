@@ -9,20 +9,30 @@ import SwiftUI
 /// picker over a world-readable database would leak who teaches whom. Awarding a winner, and the 50%
 /// cover-pay ledger, live on the dashboard (see `CoveragePickerView` / `CoverageInboxView`).
 ///
-/// Owns a `LocationService` exactly like `DiscoverView`: the fix never leaves the device and only
-/// feeds the distance term in the candidate ranking. Without a fix, ranking falls back to tier +
-/// rating, so the screen works refused just as the feed does.
+/// Distance is measured from the instructor's own published **studio location** (their exact studio
+/// coordinate — where the session actually happens), never the device's live GPS fix. That studio
+/// location is the source of truth for both the candidate ranking and the "SEARCH RADIUS" cutoff. With
+/// no studio location published, ranking falls back to tier + rating so the screen still works.
 struct OutOfStudioView: View {
     @Environment(MockDataStore.self) private var data
+    @Environment(AppSettings.self) private var settings
     @Environment(\.dismiss) private var dismiss
-
-    /// On-device only — hands out distances for candidate ranking, never coordinates (see DiscoverView).
-    @State private var location = LocationService()
+    @Environment(\.locale) private var locale
 
     /// The coverage window. Defaults to "now → end of day-ish": most out-of-studio calls are same-day
     /// ("I'm sick, cover today"), and the instructor widens it from there.
     @State private var windowStart = Date()
     @State private var windowEnd = Calendar.current.date(byAdding: .hour, value: 8, to: Date()) ?? Date()
+
+    /// Sessions the instructor just tapped "Request cover" on, keyed by `booking.remoteID`. Optimistic:
+    /// the CloudKit publish + fan-out is async (and a whole no-op in the seeded sim), so the button had
+    /// no way to acknowledge the tap — its only "requested" signal was `coverRole`, which is set at
+    /// *award* time, not request time. This flips the button instantly and reconciles with the synced
+    /// open requests (`data.myCoverRequests`) once the round-trip lands.
+    @State private var requestedIDs: Set<String> = []
+
+    /// The session whose cover request is pending cancellation (drives the confirm dialog).
+    @State private var cancelTarget: Booking?
 
     /// The instructor's confirmed, upcoming sessions that start inside the chosen window.
     private var sessions: [Booking] {
@@ -34,7 +44,7 @@ struct OutOfStudioView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     windowCard
-                    locationBar
+                    radiusCard
 
                     if sessions.isEmpty {
                         emptyState
@@ -57,9 +67,22 @@ struct OutOfStudioView: View {
                         .fontWeight(.semibold)
                 }
             }
-            // Only when already granted — never springs the prompt on open, matching Discover. The pill
-            // below is what raises it.
-            .task { if location.isAuthorized { await location.refresh() } }
+            // Cancelling withdraws the offers from every instructor you asked, and lets you re-request
+            // (e.g. for a different date). Confirmed because those instructors already saw it.
+            .confirmationDialog("Cancel this cover request?",
+                                isPresented: Binding(get: { cancelTarget != nil },
+                                                     set: { if !$0 { cancelTarget = nil } }),
+                                titleVisibility: .visible,
+                                presenting: cancelTarget) { booking in
+                Button("Cancel request", role: .destructive) {
+                    if let id = booking.remoteID { requestedIDs.remove(id) }
+                    data.cancelCoverage(for: booking)
+                    cancelTarget = nil
+                }
+                Button("Keep it", role: .cancel) { cancelTarget = nil }
+            } message: { _ in
+                Text("The instructors you asked will no longer see it. You can request cover again after.")
+            }
         }
     }
 
@@ -88,41 +111,54 @@ struct OutOfStudioView: View {
         .floweCard(cornerRadius: 16)
     }
 
-    // MARK: - Location opt-in
+    // MARK: - Search radius
     //
-    // Optional: candidate ranking works refused (tier + rating), a fix just adds the distance term.
-    // So this is a quiet nudge, never a gate — no denied/settings branch, that lives in Discover.
+    // How far the coverage fan-out reaches, measured from the instructor's STUDIO LOCATION (not the
+    // device) — see `oosCandidates`. Bites only when a studio location is published; with none, ranking
+    // runs over everyone. Persisted in AppSettings, clamped there to a 1–100 km band.
 
-    @ViewBuilder
-    private var locationBar: some View {
-        if !location.hasFix, !location.isDenied {
-            Button {
-                Task { await location.refresh() }
-            } label: {
-                HStack(spacing: 6) {
-                    if location.isLocating {
-                        ProgressView().controlSize(.mini).tint(Color.flowePinkDeep)
-                    } else {
-                        Image(systemName: "location").font(.system(size: 10))
-                    }
-                    Text("Rank cover by distance").font(FloweFont.sans(12, .medium))
-                }
-                .foregroundStyle(Color.flowePinkDeep)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(Capsule().fill(Color.flowePink.opacity(0.10)))
+    private var radiusCard: some View {
+        @Bindable var settings = settings
+        return VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("SEARCH RADIUS")
+                    .font(FloweFont.mono(11))
+                    .foregroundStyle(Color.floweMuted)
+                Text("Only instructors within this distance of your studio location are offered your session.")
+                    .font(FloweFont.sans(12))
+                    .foregroundStyle(Color.floweMuted)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .buttonStyle(.plain)
-            .disabled(location.isLocating)
+            Stepper(value: $settings.coverageRadiusKm,
+                    in: AppSettings.minCoverageRadiusKm...AppSettings.maxCoverageRadiusKm,
+                    step: 5) {
+                HStack(spacing: 6) {
+                    Image(systemName: "scope").font(.system(size: 12)).foregroundStyle(Color.flowePinkDeep)
+                    Text("\(Int(settings.coverageRadiusKm)) km")
+                        .font(FloweFont.sans(15, .medium))
+                        .foregroundStyle(Color.floweInk)
+                        .contentTransition(.numericText())
+                }
+            }
+            .tint(Color.flowePinkDeep)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .floweCard(cornerRadius: 16)
     }
 
     // MARK: - Session row
 
     @ViewBuilder
     private func sessionRow(_ booking: Booking) -> some View {
-        let candidates = data.oosCandidates(for: booking, location: location)
-        let requested = booking.coverRole == .handedOff
+        let candidates = data.oosCandidates(for: booking, radiusKm: settings.coverageRadiusKm)
+        let coverID = booking.remoteID
+        let arranged = booking.coverRole == .handedOff   // a winner was awarded — past the cancel window here
+        // An OPEN request (optimistic flag, or a synced request that isn't cancelled/filled). Status 0 only,
+        // so a cancelled request (status 2, still returned by the fetch) correctly reads as not-requested.
+        let requestedOpen = !arranged && (coverID.map { id in
+            requestedIDs.contains(id) || data.myCoverRequests.contains { $0.bookingID == id && $0.status == 0 }
+        } ?? false)
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
                 AvatarView(id: "", photo: data.studentPhoto(forOwnerID: booking.studentID ?? ""), size: 40)
@@ -130,7 +166,7 @@ struct OutOfStudioView: View {
                     Text(booking.studentName.isEmpty ? "Client" : booking.studentName)
                         .font(FloweFont.serif(15))
                         .foregroundStyle(Color.floweInk)
-                    Text("\(booking.date) · \(booking.time) · \(booking.type)")
+                    (Text(booking.localizedDate(locale)) + Text(" · ") + Text(booking.localizedTime(locale)) + Text(" · ") + Text(localizedTag: booking.type))
                         .font(FloweFont.sans(12))
                         .foregroundStyle(Color.floweMuted)
                         .lineLimit(1)
@@ -138,27 +174,56 @@ struct OutOfStudioView: View {
                 Spacer(minLength: 0)
             }
 
-            Button {
-                data.requestCoverage(for: booking,
-                                     windowStart: windowStart,
-                                     windowEnd: windowEnd,
-                                     candidates: candidates)
-            } label: {
-                Text(coverLabel(requested: requested, count: candidates.count))
-                    .font(FloweFont.sans(13, .medium))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                    .foregroundStyle(requested ? Color.floweMuted : .white)
-                    .background(requested ? AnyShapeStyle(Color.floweCardBg)
-                                          : AnyShapeStyle(FlowGradients.gradDark),
-                                in: RoundedRectangle(cornerRadius: 12))
+            if arranged {
+                statusPill("Cover arranged")
+            } else if requestedOpen {
+                // Requested but not yet awarded → show the state AND let the owner cancel/withdraw it.
+                HStack(spacing: 10) {
+                    statusPill("Cover requested")
+                    Button {
+                        cancelTarget = booking
+                    } label: {
+                        Text("Cancel")
+                            .font(FloweFont.sans(13, .medium))
+                            .foregroundStyle(Color.floweCancel)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.floweCancel.opacity(0.4), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("oos.cancelRequest")
+                }
+            } else {
+                Button {
+                    if let coverID { requestedIDs.insert(coverID) }   // flip the button now, don't wait on the network
+                    data.requestCoverage(for: booking,
+                                         windowStart: windowStart,
+                                         windowEnd: windowEnd,
+                                         candidates: candidates)
+                } label: {
+                    Text(coverLabel(requested: false, count: candidates.count))
+                        .font(FloweFont.sans(13, .medium))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .foregroundStyle(.white)
+                        .background(FlowGradients.gradDark, in: RoundedRectangle(cornerRadius: 12))
+                }
+                .buttonStyle(.plain)
+                .disabled(candidates.isEmpty)
             }
-            .buttonStyle(.plain)
-            // Nothing to fan out to, or already handed off: the button is inert either way.
-            .disabled(requested || candidates.isEmpty)
         }
         .padding(14)
         .floweCard(cornerRadius: 14)
+    }
+
+    /// A neutral status chip filling the row's action slot (requested / arranged).
+    private func statusPill(_ text: LocalizedStringKey) -> some View {
+        Text(text)
+            .font(FloweFont.sans(13, .medium))
+            .foregroundStyle(Color.floweMuted)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(Color.floweCardBg, in: RoundedRectangle(cornerRadius: 12))
     }
 
     /// The offer button's copy: how many nearby instructors will be notified, or that it's done.
@@ -293,9 +358,16 @@ struct CoverageInboxView: View {
     @Environment(MockDataStore.self) private var data
     @Environment(AppSettings.self) private var settings
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.locale) private var locale
 
     private var offers: [RemoteCoverageOffer] { data.myOffers }
     private var owed: [Booking] { data.coverOwed }
+
+    /// Offers the instructor just tapped "Claim" on, keyed by `bookingID`. Optimistic, for the same
+    /// reason as OutOfStudioView.requestedIDs: `claimCoverage` publishes async (and no-ops entirely in
+    /// the seeded sim), and the only "claimed" signal — `data.myClaims` — isn't populated until the
+    /// round-trip syncs, so the button looked dead. This flips it instantly and reconciles with myClaims.
+    @State private var claimedIDs: Set<String> = []
 
     var body: some View {
         NavigationStack {
@@ -349,10 +421,11 @@ struct CoverageInboxView: View {
     // MARK: Rows
 
     private func offerRow(_ offer: RemoteCoverageOffer) -> some View {
-        let claimed = data.myClaims.contains { $0.bookingID == offer.bookingID }
+        let claimed = claimedIDs.contains(offer.bookingID)
+            || data.myClaims.contains { $0.bookingID == offer.bookingID }
         return VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(offer.sessionType)
+                Text(localizedTag: offer.sessionType)
                     .font(FloweFont.serif(15))
                     .foregroundStyle(Color.floweInk)
                 Text(offer.sessionDate)
@@ -360,6 +433,7 @@ struct CoverageInboxView: View {
                     .foregroundStyle(Color.floweMuted)
             }
             Button {
+                claimedIDs.insert(offer.bookingID)   // flip the button now, don't wait on the network
                 data.claimCoverage(bookingID: offer.bookingID, requesterID: offer.requesterID, accept: true)
             } label: {
                 Text(claimed ? "Claimed — awaiting pick" : "Claim this cover")
@@ -380,12 +454,16 @@ struct CoverageInboxView: View {
 
     private func owedRow(_ booking: Booking) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top) {
+            HStack(alignment: .top, spacing: 10) {
+                // The student I'm covering — resolved from the CoverageSession the owner published on
+                // award (see `resolveCovering`). Absent until then, so this shows a real face once the
+                // swap is confirmed rather than the "cover-…" placeholder.
+                AvatarView(id: "", photo: data.studentPhoto(forOwnerID: booking.studentID ?? ""), size: 36)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(booking.type)
+                    Text(booking.studentName.isEmpty ? "Client" : booking.studentName)
                         .font(FloweFont.serif(15))
                         .foregroundStyle(Color.floweInk)
-                    Text("\(booking.date) · \(booking.time)")
+                    (Text(localizedTag: booking.type) + Text(" · ") + Text(booking.localizedDate(locale)) + Text(" · ") + Text(booking.localizedTime(locale)))
                         .font(FloweFont.sans(12))
                         .foregroundStyle(Color.floweMuted)
                         .lineLimit(1)
@@ -437,10 +515,4 @@ struct CoverageInboxView: View {
         )
         .padding(.top, 40)
     }
-}
-
-#Preview {
-    OutOfStudioView()
-        .environment(MockDataStore.preview)
-        .environment(AppSettings())
 }

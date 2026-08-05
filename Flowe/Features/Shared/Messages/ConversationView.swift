@@ -14,6 +14,9 @@ struct ConversationView: View {
     @State private var confirmBlock = false
     @State private var confirmDeleteConversation = false
     @State private var showStudentProfile = false
+    @State private var showRecommend = false
+    /// On-device smart-reply suggestions (Flowe Intelligence) for the latest incoming message.
+    @State private var suggestions: [String] = []
 
     private var messages: [Message] { data.thread(with: counterpart.id) }
 
@@ -45,11 +48,19 @@ struct ConversationView: View {
                                     }
                                 }
                             }
+                            // Seen / Delivered under our own last message — only while it IS the latest,
+                            // so a counterpart's reply (which already implies they saw it) drops the tag.
+                            if let last = messages.last, last.senderID == data.currentUserID {
+                                deliveryStatus(for: last)
+                            }
                         }
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 16)
                     .padding(.bottom, 12)
+                    // Drives each MessageBubble's insertion transition as the
+                    // thread grows, so a sent/received bubble slides+fades in.
+                    .animation(FloweMotion.spring, value: messages.count)
                 }
                 .onChange(of: messages.count) {
                     withAnimation(.easeOut(duration: 0.25)) {
@@ -58,6 +69,7 @@ struct ConversationView: View {
                 }
             }
 
+            suggestionRow
             composer
         }
         .background(Color.flowWhite)
@@ -66,7 +78,15 @@ struct ConversationView: View {
             await data.syncThread(with: counterpart.id)
             data.markThreadRead(with: counterpart.id)
         }
-        .refreshable { await data.syncThread(with: counterpart.id) }
+        // Regenerate smart replies whenever the latest message changes (a new incoming message arrives,
+        // or our own send clears them). On-device + free, so recomputing per message is fine.
+        .task(id: messages.last?.persistentModelID) { await refreshSuggestions() }
+        // Manual pull-to-refresh: pulls the counterpart's new replies and their Seen receipt
+        // instantly (there's no live socket — Seen/Delivered otherwise updates only on open/foreground).
+        .refreshable {
+            await data.syncThread(with: counterpart.id)
+            data.markThreadRead(with: counterpart.id)
+        }
         .toolbar {
             ToolbarItem(placement: .principal) {
                 Button {
@@ -87,6 +107,15 @@ struct ConversationView: View {
 
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
+                    // Peer recommendation (Flowe Pro Phase 5): an instructor endorsing a fellow instructor
+                    // they've worked with. Gated on the signed-in user being an instructor AND the
+                    // counterpart being a cached instructor — instructors meet via opportunities/coverage/
+                    // DMs, so the thread is the natural place to write one. See [[FlowePro]].
+                    if session.authState == .instructor, data.instructor(ownerID: counterpart.id) != nil {
+                        Button("Recommend \(counterpart.firstName)", systemImage: "hand.thumbsup") {
+                            showRecommend = true
+                        }
+                    }
                     Button("Report \(counterpart.firstName)", systemImage: "flag") {
                         showReport = true
                     }
@@ -102,6 +131,9 @@ struct ConversationView: View {
                 }
                 .accessibilityIdentifier("conversation.moderation")
             }
+        }
+        .sheet(isPresented: $showRecommend) {
+            RecommendationComposeSheet(toID: counterpart.id, toName: counterpart.name)
         }
         .sheet(isPresented: $showReport) {
             ReportSheet(
@@ -146,6 +178,26 @@ struct ConversationView: View {
     // MARK: - Grouping
 
     /// Messages bucketed by day so each run gets one date stamp.
+    /// "Seen" (once the counterpart's read marker reaches this message) or "Delivered" (it's on the
+    /// server but unread). Nothing while it's still sending — the bubble already reads "Sending…".
+    @ViewBuilder
+    private func deliveryStatus(for message: Message) -> some View {
+        let readAt = data.lastReadAt(conversationID: message.conversationID, by: counterpart.id)
+        if let readAt, readAt >= message.sentAt {
+            statusLine("Seen", color: Color.flowePinkDeep)
+        } else if !message.pendingUpload {
+            statusLine("Delivered", color: Color.floweMuted)
+        }
+    }
+
+    private func statusLine(_ text: String, color: Color) -> some View {
+        Text(text)
+            .font(FloweFont.mono(10))
+            .foregroundStyle(color)
+            .frame(maxWidth: .infinity, alignment: .trailing)
+            .padding(.trailing, 2)
+    }
+
     private var groupedByDay: [(day: String, messages: [Message])] {
         let grouped = Dictionary(grouping: messages) { Self.dayLabel($0.sentAt) }
         return grouped
@@ -197,6 +249,56 @@ struct ConversationView: View {
             .padding(.vertical, 4)
     }
 
+    // MARK: - Smart replies (Flowe Intelligence)
+
+    /// A horizontal rail of on-device reply suggestions above the composer. Shown only when the model is
+    /// available, there are suggestions, and the user hasn't started typing. Tapping one loads it into
+    /// the composer to review/edit — never auto-sends. See [[FloweIntelligence]].
+    @ViewBuilder
+    private var suggestionRow: some View {
+        if #available(iOS 26, *), FloweAI.isAvailable, !suggestions.isEmpty, draft.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    AIPrivacyBadge()
+                    ForEach(suggestions, id: \.self) { suggestion in
+                        Button {
+                            Haptic.tap()
+                            draft = suggestion
+                            suggestions = []
+                        } label: {
+                            Text(suggestion)
+                                .font(FloweFont.sans(13))
+                                .foregroundStyle(Color.flowePinkDeep)
+                                .lineLimit(1)
+                                .padding(.horizontal, 12).padding(.vertical, 8)
+                                .background(Color.flowePink.opacity(0.10), in: Capsule())
+                                .overlay(Capsule().stroke(Color.flowePink.opacity(0.2), lineWidth: 1))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+            }
+            .background(Color.flowWhite)
+        }
+    }
+
+    /// Regenerate suggestions for the latest incoming message. Clears them when we spoke last (nothing
+    /// to reply to) or the model is unavailable.
+    private func refreshSuggestions() async {
+        if #available(iOS 26, *), FloweAI.isAvailable {
+            guard let last = messages.last, last.senderID != data.currentUserID else {
+                suggestions = []
+                return
+            }
+            let recent = messages.suffix(8).map { (mine: $0.senderID == data.currentUserID, text: $0.text) }
+            suggestions = (try? await FloweIntelligence.shared.suggestReplies(recent: recent)) ?? []
+        } else {
+            suggestions = []
+        }
+    }
+
     private var composer: some View {
         HStack(spacing: 10) {
             HStack(spacing: 8) {
@@ -220,7 +322,7 @@ struct ConversationView: View {
                     .background(canSend ? AnyShapeStyle(FlowGradients.gradDark) : AnyShapeStyle(Color.flowePinkSoft))
                     .clipShape(Circle())
             }
-            .buttonStyle(.plain)
+            .flowePressable()
             .disabled(!canSend)
             .accessibilityIdentifier("conversation.send")
         }
@@ -237,15 +339,8 @@ struct ConversationView: View {
     }
 
     private func send() {
+        Haptic.tap()
         data.sendMessage(to: counterpart, text: draft)
         draft = ""
     }
-}
-
-#Preview {
-    NavigationStack {
-        ConversationView(counterpart: Counterpart(id: "preview", name: "Alex Rivera"))
-    }
-    .environment(MockDataStore.preview)
-    .environment(AppSession())
 }

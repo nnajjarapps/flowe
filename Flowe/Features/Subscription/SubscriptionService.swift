@@ -130,15 +130,36 @@ final class SubscriptionService {
     /// Resolve the active tier from current entitlements — highest rank among verified,
     /// non-revoked auto-renewables (guards the transient upgrade window).
     func refreshEntitlements() async {
-        var best: SubscriptionTier?
+        #if DEBUG
+        // Two-party / dev test harness: `-flowe.debugBypassStoreKit 1` grants a full (Boost)
+        // entitlement WITHOUT any StoreKit purchase — StoreKit sandbox is unavailable/flaky in the
+        // simulator and the agent can't run purchase flows. Everything gated on `isVisible`/`tier`
+        // (the "Get discovered" banner, paywall, Studio-wizard step 4, events, out-of-studio, share)
+        // then behaves as a real subscriber, and the `tier` change flows through
+        // `FlowApp.onChange` → `applyVisibility` so the listing publishes `visibility>0`. Never ships.
+        if UserDefaults.standard.bool(forKey: "flowe.debugBypassStoreKit") {
+            tier = .visible
+            return
+        }
+        #endif
+        // Resolve to the MOST-RECENTLY-PURCHASED active entitlement — the tier the instructor last
+        // chose — NOT the highest-ranked one. Both tiers live in ONE subscription group, so switching
+        // Boost→Visible is a crossgrade; during the overlap StoreKit can briefly report BOTH the old
+        // Boost and the new Visible entitlement. Picking by rank (the previous logic) always kept
+        // Boost, so "subscribe to Visible" stayed stuck on Boost forever. `purchaseDate` on an
+        // auto-renewable is its latest renewal/purchase, so the newer choice wins; on a genuine
+        // upgrade Visible→Boost the Boost transaction is newer and still wins correctly.
+        var current: (tier: SubscriptionTier, purchased: Date)?
         for await result in Transaction.currentEntitlements {
             guard case .verified(let transaction) = result,
                   transaction.productType == .autoRenewable,
                   transaction.revocationDate == nil,
                   let t = SubscriptionTier(productID: transaction.productID) else { continue }
-            if best == nil || t.rank > best!.rank { best = t }
+            if current == nil || transaction.purchaseDate > current!.purchased {
+                current = (t, transaction.purchaseDate)
+            }
         }
-        tier = best
+        tier = current?.tier
     }
 
     private func listenForTransactions() -> Task<Void, Never> {

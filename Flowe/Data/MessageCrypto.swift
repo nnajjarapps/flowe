@@ -6,11 +6,20 @@ import CloudKit
 /// a shared secret, and exchange end-to-end-encrypted messages over the public database — so the
 /// message text is opaque to everyone else who can query that same public record type.
 ///
-/// `recordName == ownerID`, so the default `_creator`-write role already means only a user can publish
-/// their own key. The public key is meant to be world-readable — that's the whole point of a directory.
+/// The record is `recordName == "pubkey-<ownerID>"` — NAMESPACED, not the bare ownerID. CloudKit
+/// recordNames are unique per zone across ALL record types, and `InstructorListing` already keys its
+/// record on the bare `ownerID` (see `CatalogService`); an instructor is also a messaging user, so a
+/// bare-ownerID `PublicKey` would occupy that recordName first (published on every login by
+/// `activateMessaging`) and make the later listing write COLLIDE ("cannot use an empty list … in record
+/// type 'PublicKey'"), silently leaving every messaging-enabled instructor unpublishable/undiscoverable.
+/// The `pubkey-` prefix keeps the two records distinct. The default `_creator`-write role still means
+/// only a user can publish their own key (the prefix is derived from the same authenticated ownerID).
 @MainActor
 final class PublicKeyService {
     static let recordType = "PublicKey"
+
+    /// Namespaced recordName — see the type doc. Publish and fetch MUST agree, so both route through here.
+    static func recordName(for ownerID: String) -> String { "pubkey-\(ownerID)" }
 
     #if CLOUDKIT_ENABLED
     private let database = CKContainer(identifier: FloweModelContainer.cloudKitContainerID).publicCloudDatabase
@@ -20,7 +29,7 @@ final class PublicKeyService {
     /// launch without churning the record.
     func publish(ownerID: String, publicKey: Data) async {
         #if CLOUDKIT_ENABLED
-        let id = CKRecord.ID(recordName: ownerID)
+        let id = CKRecord.ID(recordName: Self.recordName(for: ownerID))
         let record = (try? await database.record(for: id)) ?? CKRecord(recordType: Self.recordType, recordID: id)
         if let existing = record["key"] as? Data, existing == publicKey { return }
         record["key"] = publicKey
@@ -31,7 +40,7 @@ final class PublicKeyService {
     /// Fetch a user's published public key, or nil if they've never published one.
     func fetch(ownerID: String) async -> Data? {
         #if CLOUDKIT_ENABLED
-        guard let record = try? await database.record(for: CKRecord.ID(recordName: ownerID)) else { return nil }
+        guard let record = try? await database.record(for: CKRecord.ID(recordName: Self.recordName(for: ownerID))) else { return nil }
         return record["key"] as? Data
         #else
         return nil

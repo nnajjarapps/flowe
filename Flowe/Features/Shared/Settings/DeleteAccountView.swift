@@ -107,9 +107,3 @@ struct DeleteAccountView: View {
         }
     }
 }
-
-#Preview {
-    DeleteAccountView()
-        .environment(MockDataStore.preview)
-        .environment(AppSession())
-}

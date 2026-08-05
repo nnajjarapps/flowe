@@ -90,7 +90,11 @@ final class PushService {
     /// every subscription id, so a changed rule ships as a *new* subscription and the previous one
     /// is swept as stale — rather than surviving forever with an outdated predicate, since an
     /// already-existing id is never re-saved (that is what makes registration idempotent).
-    private static let version = "v1"
+    // Bumped v1→v2 for Communication Notifications: `refreshSubscriptions` never re-saves an id that
+    // already exists, so changing a subscription's NotificationInfo in place would ship nothing to
+    // existing installs. A new version mints new ids that get saved WITH mutable-content/desiredKeys,
+    // and the sweep deletes the stale v1 set.
+    private static let version = "v2"
     /// Namespace for everything this app owns in the user's subscription set. The sweep uses the
     /// bare prefix, not the versioned one, so subscriptions from older builds are cleaned up too.
     private static let idPrefix = "flowe."
@@ -240,6 +244,12 @@ final class PushService {
         let titleArgs: [String]
         let bodyKey: String
         let bodyArgs: [String]
+        /// DM plans only. Opts the push into the Notification Service Extension (adds
+        /// 'mutable-content':1) so it can be re-authored as a Communication Notification.
+        var mutableContent = false
+        /// Fields the extension reads off the push 'ck' payload to build the INSendMessageIntent.
+        /// Only meaningful when `mutableContent` is true. Never includes the E2E ciphertext `text`.
+        var desiredKeys: [String] = []
     }
 
     private static func subscriptionID(_ topic: PushTopic, _ event: String, _ ownerID: String) -> String {
@@ -319,7 +329,12 @@ final class PushService {
                 predicate: NSPredicate(format: "\(MessagingService.recipientField) == %@", ownerID),
                 options: [.firesOnRecordCreation],
                 titleKey: "push.message.title", titleArgs: ["senderName"],
-                bodyKey: "push.message.body", bodyArgs: ["text"]
+                // Generic static body (NOT the "%@"-bound ciphertext `text` field): the extension
+                // replaces title/body in the happy path, but a fallback banner must never show
+                // ciphertext. The extension personalizes from senderID/senderName/conversationID.
+                bodyKey: "push.message.body.generic", bodyArgs: [],
+                mutableContent: true,
+                desiredKeys: ["senderID", "senderName", "conversationID"]
             ))
         }
 
@@ -468,6 +483,14 @@ final class PushService {
         info.shouldSendContentAvailable = true
         // No server keeps a running unread total, so an app-icon badge could only ever be wrong.
         info.shouldBadge = false
+        if plan.mutableContent {
+            // 'mutable-content':1 — the ONLY thing that lets the Notification Service Extension
+            // intercept this remote push and re-author it as a Communication Notification.
+            info.shouldSendMutableContent = true
+            // Inline sender identity + thread into the push 'ck' payload so the extension reads
+            // them locally (never fetches, never decrypts). Ciphertext `text` is excluded.
+            info.desiredKeys = plan.desiredKeys
+        }
         subscription.notificationInfo = info
         return subscription
     }
@@ -511,6 +534,12 @@ final class PushService {
     /// would eventually promise a reminder for a session that already happened.
     private static let reminderHorizon: TimeInterval = 8 * 24 * 60 * 60
 
+    /// iOS keeps at most 64 pending local notifications per app and silently drops the rest. Cap
+    /// well under that so Flowe's reminders never starve, and — if a user ever has more confirmed
+    /// sessions in the horizon than this — keep the *nearest* ones, since a reminder for tomorrow
+    /// matters more than one for next week. The 8-day horizon keeps this from binding in practice.
+    private static let reminderMaxPending = 60
+
     /// Re-schedule local reminders for every confirmed upcoming session.
     ///
     /// These are local notifications, not pushes: the trigger is a time, not another user's action,
@@ -526,21 +555,48 @@ final class PushService {
 
         guard isEnabled(NotificationPreference.reminders), let store else { return }
 
+        // Build the DESIRED set first: every confirmed session whose reminder still lies in the
+        // future and inside the horizon. Then keep only the nearest `reminderMaxPending` so a user
+        // with many standing weeks can never blow past iOS's 64-pending ceiling and lose the soonest.
         let now = Date()
-        for booking in store.bookings where booking.status == .confirmed {
-            guard let start = Self.sessionStart(date: booking.date, time: booking.time) else { continue }
-            let fireDate = start.addingTimeInterval(-Self.reminderLeadTime)
-            guard fireDate > now, start < now.addingTimeInterval(Self.reminderHorizon) else { continue }
+        let candidates = store.bookings
+            // Not a waitlisted overflow seat — don't tell someone their class "starts soon" when they
+            // hold no admitted seat. No-op on the instructor side (their rows have no seat index).
+            .filter { $0.status == .confirmed && !store.isWaitlisted($0) }
+            .compactMap { booking -> (booking: Booking, fireDate: Date)? in
+                guard let start = booking.sessionStart(now: now) else { return nil }
+                let fireDate = start.addingTimeInterval(-Self.reminderLeadTime)
+                guard fireDate > now, start < now.addingTimeInterval(Self.reminderHorizon) else { return nil }
+                return (booking, fireDate)
+            }
+            .sorted { $0.fireDate < $1.fireDate }
+            .prefix(Self.reminderMaxPending)
 
+        for (booking, fireDate) in candidates {
             let content = UNMutableNotificationContent()
             // Resolved when the notification is *delivered*, so a language change between scheduling
             // and the session doesn't leave a stale translation sitting in the queue.
             content.title = NSString.localizedUserNotificationString(
                 forKey: "push.reminder.title", arguments: nil
             )
-            content.body = NSString.localizedUserNotificationString(
-                forKey: "push.reminder.body", arguments: [booking.time]
-            )
+            // Re-render the time for the device's current language (Arabic/Hebrew digits + 24h),
+            // never the raw en_US_POSIX "9:00 AM" that was stored for cross-user matching.
+            let time = booking.localizedTime(.current)
+            // Name the counterpart when it's known — the instructor sees the student, the student
+            // sees the instructor. If the name isn't cached (e.g. profiles not yet pre-warmed), fall
+            // back to the time-only body rather than printing an empty name into the sentence.
+            let counterpart = isInstructor
+                ? booking.studentName
+                : (store.instructors.first { $0.legacyId == booking.instructorId }?.name ?? "")
+            if counterpart.isEmpty {
+                content.body = NSString.localizedUserNotificationString(
+                    forKey: "push.reminder.body", arguments: [time]
+                )
+            } else {
+                content.body = NSString.localizedUserNotificationString(
+                    forKey: "push.reminder.body.named", arguments: [counterpart, time]
+                )
+            }
             content.sound = .default
             content.userInfo = [PushTopic.userInfoKey: PushTopic.bookings.rawValue]
 
@@ -565,36 +621,5 @@ final class PushService {
     /// Stable per booking, so re-scheduling replaces rather than duplicates.
     private static func reminderIdentifier(for booking: Booking) -> String {
         "\(reminderPrefix)\(booking.remoteID ?? "local-\(booking.legacyId)")"
-    }
-
-    /// Turn a stored booking's date + time back into a real `Date`.
-    ///
-    /// `Booking.date` is deliberately language-neutral English ("Mon, Jul 7" — see `FloweWeek`) and
-    /// carries no year, and `Booking.time` comes from `FloweConstants.times` ("9:00 AM"). Parsing is
-    /// therefore pinned to `en_US_POSIX`, and the year is recovered by asking the calendar for the
-    /// next occurrence of that month/day/time — correct because the booking flow only ever offers
-    /// days inside the coming week. Anything unparseable simply gets no reminder.
-    private static func sessionStart(date: String, time: String) -> Date? {
-        // Drop the weekday first. Asked to reconcile "Mon" with "Jul 7" in a string that carries no
-        // year, `DateFormatter` can resolve to a different day of the month entirely; the month and
-        // day are the part that is actually authoritative.
-        let day = date.split(separator: ",").last.map {
-            $0.trimmingCharacters(in: .whitespaces)
-        } ?? date
-
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "MMM d h:mm a"
-        guard let parsed = formatter.date(from: "\(day) \(time)") else { return nil }
-
-        let calendar = Calendar.current
-        let components = calendar.dateComponents([.month, .day, .hour, .minute], from: parsed)
-        // Search from a day ago so a session later today is still found; a session that has already
-        // started resolves to a past date and is dropped by the caller.
-        return calendar.nextDate(
-            after: Date().addingTimeInterval(-24 * 60 * 60),
-            matching: components,
-            matchingPolicy: .nextTime
-        )
     }
 }

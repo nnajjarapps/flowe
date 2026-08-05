@@ -16,10 +16,25 @@ struct PostRowView: View {
     @State private var showComments = false
     @State private var showReport = false
     @State private var confirmDelete = false
+    @State private var showZoom = false
+    @State private var showLikers = false
 
     private var isMine: Bool { data.isMine(post) }
 
     private var hasPhoto: Bool { post.image != nil }
+
+    /// The author's CURRENT identity, resolved live at render time — not the name/photo frozen onto
+    /// the post when it was written. Read inside `body` (via the computed prop) so a profile that
+    /// lands after `fetchAuthorProfiles` re-renders this row. Falls back to the post's snapshot.
+    private var authorIdentity: AuthorIdentity {
+        data.displayIdentity(ownerID: post.ownerID, fallbackName: post.authorNameOrEmpty)
+    }
+
+    /// Preserves the localized "Someone" fallback of `FeedPost.displayName` while showing the
+    /// resolved live name — the resolver returns a plain String, so the guard stays here.
+    private var authorNameText: Text {
+        authorIdentity.name.isEmpty ? Text("Someone") : Text(authorIdentity.name)
+    }
 
     private var subtitle: String {
         let action: String
@@ -45,6 +60,9 @@ struct PostRowView: View {
         .sheet(isPresented: $showComments) {
             PostCommentsSheet(post: post)
         }
+        .sheet(isPresented: $showLikers) {
+            PostLikesSheet(post: post)
+        }
         .sheet(isPresented: $showReport) {
             ReportSheet(
                 reportedID: post.ownerID ?? "",
@@ -67,12 +85,12 @@ struct PostRowView: View {
 
     private var header: some View {
         HStack(spacing: 10) {
-            // Students have no listing and so no avatar; the author's instructor photo is the only
-            // image a post can carry for its writer.
-            AvatarView(id: "", photo: data.authorPhoto(for: post), size: 34)
+            // Live-resolved avatar: an instructor author's Unsplash id / uploaded photo, or a
+            // student author's uploaded photo — whatever their CURRENT profile carries.
+            AvatarView(id: authorIdentity.img, photo: authorIdentity.photo, size: 34)
 
             VStack(alignment: .leading, spacing: 1) {
-                Text(post.displayName)
+                authorNameText
                     .font(FloweFont.sans(13, .medium))
                     .foregroundStyle(Color.floweInk)
                 // Assembled from user-entered names, so it stays a plain String; "Posting…" is real
@@ -108,12 +126,16 @@ struct PostRowView: View {
                 }
                 .clipped()
                 .contentShape(Rectangle())
-                // Double-tap to like, as the gesture is everywhere else. Deliberately one-way: it
-                // only ever adds a like, so a mistimed tap on a post you already liked can't
-                // silently take it away.
-                .onTapGesture(count: 2) {
+                // Double-tap to like, as the gesture is everywhere else. Deliberately one-way: the
+                // closure only ever adds a like (it no-ops when already liked), so a mistimed tap on
+                // a post you already liked can't silently take it away. Added BEFORE the single tap
+                // so the double-tap wins and a lone tap falls through to open the viewer.
+                .doubleTapToLike {
                     if !post.liked { data.toggleLike(post) }
                 }
+                // Single tap opens the full-screen zoomable viewer.
+                .onTapGesture { showZoom = true }
+                .fullScreenImageZoom(data: post.image, isPresented: $showZoom)
                 .accessibilityIdentifier("post.photo")
         } else if post.hasImage {
             // The record says there is a photo but this device hasn't downloaded it yet (the feed
@@ -142,13 +164,16 @@ struct PostRowView: View {
     private var actions: some View {
         HStack(spacing: 18) {
             Button {
-                data.toggleLike(post)
+                // A like landing is the row's one moment of confirmation — a medium tap when it
+                // lands, a lighter tick when taken back.
+                if post.liked { Haptic.tap() } else { Haptic.impact() }
+                withAnimation(FloweMotion.pop) { data.toggleLike(post) }
             } label: {
                 Image(systemName: post.liked ? "heart.fill" : "heart")
                     .font(.system(size: 21))
                     .foregroundStyle(post.liked ? Color.flowePink : Color.floweInk)
                     // A like is the one action here with a visible state change, so it gets the
-                    // small spring the rest don't need.
+                    // small pop the rest don't need (symbolEffect self-disables under reduce-motion).
                     .symbolEffect(.bounce, value: post.liked)
             }
             .accessibilityIdentifier("post.like")
@@ -176,7 +201,9 @@ struct PostRowView: View {
             .accessibilityIdentifier("post.save")
             .accessibilityLabel(post.saved ? Text("Remove bookmark") : Text("Save"))
         }
-        .buttonStyle(.plain)
+        // Standard Flowe press feedback for the row's actions (was `.buttonStyle(.plain)`, which
+        // gave none). The like keeps its own bounce on top of the press scale.
+        .flowePressable()
         .padding(.horizontal, 16)
         .padding(.top, hasPhoto ? 10 : 12)
         .padding(.bottom, 8)
@@ -184,18 +211,26 @@ struct PostRowView: View {
 
     // MARK: - Below the fold
 
-    /// Hidden at zero rather than showing "0 likes", which reads as a verdict on the post.
+    /// Hidden at zero rather than showing "0 likes", which reads as a verdict on the post. Tapping it
+    /// opens the "Liked by" list — available to anyone, like Instagram.
     @ViewBuilder
     private var likeCount: some View {
         if post.likes > 0 {
-            // Inflected rather than a bare "\(n) likes", which renders "1 likes". `inflect: true`
-            // makes the noun agree with the number, and does so per-language rather than by an
-            // English-shaped `n == 1` check that would be wrong in Arabic's six-way plural.
-            Text("^[\(post.likes) like](inflect: true)")
-                .font(FloweFont.sans(13, .medium))
-                .foregroundStyle(Color.floweInk)
-                .padding(.horizontal, 16)
-                .padding(.bottom, 4)
+            Button {
+                showLikers = true
+            } label: {
+                // Inflected rather than a bare "\(n) likes", which renders "1 likes". `inflect: true`
+                // makes the noun agree with the number, and does so per-language rather than by an
+                // English-shaped `n == 1` check that would be wrong in Arabic's six-way plural.
+                Text("^[\(post.likes) like](inflect: true)")
+                    .font(FloweFont.sans(13, .medium))
+                    .foregroundStyle(Color.floweInk)
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 4)
+            .accessibilityIdentifier("post.likeCount")
+            .accessibilityHint(Text("See who liked this"))
         }
     }
 
@@ -206,7 +241,7 @@ struct PostRowView: View {
         if !post.text.isEmpty {
             Group {
                 if hasPhoto {
-                    Text(post.displayName).font(FloweFont.sans(13, .medium))
+                    authorNameText.font(FloweFont.sans(13, .medium))
                         + Text(verbatim: "  ")
                         + Text(post.text).font(FloweFont.sans(13))
                 } else {
@@ -269,27 +304,4 @@ struct PostRowView: View {
         }
         .accessibilityIdentifier("post.moderation")
     }
-}
-
-#Preview {
-    // Written through the normal compose path into the in-memory preview store, rather than
-    // seeded: nothing here can reach the shared feed, and there is no fixture to mistake for a
-    // real post. A photo can't be conjured without a picker, so this previews the text-only row.
-    let store = MockDataStore.preview
-    // `addPost` needs an author; the real app sets these from the session on sign-in.
-    store.currentUserID = FloweConstants.localOwnerID
-    store.currentUserName = "Taylor Brooks"
-    store.addPost(type: .tip, instructorName: nil,
-                  text: "Before you engage your powerhouse, find your exhale first. "
-                      + "The breath is the engine — the core follows.")
-    return ScrollView {
-        VStack(spacing: 0) {
-            ForEach(store.posts) { post in
-                PostRowView(post: post)
-                Divider()
-            }
-        }
-    }
-    .background(Color.flowWhite)
-    .environment(store)
 }

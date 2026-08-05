@@ -109,6 +109,12 @@ final class AccountDeletionService {
 
         // My instructor listing, whose recordName *is* the owner id. Absent for students.
         ids.append(CKRecord.ID(recordName: ownerID))
+        // My public student profile and E2E public key are NAMESPACED off the owner id (to avoid the
+        // per-zone recordName collision with the instructor listing) — so account deletion must target
+        // their prefixed names explicitly, not the bare owner id. Absent-for-the-other-role records just
+        // no-op on delete.
+        ids.append(CKRecord.ID(recordName: StudentDirectoryService.recordName(for: ownerID)))
+        ids.append(CKRecord.ID(recordName: PublicKeyService.recordName(for: ownerID)))
 
         guard await delete(dedupe(ids)) else { return false }
 

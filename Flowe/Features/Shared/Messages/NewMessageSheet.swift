@@ -81,10 +81,3 @@ struct NewMessageSheet: View {
         .contentShape(Rectangle())
     }
 }
-
-#Preview {
-    NewMessageSheet()
-        .environment(MockDataStore.preview)
-        .environment(AppSettings())
-        .environment(AppSession())
-}

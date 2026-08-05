@@ -3,7 +3,7 @@ import SwiftUI
 /// The student-facing events tab inside Community: every upcoming instructor-hosted event, newest
 /// registration state reconciled, joinable from the detail sheet.
 ///
-/// Owns its own `ScrollView`/`.task`/`.refreshable` rather than nesting in the feed's edge-to-edge
+/// Owns its own `ScrollView`/`.task` rather than nesting in the feed's edge-to-edge
 /// stack, so the two Community sub-tabs never share scroll state (see `CommunityView`).
 struct EventsListView: View {
     @Environment(MockDataStore.self) private var data
@@ -39,6 +39,7 @@ struct EventsListView: View {
         }
         .background(Color.flowWhite)
         .task { await data.syncEvents(asOrganizer: false) }
+        // Manual pull-to-refresh: pulls newly-hosted events and updated fullness / your request state.
         .refreshable { await data.syncEvents(asOrganizer: false) }
         .sheet(item: $selected) { event in
             EventDetailView(event: event)
@@ -79,11 +80,4 @@ struct EventsListView: View {
             return "You're not registered yet. We'll try again next time the app refreshes."
         }
     }
-}
-
-#Preview {
-    EventsListView()
-        .environment(MockDataStore.preview)
-        .environment(AppSettings())
-        .environment(AppSession())
 }

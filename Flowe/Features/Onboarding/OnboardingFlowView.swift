@@ -24,8 +24,3 @@ struct OnboardingFlowView: View {
         }
     }
 }
-
-#Preview {
-    OnboardingFlowView()
-        .environment(AppSession())
-}

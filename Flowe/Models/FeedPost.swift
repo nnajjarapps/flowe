@@ -37,7 +37,14 @@ enum PostType: String, Codable, CaseIterable, Identifiable {
 @Model
 final class FeedPost {
     var legacyId: Int = 0
-    var type: PostType = PostType.tip
+    /// Stored as a raw String, not a Codable enum, so it mirrors to CloudKit as a plain STRING rather
+    /// than opaque BYTES — an unknown or renamed `PostType` case then degrades to `.tip` instead of
+    /// failing to decode the whole post row.
+    var typeRaw: String = PostType.tip.rawValue
+    var type: PostType {
+        get { PostType(rawValue: typeRaw) ?? .tip }
+        set { typeRaw = newValue.rawValue }
+    }
     var user: String = ""
     var instructor: String?
     var text: String = ""
@@ -93,7 +100,7 @@ final class FeedPost {
         pendingUpload: Bool = false
     ) {
         self.legacyId = legacyId
-        self.type = type
+        self.typeRaw = type.rawValue
         self.user = user
         self.instructor = instructor
         self.text = text

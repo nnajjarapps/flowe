@@ -91,10 +91,3 @@ struct CreateAccountView: View {
         }
     }
 }
-
-#Preview {
-    NavigationStack {
-        CreateAccountView(role: .student)
-            .environment(AppSession())
-    }
-}

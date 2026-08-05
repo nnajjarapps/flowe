@@ -147,13 +147,3 @@ struct EmptyStateView: View {
         .padding(.vertical, FlowSpacing.xxl)
     }
 }
-
-#Preview {
-    EmptyStateView(
-        icon: "sparkles",
-        title: "No instructors yet",
-        message: "Instructors near you will appear here once they join Flowe.",
-        actionTitle: "Refresh",
-        action: {}
-    )
-}

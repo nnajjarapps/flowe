@@ -1,8 +1,9 @@
 import SwiftUI
 import PhotosUI
 import UIKit
+import MapKit
 
-/// Editor for the instructor's public listing — photo, name, city, bio, rate, experience,
+/// Editor for the instructor's public listing — photo, name, studio location, bio, rate, experience,
 /// certification, specialties and session types. Persists to the instructor's SwiftData record and
 /// republishes the listing to the public catalog via `MockDataStore.commit()`.
 ///
@@ -17,11 +18,29 @@ struct EditProfileView: View {
     private let allSpecialties = ["Mat", "Reformer", "Barre", "Tower", "Prenatal", "Rehab"]
 
     @State private var name = ""
-    @State private var city = ""
+    @State private var showBrandDraft = false
+    @State private var headline = ""
+    @State private var brandColor = ""
+    @State private var story = ""
     @State private var bio = ""
-    @State private var priceText = ""
+
+    /// Curated brand-accent palette for the Pro brand kit — tasteful, muted studio tones rather than a
+    /// free ColorPicker (which invites clashing choices and needs Color↔hex conversion). "" = the app
+    /// default (the Flowe pink gradient). Each other entry is the raw hex stored in `Instructor.brandColor`.
+    private static let brandSwatches: [String] =
+        ["", "#C67B5C", "#B4557C", "#8A5B9A", "#6E9A7A", "#5B7C9A", "#C69A4C", "#3E8078", "#A8574C"]
     @State private var yearsText = ""
     @State private var cert = ""
+
+    /// Flowe Pro work-history rows, edited as a list and encoded back to `experienceTokens` on save.
+    /// A local editable mirror of `Instructor.ExperienceEntry` (which is immutable / display-only).
+    private struct ExpRow: Identifiable {
+        let id = UUID()
+        var role = ""
+        var place = ""
+        var period = ""
+    }
+    @State private var experienceRows: [ExpRow] = []
     @State private var specialties: Set<String> = []
     @State private var paymentMethods: Set<String> = []
 
@@ -38,27 +57,48 @@ struct EditProfileView: View {
     @State private var certPickerItem: PhotosPickerItem?
     @State private var isLoadingCert = false
 
+    @State private var coverPhoto: Data?
+    @State private var coverPickerItem: PhotosPickerItem?
+    @State private var isLoadingCover = false
+
     @State private var loaded = false
     /// Non-nil when the content filter rejected a field on save.
     @State private var filterMessage: String?
+    /// Soft on-device moderation concern (Flowe Intelligence) → "save anyway / edit?" dialog.
+    @State private var moderationConcern: String?
 
-    // MARK: Teaching location
+    // MARK: Studio location
     //
     // Set by the instructor, on purpose, with the result shown before it is saved. Nothing here
-    // runs on its own: no fix is taken unless the button below is tapped.
+    // runs on its own: no fix is taken and no address is geocoded unless the instructor asks. Unlike
+    // the old coarse teaching area this is the EXACT studio point, published so students can find and
+    // book the studio.
     @State private var location = LocationService()
-    /// The area that will be published — already snapped to ~1 km by `LocationService`.
-    @State private var teachingArea: CoarseLocation?
-    /// Reverse-geocoded name for `teachingArea`, when we managed to resolve one this session.
-    @State private var areaName = ""
+    /// The studio address string, shown wherever `city` used to appear. Typed, or reverse-geocoded
+    /// from the device's exact fix.
+    @State private var address = ""
+    /// The exact studio coordinate that will be published. Set by forward-geocoding `address` or by
+    /// the device's exact one-shot fix — never snapped.
+    @State private var studioLatitude: Double?
+    @State private var studioLongitude: Double?
+    /// The address string the current coordinate was resolved FOR — a geocode result, a device fix's
+    /// reverse-geocoded name (or its coordinate readout when naming failed), or the value loaded from
+    /// the model. The coordinate is only trustworthy while `address == resolvedAddress`; as soon as the
+    /// user edits the text past this, `onChange` clears the point so a stale pin can never ride along
+    /// with a mismatched label into `save()`. nil = no coordinate is currently vouched for.
+    @State private var resolvedAddress: String?
     @State private var isLocating = false
-    /// Shown when a requested fix didn't arrive — a nudge, not a failure the form blocks on.
+    /// A forward-geocode of the typed address is in flight.
+    @State private var isGeocoding = false
+    /// Shown when a requested device fix didn't arrive — a nudge, not a failure the form blocks on.
     @State private var locationFailed = false
+    /// Shown when the typed address couldn't be resolved to a point.
+    @State private var geocodeFailed = false
 
-    /// An empty rate is allowed — it means "not set yet", and the profile nudges for it. Only a
-    /// nonsense value blocks saving, so a new instructor can save a photo and bio before pricing.
-    private var priceIsValid: Bool { priceText.isEmpty || (Int(priceText).map { $0 > 0 } ?? false) }
-    private var canSave: Bool { priceIsValid && !name.trimmed.isEmpty }
+    // The session rate is no longer entered here — each lesson type carries its own price, and the
+    // listing's single "starting from" price is derived from the cheapest of them on save. Only a name
+    // is required to save.
+    private var canSave: Bool { !name.trimmed.isEmpty }
 
     var body: some View {
         NavigationStack {
@@ -71,13 +111,64 @@ struct EditProfileView: View {
                             .accessibilityIdentifier("editProfile.name")
                     }
 
-                    field(title: "CITY") {
-                        textBox($city, placeholder: "Where you teach")
-                            .accessibilityIdentifier("editProfile.city")
+                    // ✨ On-device brand-story draft (Flowe Intelligence). Shown only when the model is
+                    // available (iOS 26 + eligible device + supported language); otherwise absent — the
+                    // fields below work exactly as before. See [[FloweIntelligence]].
+                    if FloweAI.isAvailable {
+                        Button {
+                            showBrandDraft = true
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "sparkles").font(.system(size: 12))
+                                Text("Draft my headline & story with AI").font(FloweFont.sans(13, .medium))
+                            }
+                            .foregroundStyle(Color.flowePinkDeep)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 11)
+                            .background(Color.flowePink.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.flowePink.opacity(0.2), lineWidth: 1))
+                        }
+                        .buttonStyle(.plain)
+                        .sheet(isPresented: $showBrandDraft) {
+                            if #available(iOS 26, *) {
+                                BrandStoryDraftSheet(name: name, specialties: Array(specialties)) { h, s in
+                                    headline = h
+                                    story = s
+                                }
+                            }
+                        }
                     }
 
-                    field(title: "TEACHING AREA") {
-                        locationField
+                    field(title: "HEADLINE") {
+                        VStack(alignment: .leading, spacing: 6) {
+                            textBox($headline, placeholder: "e.g. Reformer & rehab specialist · STOTT")
+                                .accessibilityIdentifier("editProfile.headline")
+                            Text("One line under your name — what you do, in a nutshell.")
+                                .font(FloweFont.sans(11))
+                                .foregroundStyle(Color.floweMuted)
+                        }
+                    }
+
+                    field(title: "BRAND COLOR") {
+                        VStack(alignment: .leading, spacing: 8) {
+                            brandColorField
+                            Text("Your accent — it threads through your profile and studio page.")
+                                .font(FloweFont.sans(11))
+                                .foregroundStyle(Color.floweMuted)
+                        }
+                    }
+
+                    field(title: "COVER PHOTO") {
+                        VStack(alignment: .leading, spacing: 6) {
+                            coverPhotoField
+                            Text("A wide banner across the top of your profile — your studio, a class, your vibe.")
+                                .font(FloweFont.sans(11))
+                                .foregroundStyle(Color.floweMuted)
+                        }
+                    }
+
+                    field(title: "STUDIO LOCATION") {
+                        studioLocationField
                     }
 
                     field(title: "BIO") {
@@ -91,17 +182,20 @@ struct EditProfileView: View {
                             .accessibilityIdentifier("editProfile.bio")
                     }
 
-                    field(title: "RATE PER SESSION") {
-                        HStack(spacing: 4) {
-                            Text(verbatim: settings.currencySymbol).font(FloweFont.serif(18, .medium)).foregroundStyle(Color.floweInk)
-                            TextField("95", text: $priceText)
-                                .font(FloweFont.serif(18, .medium))
+                    field(title: "MY STUDIO") {
+                        VStack(alignment: .leading, spacing: 6) {
+                            TextEditor(text: $story)
+                                .font(FloweFont.sans(14))
                                 .foregroundStyle(Color.floweInk)
-                                .keyboardType(.numberPad)
+                                .frame(minHeight: 100)
+                                .scrollContentBackground(.hidden)
+                                .padding(10)
+                                .boxed()
+                                .accessibilityIdentifier("editProfile.story")
+                            Text("Your studio story — the brand narrative students and studios read.")
+                                .font(FloweFont.sans(11))
+                                .foregroundStyle(Color.floweMuted)
                         }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 12)
-                        .boxed()
                     }
 
                     field(title: "YEARS OF EXPERIENCE") {
@@ -130,6 +224,10 @@ struct EditProfileView: View {
                         chipGrid(allSpecialties, selection: $specialties)
                     }
 
+                    field(title: "EXPERIENCE") {
+                        experienceField
+                    }
+
                     field(title: "LESSON TYPES") {
                         lessonTypesField
                     }
@@ -155,9 +253,11 @@ struct EditProfileView: View {
                     Button("Cancel") { dismiss() }.tint(Color.floweMuted)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { save() }
+                    Button("Save") { Task { await save() } }
                         .tint(Color.flowePinkDeep).fontWeight(.semibold)
-                        .disabled(!canSave)
+                        // Also blocked while a location lookup is in flight, so Save can't persist a
+                        // half-resolved point and can't fire its own resolve-on-save concurrently.
+                        .disabled(!canSave || isGeocoding || isLocating)
                         .accessibilityIdentifier("editProfile.save")
                 }
             }
@@ -165,6 +265,7 @@ struct EditProfileView: View {
         .onAppear(perform: load)
         .task(id: pickerItem) { await loadPickedPhoto() }
         .task(id: certPickerItem) { await loadPickedCert() }
+        .task(id: coverPickerItem) { await loadPickedCover() }
         // A legacy instructor's flat chips become editable rich rows the first time they open the
         // editor — a no-op once they own any, and only ever for the signed-in owner.
         .onAppear { data.migrateLessonTypesIfNeeded() }
@@ -176,6 +277,19 @@ struct EditProfileView: View {
             Button("OK", role: .cancel) { filterMessage = nil }
         } message: {
             Text(filterMessage ?? "")
+        }
+        .confirmationDialog("A quick check",
+                            isPresented: .init(get: { moderationConcern != nil },
+                                               set: { if !$0 { moderationConcern = nil } }),
+                            titleVisibility: .visible,
+                            presenting: moderationConcern) { _ in
+            Button("Save anyway") {
+                moderationConcern = nil
+                if let me = data.currentInstructor { finishSave(me) }
+            }
+            Button("Edit", role: .cancel) { moderationConcern = nil }
+        } message: { concern in
+            Text(concern)
         }
     }
 
@@ -282,63 +396,151 @@ struct EditProfileView: View {
         certPhoto = prepared
     }
 
-    // MARK: - Teaching area
+    // MARK: - Cover photo (Flowe Pro brand kit)
 
-    /// Lets the instructor attach an approximate location to their listing so students can see how
-    /// far away they are.
-    ///
-    /// The whole section is written around one fact: a lot of Pilates instructors teach out of their
-    /// own home, and the catalog is readable by every user of the app. So the instructor is told the
-    /// precision before they tap, shown the exact pair of numbers that will be published afterwards,
-    /// and can take it back down in one tap. Nothing is captured in the background.
-    private var locationField: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if let teachingArea {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "mappin.and.ellipse")
-                            .font(.system(size: 12))
-                            .foregroundStyle(Color.flowePinkDeep)
-                        // Place names and coordinates are data, not UI copy — never translated.
-                        Text(verbatim: resolvedAreaName)
-                            .font(FloweFont.sans(14))
-                            .foregroundStyle(Color.floweInk)
+    /// A wide brand banner. Shown at its natural (wide) proportions here so the author previews what
+    /// their hero will actually render, with a one-tap Remove. Mirrors `certPhotoField`.
+    private var coverPhotoField: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let coverPhoto, let image = UIImage(data: coverPhoto) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 150)
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.floweBorder, lineWidth: 1))
+                    .overlay {
+                        if isLoadingCover {
+                            RoundedRectangle(cornerRadius: 14).fill(.black.opacity(0.35))
+                            ProgressView().tint(.white)
+                        }
                     }
-                    Text(verbatim: teachingArea.displayText)
+                    .accessibilityIdentifier("editProfile.coverPreview")
+            } else if isLoadingCover {
+                ProgressView().tint(Color.flowePinkDeep)
+            }
+
+            HStack(spacing: 16) {
+                PhotosPicker(selection: $coverPickerItem, matching: .images, photoLibrary: .shared()) {
+                    Text(coverPhoto == nil ? "Add Cover Photo" : "Change Cover Photo")
+                        .font(FloweFont.sans(13, .medium))
+                        .foregroundStyle(Color.flowePinkDeep)
+                }
+                .accessibilityIdentifier("editProfile.coverPicker")
+
+                if coverPhoto != nil {
+                    Button("Remove") {
+                        coverPhoto = nil
+                        coverPickerItem = nil
+                    }
+                    .font(FloweFont.sans(13))
+                    .tint(Color.floweMuted)
+                    .accessibilityIdentifier("editProfile.coverRemove")
+                }
+            }
+            .padding(.top, 2)
+        }
+    }
+
+    private func loadPickedCover() async {
+        guard let coverPickerItem else { return }
+        isLoadingCover = true
+        defer { isLoadingCover = false }
+        // Wide downscale (no square crop) — a cover is a banner, not an avatar. Reuses the post pipeline.
+        guard let raw = try? await coverPickerItem.loadTransferable(type: Data.self),
+              let prepared = ProfileImage.preparePost(raw) else { return }
+        coverPhoto = prepared
+    }
+
+    // MARK: - Studio location
+
+    /// Lets the instructor set the EXACT studio location published to the world-readable catalog so
+    /// students can find and book the studio. This deliberately reverses the old coarse "teaching
+    /// area": a studio is a business location, standard for a booking app.
+    ///
+    /// Two ways in — type the address (forward-geocoded to a point on submit) or take one device fix
+    /// and reverse-geocode it into an address. Either way the result is shown (address + a map pin)
+    /// before Save, and can be removed in one tap. Nothing is captured in the background.
+    private var studioLocationField: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            // Type-your-address path: forward-geocode on submit.
+            HStack(spacing: 8) {
+                TextField("", text: $address,
+                          prompt: Text("Your studio address").foregroundColor(Color.floweMuted))
+                    .font(FloweFont.sans(14))
+                    .foregroundStyle(Color.floweInk)
+                    .textInputAutocapitalization(.words)
+                    .submitLabel(.search)
+                    .onSubmit { Task { await geocodeTypedAddress() } }
+                    // Editing the address invalidates the pin: the moment the text no longer matches the
+                    // string the coordinate was resolved for, drop the coordinate so a stale point can't
+                    // be saved under a new label. Our own resolve paths keep `resolvedAddress` in step,
+                    // so this only fires on genuine user edits. The map preview vanishing signals
+                    // "re-search to place the pin".
+                    .onChange(of: address) { _, newValue in
+                        if newValue != resolvedAddress {
+                            studioLatitude = nil
+                            studioLongitude = nil
+                            resolvedAddress = nil
+                            geocodeFailed = false
+                        }
+                    }
+                    .accessibilityIdentifier("editProfile.address")
+                if isGeocoding {
+                    ProgressView().controlSize(.mini).tint(Color.flowePinkDeep)
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .boxed()
+
+            // Use-my-location path: exact device fix → reverse-geocode into the address field.
+            locationButton(title: "Use My Current Location")
+
+            // A small pin preview of the exact point that will be published, plus a one-tap Remove.
+            if let coordinate = studioCoordinate {
+                Map(initialPosition: .region(MKCoordinateRegion(
+                    center: coordinate, latitudinalMeters: 400, longitudinalMeters: 400))) {
+                    Marker("", coordinate: coordinate).tint(Color.flowePinkDeep)
+                }
+                // A fresh coordinate is a fresh map — `initialPosition` is read once per identity.
+                .id("\(coordinate.latitude),\(coordinate.longitude)")
+                .frame(height: 140)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.floweBorder, lineWidth: 1))
+                .allowsHitTesting(false)
+                .accessibilityIdentifier("editProfile.studioMap")
+
+                HStack(spacing: 12) {
+                    // The exact pair is data, not UI copy — never translated.
+                    Text(verbatim: String(format: "%.5f, %.5f", coordinate.latitude, coordinate.longitude))
                         .font(FloweFont.mono(11))
                         .foregroundStyle(Color.floweMuted)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
-                .boxed()
-                .accessibilityIdentifier("editProfile.locationSummary")
-
-                Text("Students see roughly a 1 km area around this point — never your exact address.")
-                    .font(FloweFont.sans(11))
-                    .foregroundStyle(Color.floweMuted)
-
-                HStack(spacing: 16) {
-                    locationButton(title: "Update Area")
+                    Spacer(minLength: 8)
                     Button("Remove") {
-                        self.teachingArea = nil
-                        areaName = ""
+                        studioLatitude = nil
+                        studioLongitude = nil
+                        resolvedAddress = nil
+                        address = ""
                         locationFailed = false
+                        geocodeFailed = false
                     }
                     .font(FloweFont.sans(13))
                     .tint(Color.floweMuted)
                     .accessibilityIdentifier("editProfile.locationRemove")
                 }
-            } else {
-                Text("Add your area so students nearby can see how far you are. Flowe publishes a point rounded to about 1 km — the neighbourhood, never the address.")
-                    .font(FloweFont.sans(11))
-                    .foregroundStyle(Color.floweMuted)
-                locationButton(title: "Use My Current Location")
             }
+
+            // Disclosure — always under the control, so the public nature is stated before Save.
+            Text("Your studio location is shown publicly to students so they can find and book you. Use your studio's address — not a private home you'd rather keep off the map.")
+                .font(FloweFont.sans(11))
+                .foregroundStyle(Color.floweMuted)
+                .fixedSize(horizontal: false, vertical: true)
 
             if location.isDenied {
                 HStack(spacing: 6) {
-                    Text("Location access is off. Your city above still works — turn it on in Settings to add an area.")
+                    Text("Location access is off. Type your studio address above instead, or turn it on in Settings.")
                         .font(FloweFont.sans(11))
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 8)
@@ -352,24 +554,26 @@ struct EditProfileView: View {
                 }
                 .foregroundStyle(Color.floweMuted)
             } else if locationFailed {
-                Text("Couldn't find your location. Try again, or just type your city above.")
+                Text("Couldn't find your location. Try again, or type your studio address above.")
+                    .font(FloweFont.sans(11))
+                    .foregroundStyle(Color.floweMuted)
+            } else if geocodeFailed {
+                Text("We couldn't find that address. Check it and try again.")
                     .font(FloweFont.sans(11))
                     .foregroundStyle(Color.floweMuted)
             }
         }
     }
 
-    /// The name shown above the coordinates: whatever we reverse-geocoded this session, falling back
-    /// to the city the instructor typed, and to the coordinates themselves if there is neither.
-    private var resolvedAreaName: String {
-        if !areaName.isEmpty { return areaName }
-        if !city.trimmed.isEmpty { return city.trimmed }
-        return teachingArea?.displayText ?? ""
+    /// The exact studio coordinate held in the two `Double?`s, or nil when unset.
+    private var studioCoordinate: CLLocationCoordinate2D? {
+        guard let studioLatitude, let studioLongitude else { return nil }
+        return CLLocationCoordinate2D(latitude: studioLatitude, longitude: studioLongitude)
     }
 
     private func locationButton(title: LocalizedStringKey) -> some View {
         Button {
-            Task { await captureArea() }
+            Task { await captureCurrentLocation() }
         } label: {
             HStack(spacing: 6) {
                 if isLocating {
@@ -386,24 +590,63 @@ struct EditProfileView: View {
         .accessibilityIdentifier("editProfile.locationCapture")
     }
 
-    private func captureArea() async {
+    /// "Use my current location": take one EXACT device fix (no snapping — this is a studio the
+    /// instructor is publishing) and reverse-geocode it into the address field. The pin is kept even
+    /// if naming fails, since that is what students route to.
+    private func captureCurrentLocation() async {
         isLocating = true
         locationFailed = false
+        geocodeFailed = false
         defer { isLocating = false }
 
-        // Already coarsened by the service — the precise fix never leaves it, so there is nothing
-        // here that could accidentally be saved at street precision.
-        guard let area = await location.requestCoarseLocation() else {
+        guard let coordinate = await location.requestExactLocation(),
+              Self.isValidCoordinate(coordinate.latitude, coordinate.longitude) else {
             locationFailed = !location.isDenied   // a refusal is a choice, not a failure to report
             return
         }
-        teachingArea = area
-        // Geocoding runs on the rounded point, so even this lookup can't leak the exact one.
-        guard let resolved = await location.areaName(for: area) else { return }
-        areaName = resolved
-        // Only fills a blank city. Overwriting would clobber something more specific than a
-        // geocoder returns — "Tel Aviv · Florentin", a studio name — that the instructor chose.
-        if city.trimmed.isEmpty { city = resolved }
+        studioLatitude = coordinate.latitude
+        studioLongitude = coordinate.longitude
+        // The address label must track the point. On a successful reverse-geocode use the name; when
+        // naming fails, fall back to the coordinate readout rather than leaving a STALE typed label
+        // over a different (device) point — a mismatch and a home-address leak. Either way `address`
+        // and `resolvedAddress` are set together so `onChange` treats the pin as matching.
+        let label = await location.reverseGeocode(latitude: coordinate.latitude,
+                                                  longitude: coordinate.longitude)
+            ?? String(format: "%.5f, %.5f", coordinate.latitude, coordinate.longitude)
+        resolvedAddress = label
+        address = label
+    }
+
+    /// "Type your address": forward-geocode the typed string to an EXACT point, and normalise the
+    /// field to the geocoder's formatted address. A blank/unresolvable address surfaces a nudge and
+    /// leaves any existing point alone.
+    private func geocodeTypedAddress() async {
+        let query = address.trimmed
+        guard !query.isEmpty else { return }
+        isGeocoding = true
+        geocodeFailed = false
+        locationFailed = false
+        defer { isGeocoding = false }
+
+        guard let result = await location.geocode(address: query),
+              Self.isValidCoordinate(result.latitude, result.longitude) else {
+            geocodeFailed = true
+            return
+        }
+        studioLatitude = result.latitude
+        studioLongitude = result.longitude
+        // Set the vouched-for address BEFORE the field so `onChange` sees them equal and keeps the pin.
+        resolvedAddress = result.formattedAddress
+        address = result.formattedAddress
+    }
+
+    /// Reject Null Island, non-finite, and out-of-range pairs — the editor must mirror the rules the
+    /// model (`Instructor.studioCoordinate`) enforces, so a bad fix can't render a pin here that then
+    /// vanishes everywhere downstream.
+    private static func isValidCoordinate(_ lat: Double, _ lon: Double) -> Bool {
+        lat.isFinite && lon.isFinite
+            && (-90...90).contains(lat) && (-180...180).contains(lon)
+            && !(lat == 0 && lon == 0)
     }
 
     // MARK: - Pieces
@@ -438,7 +681,7 @@ struct EditProfileView: View {
             if isOn { selection.wrappedValue.remove(label) }
             else { selection.wrappedValue.insert(label) }
         } label: {
-            Text(label)
+            Text(localizedTag: label)
                 .font(FloweFont.sans(13, .medium))
                 .foregroundStyle(isOn ? .white : Color.flowePinkDeep)
                 .padding(.horizontal, 14)
@@ -596,40 +839,189 @@ struct EditProfileView: View {
         data.reorderLessonTypes(from: IndexSet(integer: index), to: destination)
     }
 
+    // MARK: - Experience (Flowe Pro)
+
+    /// A list of editable work-history rows + an "Add role" button. Encoded to `experienceTokens` on
+    /// save; a row with no `place` is dropped (an empty row the user added but never filled).
+    private var experienceField: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if experienceRows.isEmpty {
+                Text("Add your teaching history — studios, roles, apprenticeships. Optional, but it builds trust with students and studios.")
+                    .font(FloweFont.sans(11))
+                    .foregroundStyle(Color.floweMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                ForEach($experienceRows) { $row in
+                    experienceRowEditor($row)
+                }
+            }
+
+            Button {
+                experienceRows.append(ExpRow())
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "plus").font(.system(size: 11, weight: .semibold))
+                    Text("Add role").font(FloweFont.sans(13, .medium))
+                }
+                .foregroundStyle(Color.flowePinkDeep)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("editProfile.addExperience")
+        }
+    }
+
+    /// One work-history row: role / place / period stacked with dividers, and a trailing delete.
+    private func experienceRowEditor(_ row: Binding<ExpRow>) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            VStack(alignment: .leading, spacing: 7) {
+                TextField("", text: row.role,
+                          prompt: Text("Role — e.g. Senior Reformer instructor").foregroundColor(Color.floweMuted))
+                    .font(FloweFont.sans(14, .medium))
+                    .foregroundStyle(Color.floweInk)
+                Divider().overlay(Color.floweBorder)
+                TextField("", text: row.place,
+                          prompt: Text("Studio / employer").foregroundColor(Color.floweMuted))
+                    .font(FloweFont.sans(13))
+                    .foregroundStyle(Color.floweInk.opacity(0.85))
+                Divider().overlay(Color.floweBorder)
+                TextField("", text: row.period,
+                          prompt: Text("2018–2021 (optional)").foregroundColor(Color.floweMuted))
+                    .font(FloweFont.sans(12))
+                    .foregroundStyle(Color.floweMuted)
+            }
+            .textInputAutocapitalization(.words)
+
+            Button(role: .destructive) {
+                experienceRows.removeAll { $0.id == row.wrappedValue.id }
+            } label: {
+                Image(systemName: "trash").font(.system(size: 13))
+            }
+            .buttonStyle(.plain)
+            .tint(Color.floweMuted)
+            .foregroundStyle(Color.floweMuted)
+            .accessibilityIdentifier("editProfile.experienceDelete")
+        }
+        .padding(12)
+        .boxed()
+    }
+
+    // MARK: - Brand color (Flowe Pro)
+
+    private var brandColorField: some View {
+        FlowLayout(spacing: 14, lineSpacing: 14) {
+            ForEach(Self.brandSwatches, id: \.self) { hex in
+                brandSwatch(hex)
+            }
+        }
+    }
+
+    /// One selectable swatch. "" is the app default (rendered as the Flowe gradient); the rest are the
+    /// brand hex. The current pick gets an ink ring + checkmark.
+    private func brandSwatch(_ hex: String) -> some View {
+        let isSelected = brandColor == hex
+        return Button {
+            brandColor = hex
+            Haptic.selection()
+        } label: {
+            ZStack {
+                Circle()
+                    .fill(hex.isEmpty
+                          ? AnyShapeStyle(FlowGradients.gradDark)
+                          : AnyShapeStyle(Color(hexString: hex) ?? Color.flowePink))
+                    .frame(width: 38, height: 38)
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+            }
+            .overlay(
+                Circle().stroke(Color.floweInk.opacity(isSelected ? 0.9 : 0), lineWidth: 2).padding(-4)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("editProfile.brandSwatch.\(hex.isEmpty ? "default" : hex)")
+    }
+
     // MARK: - Load / save
 
     private func load() {
         guard !loaded, let me = data.currentInstructor else { return }
         name = me.name
-        city = me.city
+        headline = me.headline
+        brandColor = me.brandColor
+        story = me.story
+        experienceRows = me.experience.map { ExpRow(role: $0.role, place: $0.place, period: $0.period) }
+        address = me.address
         bio = me.bio ?? ""
-        priceText = me.price > 0 ? String(me.price) : ""
         yearsText = me.yearsExp > 0 ? String(me.yearsExp) : ""
         cert = me.cert
         specialties = Set(me.specialties)
         paymentMethods = Set(PaymentMethod.known(me.paymentMethods))
         photo = me.photo
         certPhoto = me.certPhoto
-        // No reverse-geocode on open: the name falls back to the city field, and a network lookup
+        coverPhoto = me.coverPhoto
+        // No geocode on open: the stored exact point is read straight back, and a network lookup
         // nobody asked for is the wrong thing to do when a screen appears.
-        teachingArea = me.coarseLocation
+        studioLatitude = me.latitude
+        studioLongitude = me.longitude
+        // The stored address IS the vouched-for label for the stored point (when there is one), so a
+        // Save that never touches the location doesn't need to re-geocode and won't be treated as an edit.
+        resolvedAddress = (me.latitude != nil && me.longitude != nil) ? me.address : nil
         loaded = true
     }
 
-    private func save() {
+    private func save() async {
         guard let me = data.currentInstructor else { dismiss(); return }
+        // A location the user typed but never searched (or edited after searching) has address text
+        // but no vouched-for point. Resolve it NOW rather than publishing a "located but unlocatable"
+        // listing (address string, no pin, no distance ranking). If it still won't resolve, abort the
+        // save with the inline nudge showing so the user can fix or Remove it — we never silently save
+        // a mismatched or point-less location. A resolved (or empty, or Removed) location skips this.
+        if !address.trimmed.isEmpty && studioCoordinate == nil {
+            await geocodeTypedAddress()
+            if studioCoordinate == nil { return }   // geocodeFailed nudge is now visible
+        }
         // Every field here is broadcast to the public catalog, so it is screened before publishing
         // (Guideline 1.2). Private messages are deliberately not screened — see `ContentFilter`.
-        if let rejection = ContentFilter.reject(fields: [name, city, bio, cert]) {
+        // Screened AFTER the resolve above so the geocoder's normalised address is what gets checked.
+        // Screen only the DESCRIPTIVE experience fields (role + place). The period is a year range
+        // like "2016-2018" — its digit-and-hyphen run matches ContentFilter's phone-number heuristic
+        // (`\d[\d\s().-]{7,}\d`), so screening it false-positives on every honest work history.
+        let experienceText = experienceRows.flatMap { [$0.role, $0.place] }
+        if let rejection = ContentFilter.reject(fields: [name, headline, story, address, bio, cert] + experienceText) {
             filterMessage = rejection.message
             return
         }
+        // Soft AI second pass on the descriptive public fields (headline/story/bio). save() is already
+        // async, so no Task; a concern surfaces the "Save anyway / Edit" dialog rather than blocking.
+        if FloweAI.isAvailable,
+           let concern = await FloweAI.moderationConcern([headline, story, bio].joined(separator: "\n")) {
+            moderationConcern = concern
+            return
+        }
+        finishSave(me)
+    }
+
+    /// Apply the edited fields to the model and publish. Split from `save()` so the moderation dialog's
+    /// "Save anyway" can complete the save after the soft AI check.
+    private func finishSave(_ me: Instructor) {
         me.name = name.trimmed
-        me.city = city.trimmed
+        me.headline = headline.trimmed
+        me.brandColor = brandColor
+        me.story = story.trimmed
+        // Encode the rows to `period|place|role` tokens, dropping any with no place (an empty row the
+        // user added but never filled). Order matches `Instructor.experience`'s decoder.
+        me.experienceTokens = experienceRows.compactMap { row in
+            let place = row.place.trimmed
+            guard !place.isEmpty else { return nil }
+            return [row.period.trimmed, place, row.role.trimmed].joined(separator: "|")
+        }
         me.bio = bio.trimmed
         me.cert = cert.trimmed
-        me.price = Int(priceText) ?? 0
-        me.yearsExp = Int(yearsText) ?? 0
+        // `price` is not written here — `data.commit()` → `publishMyListing()` re-derives it from the
+        // current lesson types (the cheapest priced one), the same way `sessionTypes` is store-derived.
+        me.yearsExp = yearsText.wholeNumber ?? 0
         // Filter through the canonical lists so stored order stays stable rather than set order.
         me.specialties = allSpecialties.filter { specialties.contains($0) }
         // sessionTypes is no longer edited here — it is the denormalised name cache the store re-derives
@@ -637,9 +1029,11 @@ struct EditProfileView: View {
         me.paymentMethods = PaymentMethod.all.filter { paymentMethods.contains($0) }
         me.photo = photo
         me.certPhoto = certPhoto
-        // nil clears both fields and removes the keys from the public record — Remove has to be a
-        // real withdrawal, not a value that lingers on other people's devices.
-        me.setCoarseLocation(teachingArea)
+        me.coverPhoto = coverPhoto
+        // The EXACT studio point + address, set together. nil coordinates (Remove) clear the point
+        // and remove the keys from the public record — a real withdrawal, not a value that lingers
+        // on other people's devices.
+        me.setStudioLocation(latitude: studioLatitude, longitude: studioLongitude, address: address.trimmed)
         data.commit()
         dismiss()
     }
@@ -647,6 +1041,19 @@ struct EditProfileView: View {
 
 private extension String {
     var trimmed: String { trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    /// Parse a typed whole number that may carry non-ASCII digits (an Arabic keyboard's `.numberPad`
+    /// emits Eastern-Arabic-Indic ٠–٩) or grouping separators — bare `Int("٥")`/`Int("1,000")` return
+    /// nil, silently zeroing the field. Maps each Unicode decimal digit via `wholeNumberValue` and
+    /// drops the rest; nil only when there's no digit at all. (Mirrors `ComposeLessonTypeSheet`.)
+    var wholeNumber: Int? {
+        var digits = ""
+        for ch in self where ch.isNumber {
+            guard let v = ch.wholeNumberValue, (0...9).contains(v) else { continue }
+            digits.append(Character("\(v)"))
+        }
+        return digits.isEmpty ? nil : Int(digits)
+    }
 }
 
 private extension View {
@@ -656,10 +1063,4 @@ private extension View {
             .clipShape(RoundedRectangle(cornerRadius: 14))
             .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.floweBorder, lineWidth: 1))
     }
-}
-
-#Preview {
-    EditProfileView()
-        .environment(MockDataStore.preview)
-        .environment(AppSettings())
 }

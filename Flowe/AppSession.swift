@@ -16,6 +16,12 @@ final class AppSession {
     /// True when a signed-in student hasn't finished the onboarding quiz — drives `AppRouter` to show
     /// the quiz before the tabs.
     var needsOnboardingQuiz = false
+
+    /// Deep-link target captured from a Universal Link (`https://nnajjarapps.github.io/flowe-support/i/<ownerID>`)
+    /// before `StudentTabView` is mounted. Survives the login/quiz gate; consumed + cleared by
+    /// `StudentTabView`. The exact analog of `PushService.pendingTopic`.
+    var pendingInstructorID: String?
+
     /// The student's saved match preferences. Restored per-account (mirrors the durable-profile
     /// pattern), so they survive logout and come back on re-sign-in for the same Apple ID.
     private(set) var studentPreferences: StudentPreferences?
@@ -51,8 +57,43 @@ final class AppSession {
             currentUser = Self.loadUser(from: defaults, key: userKey)
             authState = role == .student ? .student : .instructor
         }
+        #if DEBUG
+        applyDebugIdentityInjection(defaults)
+        #endif
         refreshStudentPreferences()
     }
+
+    #if DEBUG
+    /// Two-party manual-testing harness (DEBUG only, never ships). Launching with
+    /// `-flowe.debugAppleUserID <id> -flowe.isLoggedIn 1 -flowe.userRole instructor|student`
+    /// forces a stable LOGICAL identity (ownerID = `<id>`) without going through the flaky
+    /// Sign-in-with-Apple UI in the simulator. Real CloudKit still authenticates against whatever
+    /// iCloud account the simulator is signed into — this only overrides the app's own owner id, so
+    /// two simulators can act as a distinct instructor and student against the real public database.
+    /// `validateAppleCredential()` is a no-op under this flag (see there), so the injected id isn't
+    /// wiped as "unknown to Apple". `-flowe.debugUserName "Name"` sets the display name.
+    private func applyDebugIdentityInjection(_ defaults: UserDefaults) {
+        guard let injected = defaults.string(forKey: "flowe.debugAppleUserID"), !injected.isEmpty
+        else { return }
+        setAppleUserID(injected)
+        let role: UserRole = defaults.string(forKey: roleKey) == "instructor" ? .instructor : .student
+        let name = defaults.string(forKey: "flowe.debugUserName")
+            ?? (role == .instructor ? "Test Instructor" : "Test Student")
+        currentUser = loadDurableProfile() ?? User(
+            id: UUID(), fullName: name, email: "", role: role, memberSince: Date()
+        )
+        authState = role == .instructor ? .instructor : .student
+
+        // `-flowe.debugOpenInstructor <ownerID>` deep-links a student straight to that instructor's
+        // profile by DIRECT recordID fetch (`loadInstructor` → `CatalogService.fetch(ownerIDs:)`),
+        // bypassing both the flaky simulator universal-link delivery AND the CloudKit visibility>0
+        // query index (which lags for a just-published listing seen by another account). Same seam the
+        // real universal link uses — `StudentTabView.task(id: pendingInstructorID)`.
+        if let openID = defaults.string(forKey: "flowe.debugOpenInstructor"), !openID.isEmpty {
+            pendingInstructorID = openID
+        }
+    }
+    #endif
 
     private static func loadUser(from defaults: UserDefaults, key: String) -> User? {
         guard let data = defaults.data(forKey: key) else { return nil }
@@ -153,6 +194,11 @@ final class AppSession {
 
     /// On launch, drop the session if Apple has revoked the credential.
     func validateAppleCredential() async {
+        #if DEBUG
+        // Injected debug identity (two-party test harness) is unknown to Apple, so the real
+        // credential check would report `.notFound` and log us straight back out. Skip it.
+        if UserDefaults.standard.string(forKey: "flowe.debugAppleUserID")?.isEmpty == false { return }
+        #endif
         guard let appleUserID else { return }
         let state = try? await ASAuthorizationAppleIDProvider()
             .credentialState(forUserID: appleUserID)

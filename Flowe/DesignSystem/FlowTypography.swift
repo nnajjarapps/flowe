@@ -11,6 +11,9 @@ enum FloweFont {
     enum SerifWeight { case light, regular, medium }
     enum SansWeight  { case light, regular, medium }
 
+    /// Brand title at the top of a screen. Route every top-of-screen brand title here.
+    static let screenTitle: Font = serif(28, .regular)
+
     /// Fraunces — set `italic` for the `<em>` accent words in the mockup headings.
     static func serif(_ size: CGFloat, _ weight: SerifWeight = .regular, italic: Bool = false) -> Font {
         let name: String

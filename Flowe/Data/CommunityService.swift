@@ -204,7 +204,16 @@ final class CommunityService {
     /// means "genuinely no posts yet".
     func fetchRecentPosts() async -> [RemotePost]? {
         #if CLOUDKIT_ENABLED
-        let query = CKQuery(recordType: Self.postRecordType, predicate: NSPredicate(value: true))
+        // Query on the queryable `createdAt` field rather than `NSPredicate(value: true)`. A fetch-all
+        // TRUEPREDICATE query makes CloudKit fall back to the `recordName` system index, which is NOT
+        // marked queryable on `CommunityPost` — so it fails server-side with CKError 2015 "Field
+        // 'recordName' is not marked queryable" and the whole feed shows "Couldn't load". Filtering on
+        // `createdAt` (QUERYABLE+SORTABLE) uses that index instead and still returns every post (all have
+        // a createdAt after the epoch). No CloudKit schema change needed.
+        let query = CKQuery(
+            recordType: Self.postRecordType,
+            predicate: NSPredicate(format: "createdAt > %@", Date(timeIntervalSince1970: 0) as NSDate)
+        )
         query.sortDescriptors = [NSSortDescriptor(key: "createdAt", ascending: false)]
         do {
             let (matches, _) = try await database.records(

@@ -10,3 +10,11 @@ extension FloweWeek.Day {
     /// The current week, in the device calendar/time zone, starting today.
     static var all: [WeekDay] { FloweWeek.current() }
 }
+
+// MARK: - Calendar view mode
+
+/// The instructor calendar toggles between a paged week strip and a month overview grid.
+enum CalendarViewMode {
+    case week
+    case month
+}

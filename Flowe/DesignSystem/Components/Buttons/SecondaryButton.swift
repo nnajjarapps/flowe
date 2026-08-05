@@ -18,8 +18,3 @@ struct SecondaryButton: View {
         }
     }
 }
-
-#Preview {
-    SecondaryButton(title: "Log In") {}
-        .padding()
-}

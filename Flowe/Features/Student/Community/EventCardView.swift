@@ -159,7 +159,8 @@ struct EventCardView: View {
                 photo: data.organizerPhoto(for: event),
                 size: 22
             )
-            Text(event.organizerName)
+            Text({ let n = data.displayIdentity(ownerID: event.organizerID, fallbackName: event.organizerName).name
+                   return n.isEmpty ? String(localized: "Someone") : n }())
                 .font(FloweFont.sans(12, .medium))
                 .foregroundStyle(Color.floweInk)
                 .lineLimit(1)
@@ -257,11 +258,27 @@ struct EventCardView: View {
                         fill: AnyShapeStyle(FlowGradients.gradDark), foreground: .white)
             }
         case .joined:
-            capsule(
-                Label { Text("Going") } icon: { Image(systemName: "checkmark") },
-                fill: AnyShapeStyle(Color.flowePink.opacity(0.12)),
-                foreground: .flowePinkDeep
-            )
+            // `.joined` only means "I hold a registration" — but under the request→approve model that
+            // one flag spans three reader states. Only an ACCEPTED guest is actually going; a pending
+            // request reads "Requested" and a declined one "Not accepted", so the card never
+            // over-promises a spot the organizer hasn't granted. The detail rail draws the same line.
+            switch data.requestState(for: event) {
+            case .accepted:
+                capsule(
+                    Label { Text("Going") } icon: { Image(systemName: "checkmark") },
+                    fill: AnyShapeStyle(Color.flowePink.opacity(0.12)),
+                    foreground: .flowePinkDeep
+                )
+            case .declined:
+                capsule(Text("Not accepted"),
+                        fill: AnyShapeStyle(Color.floweMuted.opacity(0.12)), foreground: .floweMuted)
+            case .requested, .notRequested:
+                capsule(
+                    Label { Text("Requested") } icon: { Image(systemName: "clock") },
+                    fill: AnyShapeStyle(Color.flowePink.opacity(0.10)),
+                    foreground: .flowePinkDeep
+                )
+            }
         case .full:
             capsule(Text("FULLY BOOKED"),
                     fill: AnyShapeStyle(Color.floweMuted.opacity(0.12)), foreground: .floweMuted)

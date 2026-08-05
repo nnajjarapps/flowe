@@ -12,7 +12,7 @@ import Foundation
 /// so it must not shift with locale.
 enum FloweWeek {
     struct Day: Identifiable, Hashable {
-        let id: Int
+        let id: Int                   // ABSOLUTE day offset from today (today = 0, tomorrow = 1, …); negative for past
         let date: Date
         let isToday: Bool
         let displayWeekday: String    // localized, e.g. "Mon" / "lun." / "月"
@@ -22,29 +22,99 @@ enum FloweWeek {
         let pickerValue: String       // English "Mon Jul 7" — what a picked day stores
     }
 
-    /// Seven days starting today, in the device calendar and time zone.
-    static func current(now: Date = Date(), calendar: Calendar = .current) -> [Day] {
+    /// How far forward the booking/calendar horizon may page: offsets 0…11 (12 weeks / ~84 days),
+    /// safely inside the ~26-week (182-day) ceiling of `Booking.sessionEnd`'s nearest-year date
+    /// reconstruction. Never page before offset 0 (no past bookings) or beyond this.
+    static let maxWeekOffset = 11
+
+    /// The last selectable absolute day id — the final day of the last pageable week (11*7 + 6 = 83).
+    static var maxDayID: Int { maxWeekOffset * 7 + 6 }
+
+    /// Build a `Day` for `date`, tagged with its absolute offset-from-today `absOffset`.
+    private static func makeDay(date: Date, absOffset: Int, calendar: Calendar) -> Day {
+        Day(
+            id: absOffset,
+            date: date,
+            isToday: calendar.isDateInToday(date),
+            displayWeekday: localized(date, template: "EEE"),
+            displayNumber: localized(date, template: "d"),
+            displayShortDate: localized(date, template: "MMMd"),
+            matchWeekday: english(date, format: "EEE"),
+            pickerValue: english(date, format: "EEE MMM d")
+        )
+    }
+
+    /// Seven days for the week at `offset` (0 = this week starting today, 1 = next week, …), in the
+    /// device calendar and time zone. Ids are the absolute offset from today, so they stay unique
+    /// across paged weeks: week `n` yields ids `7n … 7n+6`.
+    static func week(offset: Int, now: Date = Date(), calendar: Calendar = .current) -> [Day] {
         let start = calendar.startOfDay(for: now)
-        return (0..<7).map { offset in
-            let date = calendar.date(byAdding: .day, value: offset, to: start) ?? start
-            return Day(
-                id: offset,
-                date: date,
-                isToday: calendar.isDateInToday(date),
-                displayWeekday: localized(date, template: "EEE"),
-                displayNumber: localized(date, template: "d"),
-                displayShortDate: localized(date, template: "MMMd"),
-                matchWeekday: english(date, format: "EEE"),
-                pickerValue: english(date, format: "EEE MMM d")
-            )
+        return (0..<7).map { i in
+            let absOffset = offset * 7 + i
+            let date = calendar.date(byAdding: .day, value: absOffset, to: start) ?? start
+            return makeDay(date: date, absOffset: absOffset, calendar: calendar)
         }
     }
 
+    /// Seven days starting today (week 0). Thin wrapper over `week(offset: 0)` — identical ids and
+    /// behavior to before, for `WeekDay.all` callers that only want this week.
+    static func current(now: Date = Date(), calendar: Calendar = .current) -> [Day] {
+        week(offset: 0, now: now, calendar: calendar)
+    }
+
     /// Localized range for the week header, e.g. "Jul 21 – Jul 27" (order follows the region).
-    static func rangeLabel(now: Date = Date(), calendar: Calendar = .current) -> String {
-        let days = current(now: now, calendar: calendar)
+    /// `offset` selects which paged week to label; default 0 keeps existing call sites working.
+    static func rangeLabel(offset: Int = 0, now: Date = Date(), calendar: Calendar = .current) -> String {
+        let days = week(offset: offset, now: now, calendar: calendar)
         guard let first = days.first?.date, let last = days.last?.date else { return "" }
         return "\(localized(first, template: "MMMd")) – \(localized(last, template: "MMMd"))"
+    }
+
+    // MARK: - Month overview grid
+
+    /// One position in the month grid. `day == nil` is a leading/trailing pad blank that keeps the
+    /// weeks aligned; `id` is the grid position (stable for `ForEach`), not a day offset.
+    struct MonthCell: Identifiable, Hashable {
+        let id: Int
+        let day: Day?
+    }
+
+    /// A calendar-month grid for the month at `monthOffset` from the current month. Returns the
+    /// localized month title, the weekday-symbol header (localized `veryShortWeekdaySymbols` rotated
+    /// to the device's `firstWeekday`), and the aligned cells: leading blanks then one cell per real
+    /// day. Each real day carries its absolute offset-from-today id (NEGATIVE for days before today,
+    /// possibly `> maxDayID` for days beyond the cap) — the view dims/disables ids outside 0…maxDayID.
+    static func monthGrid(monthOffset: Int = 0, now: Date = Date(), calendar: Calendar = .current) -> (title: String, weekdaySymbols: [String], cells: [MonthCell]) {
+        let today = calendar.startOfDay(for: now)
+        // First day of the target month.
+        let startOfThisMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: today)) ?? today
+        let firstOfMonth = calendar.date(byAdding: .month, value: monthOffset, to: startOfThisMonth) ?? startOfThisMonth
+
+        let title = localized(firstOfMonth, template: "yMMMM")
+
+        // Weekday symbols rotated so index 0 == the device's first weekday.
+        let symbols = calendar.veryShortWeekdaySymbols                 // index 0 = Sunday
+        let rotate = calendar.firstWeekday - 1                          // firstWeekday is 1-based
+        let weekdaySymbols = Array(symbols[rotate...] + symbols[..<rotate])
+
+        // Leading blank count: how many pad cells before the 1st.
+        let firstWeekdayComponent = calendar.component(.weekday, from: firstOfMonth)   // 1 = Sun … 7 = Sat
+        let leadingBlanks = (firstWeekdayComponent - calendar.firstWeekday + 7) % 7
+        let daysInMonth = calendar.range(of: .day, in: .month, for: firstOfMonth)?.count ?? 30
+
+        var cells: [MonthCell] = []
+        var pos = 0
+        for _ in 0..<leadingBlanks {
+            cells.append(MonthCell(id: pos, day: nil))
+            pos += 1
+        }
+        for dayNum in 0..<daysInMonth {
+            let date = calendar.date(byAdding: .day, value: dayNum, to: firstOfMonth) ?? firstOfMonth
+            let absOffset = calendar.dateComponents([.day], from: today, to: date).day ?? 0
+            cells.append(MonthCell(id: pos, day: makeDay(date: date, absOffset: absOffset, calendar: calendar)))
+            pos += 1
+        }
+        return (title: title, weekdaySymbols: weekdaySymbols, cells: cells)
     }
 
     /// The stored `Booking.date` string for a date ("Mon, Jul 7"), matching what the booking flow

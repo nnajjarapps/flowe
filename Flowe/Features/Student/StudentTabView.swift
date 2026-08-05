@@ -6,28 +6,51 @@ struct StudentTabView: View {
     @Environment(PushService.self) private var push
 
     @State private var selectedTab = 0
+    @State private var deepLinkedInstructor: Instructor?
+    /// Bumped each time the already-selected tab is tapped again; broadcast down
+    /// via `\.tabReselectTrigger` so each tab's scroll content can honor it with
+    /// `scrollToTopOnTabReselect(trigger:proxy:)` (see ScrollToTop in FloweCommon).
+    @State private var reselectTick = 0
+
+    /// Wraps `selectedTab` so a re-tap of the current tab (TabView calls `set`
+    /// with the SAME value) becomes a scroll-to-top trigger instead of a no-op.
+    private var tabSelection: Binding<Int> {
+        Binding(
+            get: { selectedTab },
+            set: { newValue in
+                if newValue == selectedTab {
+                    reselectTick &+= 1
+                    Haptic.tap()
+                }
+                selectedTab = newValue
+            }
+        )
+    }
 
     var body: some View {
-        TabView(selection: $selectedTab) {
-            DiscoverView()
+        TabView(selection: tabSelection) {
+            DiscoverView().floweAdaptiveColumn()
                 .tabItem { Label("Discover", systemImage: "safari") }.tag(0)
 
-            CommunityView()
+            CommunityView().floweAdaptiveColumn()
                 .tabItem { Label("Community", systemImage: "person.3") }.tag(1)
 
-            BookingsView()
+            BookingsView().floweAdaptiveColumn()
                 .tabItem { Label("Bookings", systemImage: "calendar") }.tag(2)
 
             // Messaging needs both sides reachable — students previously had no way in at all.
-            MessageListView()
+            MessageListView().floweAdaptiveColumn()
                 .tabItem { Label("Messages", systemImage: "message") }.tag(3)
                 .badge(data.unreadMessageCount)
 
-            ProfileView()
+            ProfileView().floweAdaptiveColumn()
                 .tabItem { Label("Profile", systemImage: "person.circle") }.tag(4)
         }
+        .sidebarAdaptableIfAvailable()
         .tint(Color.flowePinkDeep)
         .toolbarBackground(.ultraThinMaterial, for: .tabBar)
+        // Broadcast the active-tab-reselect trigger to every tab's scroll content.
+        .environment(\.tabReselectTrigger, reselectTick)
         // A tapped notification lands here: open the tab the alert was about, then clear the
         // request so returning to this screen later doesn't yank the user back to it.
         .onChange(of: push.pendingTopic) { _, topic in
@@ -41,13 +64,35 @@ struct StudentTabView: View {
             }
             push.pendingTopic = nil
         }
+        // A shared profile link lands here. `.task(id:)` fires both on first appearance (covering a
+        // cold-start link that waited out the login/quiz gate) and on every change of the pending id
+        // (warm foreground). Present at the tab level, not from inside Discover — a second sheet
+        // stacked on Discover's own `.sheet` would double-present.
+        .task(id: session.pendingInstructorID) {
+            guard let id = session.pendingInstructorID else { return }
+            session.pendingInstructorID = nil          // clear first to avoid re-entry
+            selectedTab = 0                            // land on Discover for context
+            deepLinkedInstructor = await data.loadInstructor(ownerID: id)
+        }
+        .sheet(item: $deepLinkedInstructor) { instructor in
+            StudentInstructorProfileView(instructor: instructor) { deepLinkedInstructor = nil }
+        }
     }
 }
 
-#Preview {
-    StudentTabView()
-        .environment(AppSession())
-        .environment(MockDataStore.preview)
-        .environment(AppSettings())
-        .environment(PushService.shared)
+// MARK: Active-tab-reselect → scroll-to-top coordination
+
+/// Value bumped by the tab shell whenever the already-selected tab is re-tapped.
+/// A tab's scroll content reads it with `@Environment(\.tabReselectTrigger)` and
+/// feeds it to `scrollToTopOnTabReselect(trigger:proxy:)` (see `ScrollToTop`).
+/// Injected by both `StudentTabView` and `InstructorTabView`; defined once here.
+private struct TabReselectTriggerKey: EnvironmentKey {
+    static let defaultValue = 0
+}
+
+extension EnvironmentValues {
+    var tabReselectTrigger: Int {
+        get { self[TabReselectTriggerKey.self] }
+        set { self[TabReselectTriggerKey.self] = newValue }
+    }
 }

@@ -31,6 +31,7 @@ struct EventDetailView: View {
     @State private var confirmLeave = false
     @State private var confirmCancel = false
     @State private var confirmDelete = false
+    @State private var showHeroZoom = false
 
     private var isMine: Bool { data.isMine(event) }
 
@@ -57,6 +58,10 @@ struct EventDetailView: View {
                         .padding(.top, 20)
                     sections
                         .padding(.top, 24)
+                    if canManage {
+                        requestsSection
+                            .padding(.top, 24)
+                    }
                     whoIsGoing
                         .padding(.top, 20)
                 }
@@ -125,6 +130,12 @@ struct EventDetailView: View {
             .clipped()
             .overlay(alignment: .bottomLeading) { heroCaption }
             .overlay(alignment: .topTrailing) { heroButtons }
+            // Tap the highlight photo to open it full-screen. The overlaid close/moderation
+            // buttons handle their own taps and take priority, so only the photo area opens the
+            // viewer — and only when there's a real highlight to show.
+            .contentShape(Rectangle())
+            .onTapGesture { if event.highlight != nil { showHeroZoom = true } }
+            .fullScreenImageZoom(data: event.highlight, isPresented: $showHeroZoom)
     }
 
     @ViewBuilder
@@ -218,6 +229,70 @@ struct EventDetailView: View {
         .accessibilityIdentifier("event.moderation")
     }
 
+    // MARK: - Organizer requests (accept / decline join requests)
+
+    @ViewBuilder
+    private var requestsSection: some View {
+        let requests = data.pendingRequests(for: event)
+        let full = event.spotsLeft == 0
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                SectionHeader(text: "REQUESTS")
+                if !requests.isEmpty {
+                    Text("\(requests.count)")
+                        .font(FloweFont.mono(10)).foregroundStyle(.white)
+                        .frame(minWidth: 18).padding(.vertical, 2).padding(.horizontal, 4)
+                        .background(Capsule().fill(FlowGradients.gradDark))
+                }
+                Spacer()
+            }
+            if requests.isEmpty {
+                Text("New requests to join appear here for you to accept or decline.")
+                    .font(FloweFont.sans(13)).foregroundStyle(Color.floweMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                if full {
+                    Text("This event is full — decline a request or leave a spot open before accepting more.")
+                        .font(FloweFont.sans(12)).foregroundStyle(Color.floweCancel)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                ForEach(requests, id: \.studentID) { requestRow($0, acceptDisabled: full) }
+            }
+        }
+        .padding(.horizontal, 20)
+    }
+
+    private func requestRow(_ req: RemoteRegistration, acceptDisabled: Bool) -> some View {
+        HStack(spacing: 12) {
+            InitialAvatar(name: req.studentName, size: 40)
+            Text(req.studentName.isEmpty ? String(localized: "A student") : req.studentName)
+                .font(FloweFont.sans(14, .medium)).foregroundStyle(Color.floweInk).lineLimit(1)
+            Spacer(minLength: 8)
+            Button {
+                Haptic.tap(); data.respondToEventRequest(req, accepted: false)
+            } label: {
+                Image(systemName: "xmark").font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.floweCancel).frame(width: 36, height: 36)
+                    .background(Color.floweCancel.opacity(0.10), in: Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Decline \(req.studentName)")
+            Button {
+                Haptic.success(); data.respondToEventRequest(req, accepted: true)
+            } label: {
+                Image(systemName: "checkmark").font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.white).frame(width: 36, height: 36)
+                    .background(acceptDisabled ? AnyShapeStyle(Color.floweMuted.opacity(0.4))
+                                               : AnyShapeStyle(FlowGradients.gradDark), in: Circle())
+            }
+            .buttonStyle(.plain)
+            .disabled(acceptDisabled)
+            .accessibilityLabel("Accept \(req.studentName)")
+        }
+        .padding(12)
+        .floweCard(cornerRadius: 14)
+    }
+
     // MARK: - Organizer card
 
     private var organizerCard: some View {
@@ -244,7 +319,8 @@ struct EventDetailView: View {
                 Text("HOSTED BY")
                     .font(FloweFont.mono(9))
                     .foregroundStyle(Color.floweMuted)
-                Text(event.organizerName)
+                Text({ let n = data.displayIdentity(ownerID: event.organizerID, fallbackName: event.organizerName).name
+                       return n.isEmpty ? String(localized: "Someone") : n }())
                     .font(FloweFont.sans(15, .medium))
                     .foregroundStyle(Color.floweInk)
                 // Only a real rating — never a fabricated 0.0 before the first review.
@@ -419,32 +495,54 @@ struct EventDetailView: View {
 
     @ViewBuilder
     private var studentRail: some View {
-        switch event.status {
-        case .open:
-            VStack(spacing: 8) {
-                GradientButton(title: "Join this event") { data.join(event) }
-                    .accessibilityIdentifier("event.join")
-                Text(event.price == 0
-                     ? "Free event."
-                     : "Free to join. You'll pay your instructor directly.")
-                    .font(FloweFont.mono(9))
-                    .foregroundStyle(Color.floweMuted)
-                    .multilineTextAlignment(.center)
-            }
-        case .joined:
-            VStack(spacing: 10) {
-                HStack(spacing: 6) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(Color.flowePinkDeep)
-                    Text("You're going.")
-                        .font(FloweFont.sans(13))
-                        .foregroundStyle(Color.floweInk)
+        // A finished or called-off class can't be acted on, whatever my request state.
+        if case .ended = event.status { statusBar }
+        else if case .cancelled = event.status { statusBar }
+        else {
+            // Events are request → organizer accepts (like lesson bookings). My standing decides the rail.
+            switch data.requestState(for: event) {
+            case .accepted:
+                VStack(spacing: 10) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.flowePinkDeep)
+                        Text("You're in.").font(FloweFont.sans(13)).foregroundStyle(Color.floweInk)
+                    }
+                    SecondaryButton(title: "Leave this event") { confirmLeave = true }
+                        .accessibilityIdentifier("event.leave")
                 }
-                SecondaryButton(title: "Leave this event") { confirmLeave = true }
-                    .accessibilityIdentifier("event.leave")
+            case .requested:
+                VStack(spacing: 10) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "clock.badge.checkmark").foregroundStyle(Color.flowePinkDeep)
+                        Text("Requested — waiting for \(event.organizerName) to accept.")
+                            .font(FloweFont.sans(13)).foregroundStyle(Color.floweInk)
+                            .multilineTextAlignment(.center)
+                    }
+                    SecondaryButton(title: "Withdraw request") { confirmLeave = true }
+                        .accessibilityIdentifier("event.leave")
+                }
+            case .declined:
+                VStack(spacing: 10) {
+                    Text("Not accepted this time.")
+                        .font(FloweFont.sans(13)).foregroundStyle(Color.floweMuted)
+                    SecondaryButton(title: "Dismiss") { data.leave(event) }
+                }
+            case .notRequested:
+                if case .full = event.status {
+                    statusBar
+                } else {
+                    VStack(spacing: 8) {
+                        GradientButton(title: "Request to join") { data.join(event) }
+                            .accessibilityIdentifier("event.join")
+                        Text(event.price == 0
+                             ? "Free event. The organizer accepts your request."
+                             : "Free to request. If accepted, you'll pay your instructor directly.")
+                            .font(FloweFont.mono(9))
+                            .foregroundStyle(Color.floweMuted)
+                            .multilineTextAlignment(.center)
+                    }
+                }
             }
-        case .full, .ended, .cancelled:
-            statusBar
         }
     }
 
@@ -478,28 +576,4 @@ struct EventDetailView: View {
         default:         return ""
         }
     }
-}
-
-#Preview {
-    let store = MockDataStore.preview
-    store.currentUserID = FloweConstants.localOwnerID
-    store.currentUserName = "Taylor Brooks"
-    store.addEvent(
-        title: "Sunrise Reformer Flow",
-        about: "A slow, breath-led reformer class to open the week. All levels — bring grip socks.",
-        location: "Studio Flowe, 12 Rue de la Paix",
-        startsAt: Date().addingTimeInterval(3 * 24 * 3600),
-        durationMinutes: 60,
-        capacity: 12,
-        price: 30,
-        image: nil
-    )
-    return Group {
-        if let event = store.events.first {
-            EventDetailView(event: event)
-        }
-    }
-    .environment(store)
-    .environment(AppSettings())
-    .environment(AppSession())
 }

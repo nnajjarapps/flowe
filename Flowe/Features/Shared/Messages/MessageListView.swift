@@ -9,10 +9,14 @@ import SwiftUI
 struct MessageListView: View {
     @Environment(MockDataStore.self) private var data
     @Environment(AppSession.self) private var session
+    // Optional: the student TabShell has no InstructorRouter in its environment. Reading it as an
+    // optional keeps the shared inbox working (and crash-free) on the student side.
+    @Environment(InstructorRouter.self) private var router: InstructorRouter?
 
     @State private var search = ""
     @State private var showCompose = false
     @State private var deleteTarget: Counterpart?
+    @State private var path: [Counterpart] = []
 
     private var conversations: [ConversationSummary] { data.conversations }
 
@@ -26,7 +30,7 @@ struct MessageListView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ScrollView {
                 LazyVStack(spacing: 0) {
                     searchField
@@ -34,13 +38,11 @@ struct MessageListView: View {
                         .padding(.top, 4)
                         .padding(.bottom, 12)
 
-                    ForEach(filtered) { summary in
-                        NavigationLink {
-                            ConversationView(counterpart: summary.counterpart)
-                        } label: {
+                    ForEach(Array(filtered.enumerated()), id: \.element.id) { index, summary in
+                        NavigationLink(value: summary.counterpart) {
                             row(summary)
                         }
-                        .buttonStyle(.plain)
+                        .flowePressable()
                         .contextMenu {
                             Button(role: .destructive) {
                                 deleteTarget = summary.counterpart
@@ -48,6 +50,7 @@ struct MessageListView: View {
                                 Label("Delete conversation", systemImage: "trash")
                             }
                         }
+                        .floweAppear(index)
                         Divider().overlay(Color.floweBorder).padding(.leading, 78)
                     }
 
@@ -65,7 +68,18 @@ struct MessageListView: View {
             }
             .background(Color.flowWhite)
             .safeAreaInset(edge: .top, spacing: 0) { header }
+            .navigationDestination(for: Counterpart.self) { ConversationView(counterpart: $0) }
+            // Manual pull-to-refresh on the inbox — the one instant way to pull new conversations /
+            // unread state on a serverless app between pushes. On the ScrollView so the swipe lands.
             .refreshable { await data.syncMessages() }
+        }
+        // Consume a router deep-link (from the Students screen or a Calendar card's Message action).
+        // initial:true covers the target being set before this tab first renders; clearing it after
+        // routing prevents a re-push on later visits to Messages.
+        .onChange(of: router?.pendingCounterpart, initial: true) { _, target in
+            guard let target else { return }
+            path = [target]
+            router?.pendingCounterpart = nil
         }
         .task { await data.syncMessages() }
         .sheet(isPresented: $showCompose) { NewMessageSheet() }
@@ -203,11 +217,4 @@ struct MessageListView: View {
         .frame(maxWidth: .infinity)
         .padding(.top, 60)
     }
-}
-
-#Preview {
-    MessageListView()
-        .environment(MockDataStore.preview)
-        .environment(AppSettings())
-        .environment(AppSession())
 }

@@ -3,16 +3,26 @@ import SwiftUI
 /// A single student review on the instructor profile: name, star rating, relative time, and body.
 /// Backed by a real `Review` anchored to a completed booking — see `ReviewService`.
 struct ReviewRow: View {
+    @Environment(MockDataStore.self) private var data
+
     let review: Review
+
+    /// The reviewer's CURRENT name, resolved live from their profile — not the snapshot
+    /// `Review.studentName` (which re-stamps from the remote each sync, so backfill can't fix it).
+    /// Falls back to the review's own display name ("A student") when nothing is cached.
+    private var reviewerName: String {
+        let idty = data.displayIdentity(ownerID: review.studentID, fallbackName: review.studentName)
+        return idty.name.isEmpty ? review.displayName : idty.name
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
                 // Students have no public listing photo, so the initial stands in.
-                InitialAvatar(name: review.displayName, size: 40)
+                InitialAvatar(name: reviewerName, size: 40)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(review.displayName)
+                    Text(reviewerName)
                         .font(FloweFont.serif(15, .medium))
                         .foregroundStyle(Color.floweInk)
                     Text(review.relativeTime)
@@ -58,17 +68,4 @@ struct InitialAvatar: View {
                     .foregroundStyle(Color.flowePinkDeep)
             )
     }
-}
-
-#Preview {
-    ReviewRow(
-        review: Review(
-            bookingID: "b1", instructorID: "i1", studentID: "s1",
-            studentName: "Mia Tanaka", rating: 5,
-            text: "Elena's cueing is unreal — I finally understand what engaging my core actually feels like.",
-            createdAt: Date().addingTimeInterval(-2 * 86_400)
-        )
-    )
-    .padding()
-    .background(Color.flowWhite)
 }

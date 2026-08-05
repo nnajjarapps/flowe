@@ -1,90 +1,78 @@
 {
-  "sourceLanguage" : "en",
-  "strings" : {
-    "CFBundleDisplayName" : {
-      "comment" : "Bundle display name",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Flowe"
+  "sourceLanguage": "en",
+  "strings": {
+    "CFBundleDisplayName": {
+      "comment": "Bundle display name",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Flowe"
           }
         }
       }
     },
-    "CFBundleName" : {
-      "comment" : "Bundle name",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Flowe"
+    "CFBundleName": {
+      "comment": "Bundle name",
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Flowe"
           }
         }
       }
     },
-    "NSLocationWhenInUseUsageDescription" : {
-      "comment" : "Shown by iOS when Flowe first asks for location. Must cover BOTH uses: on-device distance for students, and the public teaching area for instructors.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "يستخدم Flowe موقعك لعرض المدربين القريبين منك. وإذا كنت تُدرّس عبر Flowe، فستظهر المنطقة التقريبية التي تختارها في ملفك العام ليجدك الطلاب — ولن يظهر عنوانك الدقيق أبدًا."
+    "NSLocationWhenInUseUsageDescription": {
+      "comment": "Shown by iOS when Flowe first asks for location. Must cover BOTH uses: on-device distance for students, and the public teaching area for instructors.",
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يستخدم Flowe موقعك لعرض المدربين القريبين منك. وإذا كنت تُدرّس عبر Flowe، فستظهر المنطقة التقريبية التي تختارها في ملفك العام ليجدك الطلاب — ولن يظهر عنوانك الدقيق أبدًا."
           }
         },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Flowe uses your location to show instructors near you. If you teach on Flowe, the approximate area you choose is shown on your public profile so students can find you — never your exact address."
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flowe uses your location to show instructors near you. If you teach on Flowe, the approximate area you choose is shown on your public profile so students can find you — never your exact address."
           }
         },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Flowe usa tu ubicación para mostrarte instructores cercanos. Si enseñas en Flowe, la zona aproximada que elijas aparecerá en tu perfil público para que los alumnos te encuentren, nunca tu dirección exacta."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Flowe utilise votre position pour vous montrer les instructeurs à proximité. Si vous enseignez sur Flowe, la zone approximative que vous choisissez apparaît sur votre profil public afin que les élèves vous trouvent — jamais votre adresse exacte."
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "‏Flowe משתמש במיקום שלך כדי להציג מדריכים קרוב אליך. אם את/ה מלמד/ת ב‑Flowe, האזור המשוער שתבחר/י יוצג בפרופיל הציבורי שלך כדי שמתאמנים יוכלו למצוא אותך — לעולם לא הכתובת המדויקת."
           }
         }
       }
     },
-    "NSPhotoLibraryUsageDescription" : {
-      "comment" : "Shown by iOS when Flowe first asks for photo library access.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "يستخدم Flowe مكتبة صورك حتى تتمكن من مشاركة الصور في المنشورات."
+    "NSPhotoLibraryUsageDescription": {
+      "comment": "Shown by iOS when Flowe first asks for photo library access.",
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يستخدم Flowe مكتبة صورك حتى تتمكن من مشاركة الصور في المنشورات."
           }
         },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Flowe uses your photo library so you can share images in posts."
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flowe uses your photo library so you can share images in posts."
           }
         },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Flowe usa tu fototeca para que puedas compartir imágenes en las publicaciones."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Flowe utilise votre photothèque afin que vous puissiez partager des images dans les publications."
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "‏Flowe משתמש בספריית התמונות שלך כדי שתוכל/י לשתף תמונות בפוסטים."
           }
         }
       }
     }
   },
-  "version" : "1.0"
+  "version": "1.0"
 }

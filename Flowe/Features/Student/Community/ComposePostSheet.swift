@@ -15,6 +15,8 @@ struct ComposePostSheet: View {
     @State private var instructorID: String = ""
     @State private var text = ""
     @State private var filterMessage: String?
+    /// A soft on-device moderation concern (Flowe Intelligence) → "post anyway / edit?" dialog.
+    @State private var moderationConcern: String?
 
     @State private var image: Data?
     @State private var pickerItem: PhotosPickerItem?
@@ -111,6 +113,17 @@ struct ComposePostSheet: View {
             } message: {
                 Text(filterMessage ?? "")
             }
+            // Soft AI second pass: surfaces a concern but lets the author decide (the model can be wrong).
+            .confirmationDialog("A quick check",
+                                isPresented: .init(get: { moderationConcern != nil },
+                                                   set: { if !$0 { moderationConcern = nil } }),
+                                titleVisibility: .visible,
+                                presenting: moderationConcern) { _ in
+                Button("Post anyway") { moderationConcern = nil; finishPublish() }
+                Button("Edit", role: .cancel) { moderationConcern = nil }
+            } message: { concern in
+                Text(concern)
+            }
         }
     }
 
@@ -175,12 +188,19 @@ struct ComposePostSheet: View {
             filterMessage = rejection.message
             return
         }
+        // Non-AI devices (the majority) stay fully synchronous; only the on-device slice does the check.
+        guard FloweAI.isAvailable else { finishPublish(); return }
+        Task {
+            if let concern = await FloweAI.moderationConcern(text) {
+                moderationConcern = concern
+                return
+            }
+            finishPublish()
+        }
+    }
+
+    private func finishPublish() {
         data.addPost(type: type, instructorName: selectedInstructor?.name, text: text, image: image)
         dismiss()
     }
-}
-
-#Preview {
-    ComposePostSheet()
-        .environment(MockDataStore.preview)
 }

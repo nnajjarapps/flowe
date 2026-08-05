@@ -6,6 +6,7 @@ import SwiftUI
 struct NoShowShieldView: View {
     @Environment(MockDataStore.self) private var data
     @Environment(AppSettings.self) private var settings
+    @Environment(\.locale) private var locale
 
     private var awaiting: [Booking] { data.sessionsAwaitingAttendance }
     private var owed: [Booking] { data.owedFees }
@@ -126,9 +127,12 @@ struct NoShowShieldView: View {
             bookingLine(booking, reason: strikes == 1 ? "1 prior no-show" : "\(strikes) prior no-shows")
             Button {
                 guard let sid = booking.studentID else { return }
+                // Resolve the live name so the DM greets the student by their current name, not a stale
+                // "Member" snapshot.
+                let name = data.displayIdentity(ownerID: sid, fallbackName: booking.studentName).name
                 data.sendMessage(
-                    to: Counterpart(id: sid, name: booking.studentName),
-                    text: "Hi \(booking.studentName.split(separator: " ").first.map(String.init) ?? "there") — just confirming our \(booking.type) on \(booking.date) at \(booking.time). See you then! 🌸"
+                    to: Counterpart(id: sid, name: name),
+                    text: "Hi \(name.split(separator: " ").first.map(String.init) ?? "there") — just confirming our \(booking.type) on \(booking.date) at \(booking.time). See you then! 🌸"
                 )
             } label: {
                 Label("Send confirmation", systemImage: "paperplane")
@@ -147,13 +151,16 @@ struct NoShowShieldView: View {
     // MARK: - Pieces
 
     private func bookingLine(_ booking: Booking, reason: String? = nil) -> some View {
-        HStack(spacing: 12) {
+        // Resolve the name from the live StudentProfile (like the avatar already does), not the frozen
+        // booking snapshot — same fix as the Students list. See [[StudentsList]] / displayIdentity.
+        let name = data.displayIdentity(ownerID: booking.studentID, fallbackName: booking.studentName).name
+        return HStack(spacing: 12) {
             AvatarView(id: "", photo: data.studentPhoto(forOwnerID: booking.studentID ?? ""), size: 40)
             VStack(alignment: .leading, spacing: 2) {
-                Text(booking.studentName.isEmpty ? "Client" : booking.studentName)
+                Text(name.isEmpty ? "Client" : name)
                     .font(FloweFont.serif(15))
                     .foregroundStyle(Color.floweInk)
-                Text("\(booking.date) · \(booking.time) · \(booking.type)")
+                (Text(booking.localizedDate(locale)) + Text(" · ") + Text(booking.localizedTime(locale)) + Text(" · ") + Text(localizedTag: booking.type))
                     .font(FloweFont.sans(12))
                     .foregroundStyle(Color.floweMuted)
                     .lineLimit(1)
@@ -176,18 +183,30 @@ struct NoShowShieldView: View {
         }
     }
 
-    private var emptyState: some View {
-        EmptyStateView(
-            icon: "checkmark.shield",
-            title: "You're covered",
-            message: "Set a cancellation policy on your lesson types, and no-shows and late cancels will show up here to protect your income."
-        )
-        .padding(.top, 40)
+    @ViewBuilder private var emptyState: some View {
+        if data.hasActiveCancellationPolicy {
+            // Protection IS on — nothing owed yet.
+            EmptyStateView(
+                icon: "checkmark.shield",
+                title: "You're covered",
+                message: "No-shows and late cancels will show up here so you can collect the fee directly. Flowe only tracks what's owed — it never charges anyone."
+            )
+            .padding(.top, 40)
+        } else {
+            // Not set up — say so plainly and show how to turn it on.
+            VStack(spacing: 16) {
+                EmptyStateView(
+                    icon: "shield.lefthalf.filled",
+                    title: "Not set up yet",
+                    message: "Add a cancellation policy to a lesson type and Flowe protects your income: cancel-within-window and no-shows are tracked here for you to collect directly. Students see the policy before they book."
+                )
+                Text("Set it on each lesson type in Edit Profile → your lesson types.")
+                    .font(FloweFont.sans(12))
+                    .foregroundStyle(Color.floweMuted)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
+            }
+            .padding(.top, 40)
+        }
     }
-}
-
-#Preview {
-    NavigationStack { NoShowShieldView() }
-        .environment(MockDataStore.preview)
-        .environment(AppSettings())
 }

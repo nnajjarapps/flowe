@@ -52,6 +52,12 @@ struct RecommendedSection: View {
         preferences?.hasOnboarded != true
     }
 
+    /// A compact natural-language digest of the student's quiz answers — the input to the on-device
+    /// "why this instructor" rationale (Flowe Intelligence). Empty when nothing was answered.
+    private var prefsSummary: String {
+        preferences.map { FloweAI.preferenceSummary($0) } ?? ""
+    }
+
     var body: some View {
         // Compute once (MatchEngine.rank runs on access). An onboarded student with nothing to rank
         // (empty visible catalog) renders nothing rather than an orphan header over blank space.
@@ -79,10 +85,11 @@ struct RecommendedSection: View {
                     // Bleed the carousel to the screen edges (inset lives on the inner HStack).
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 12) {
-                            ForEach(matches) { result in
-                                RecommendedCard(result: result) {
+                            ForEach(Array(matches.enumerated()), id: \.element.id) { index, result in
+                                RecommendedCard(result: result, prefsSummary: prefsSummary) {
                                     onSelect(result.instructor, distance(result.instructor))
                                 }
+                                .floweAppear(index)
                             }
                         }
                         .padding(.horizontal, 20)
@@ -115,87 +122,116 @@ struct RecommendedSection: View {
 private struct RecommendedCard: View {
     @Environment(AppSettings.self) private var settings
     let result: MatchResult
+    /// The student's quiz digest — non-empty enables the ✨ "why this instructor" rationale.
+    var prefsSummary: String = ""
     let onTap: () -> Void
+
+    /// On-device rationale for why this instructor fits the student. Nil until generated / if unavailable.
+    @State private var rationale: String?
 
     private var instructor: Instructor { result.instructor }
 
+    // The label is split into named sub-views on purpose. As one monolithic Button-label
+    // expression this body is a huge nested `ModifiedContent` type that the DEBUG (`-Onone`)
+    // SwiftUI toolchain miscompiles — it corrupts the value's copy/destroy and crashes with
+    // EXC_BAD_ACCESS in `initializeWithCopy for StrokeShapeView` / `swift_retain` the moment the
+    // card renders. Breaking it into separately type-checked `some View` pieces keeps the top-level
+    // type small and stops the miscompile.
     var body: some View {
         Button(action: onTap) {
             VStack(alignment: .leading, spacing: 0) {
-                // Image + match% pill
-                RemoteImage(id: instructor.img, photo: instructor.photo, width: 400, height: 260)
-                    .frame(height: 120)
-                    .frame(maxWidth: .infinity)
-                    .background(Color.flowePinkPale)
-                    .overlay(FlowGradients.grad.opacity(0.35))
-                    .overlay(alignment: .topTrailing) {
-                        Text("\(result.matchPercent)% match")
-                            .font(FloweFont.mono(11))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .background(Capsule().fill(FlowGradients.gradDark))
-                            .padding(8)
-                    }
-                    .clipped()
-
-                // Detail column
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(instructor.name)
-                        .font(FloweFont.serif(15))
-                        .foregroundStyle(Color.floweInk)
-                        .lineLimit(1)
-
-                    if instructor.reviews > 0 {
-                        StarRatingView(rating: instructor.rating)
-                    } else {
-                        Text("New")
-                            .font(FloweFont.mono(10))
-                            .foregroundStyle(Color.floweMuted)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(Color.flowePink.opacity(0.10), in: Capsule())
-                    }
-
-                    HStack(spacing: 4) {
-                        ForEach(instructor.specialties.prefix(2), id: \.self) { s in
-                            SpecialtyTag(text: s)
-                        }
-                    }
-
-                    Text(settings.money(instructor.price))
-                        .font(FloweFont.serif(13, .medium))
-                        .foregroundStyle(Color.floweInk)
-                }
-                .padding(12)
+                photo
+                details
             }
             .frame(width: 200, alignment: .leading)
             .floweCard()
         }
-        .buttonStyle(.plain)
+        .flowePressable()
+        .task { await loadRationale() }
     }
-}
 
-#Preview {
-    let data = MockDataStore.preview
-    return ScrollView {
-        VStack(spacing: 24) {
-            RecommendedSection(
-                preferences: StudentPreferences(disciplines: ["Reformer"], completedAt: Date()),
-                distance: { _ in nil },
-                onSelect: { _, _ in },
-                onTakeQuiz: {}
-            )
-            RecommendedSection(
-                preferences: nil,
-                distance: { _ in nil },
-                onSelect: { _, _ in },
-                onTakeQuiz: {}
-            )
+    /// Generate the "why this instructor" line on-device, once, when there's a preference digest and the
+    /// model is available. Silent no-op otherwise — the card just shows without the line.
+    private func loadRationale() async {
+        guard rationale == nil, !prefsSummary.isEmpty else { return }
+        if #available(iOS 26, *), FloweAI.isAvailable {
+            rationale = try? await FloweIntelligence.shared.whyThisInstructor(
+                studentSummary: prefsSummary,
+                instructor: instructor.name,
+                specialties: instructor.specialties)
         }
-        .padding(.vertical)
     }
-    .background(Color.flowWhite)
-    .environment(data)
-    .environment(AppSettings())
+
+    /// Instructor photo with the gradient wash and the match% pill.
+    private var photo: some View {
+        RemoteImage(id: instructor.img, photo: instructor.photo, width: 400, height: 260)
+            .frame(height: 120)
+            .frame(maxWidth: .infinity)
+            .background(Color.flowePinkPale)
+            .overlay(FlowGradients.grad.opacity(0.35))
+            .overlay(alignment: .topTrailing) { matchBadge }
+            .clipped()
+    }
+
+    private var matchBadge: some View {
+        Text("\(result.matchPercent)% match")
+            .font(FloweFont.mono(11))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(Capsule().fill(FlowGradients.gradDark))
+            .padding(8)
+    }
+
+    /// Name / rating / specialties / starting price.
+    private var details: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(instructor.name)
+                .font(FloweFont.serif(15))
+                .foregroundStyle(Color.floweInk)
+                .lineLimit(1)
+
+            ratingOrNew
+
+            HStack(spacing: 4) {
+                ForEach(instructor.specialties.prefix(2), id: \.self) { s in
+                    SpecialtyTag(text: s)
+                }
+            }
+
+            // ✨ On-device "why this instructor for you" line (Flowe Intelligence). Appears when the
+            // rationale is ready; absent otherwise, so the card never waits on it. See [[FloweIntelligence]].
+            if let rationale, !rationale.isEmpty {
+                HStack(alignment: .top, spacing: 4) {
+                    Image(systemName: "sparkles").font(.system(size: 9)).foregroundStyle(Color.flowePinkDeep)
+                    Text(rationale)
+                        .font(FloweFont.sans(11))
+                        .foregroundStyle(Color.flowePinkDeep)
+                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            // "from" = starting price (cheapest lesson type); hidden when 0 (no priced type).
+            if instructor.price > 0 {
+                Text("from \(settings.money(instructor.price))")
+                    .font(FloweFont.serif(13, .medium))
+                    .foregroundStyle(Color.floweInk)
+            }
+        }
+        .padding(12)
+    }
+
+    @ViewBuilder private var ratingOrNew: some View {
+        if instructor.reviews > 0 {
+            StarRatingView(rating: instructor.rating)
+        } else {
+            Text("New")
+                .font(FloweFont.mono(10))
+                .foregroundStyle(Color.floweMuted)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(Color.flowePink.opacity(0.10), in: Capsule())
+        }
+    }
 }

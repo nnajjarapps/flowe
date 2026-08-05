@@ -252,8 +252,3 @@ struct ComposeEventSheet: View {
         dismiss()
     }
 }
-
-#Preview {
-    ComposeEventSheet()
-        .environment(MockDataStore.preview)
-}

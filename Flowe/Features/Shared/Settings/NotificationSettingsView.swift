@@ -148,9 +148,3 @@ struct NotificationSettingsView: View {
         }
     }
 }
-
-#Preview {
-    NotificationSettingsView()
-        .environment(AppSession())
-        .environment(PushService.shared)
-}

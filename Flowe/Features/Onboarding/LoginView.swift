@@ -86,10 +86,3 @@ struct LoginView: View {
         }
     }
 }
-
-#Preview {
-    NavigationStack {
-        LoginView(role: .student)
-            .environment(AppSession())
-    }
-}

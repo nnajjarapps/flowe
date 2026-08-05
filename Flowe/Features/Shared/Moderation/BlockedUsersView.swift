@@ -49,8 +49,3 @@ struct BlockedUsersView: View {
         }
     }
 }
-
-#Preview {
-    BlockedUsersView()
-        .environment(MockDataStore.preview)
-}

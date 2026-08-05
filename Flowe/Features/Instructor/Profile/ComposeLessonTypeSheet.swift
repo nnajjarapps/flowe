@@ -42,7 +42,10 @@ struct ComposeLessonTypeSheet: View {
         _durationMinutes = State(initialValue: editing?.durationMinutes ?? 0)
         // A fresh type defaults to a small group; editing keeps the stored size (never below 1, since
         // the stepper can't state 0 — a stored 0 only comes from a migrated legacy name).
-        _capacity = State(initialValue: max(1, editing?.capacity ?? 2))
+        // Preserve a "not stated" (0) capacity when editing — `max(1, …)` used to force it to 1, so
+        // opening a migrated legacy offer (all created with capacity 0) just to add a price silently
+        // relabelled it "1-on-1" everywhere. New types still default to 2 (a small group).
+        _capacity = State(initialValue: editing?.capacity ?? 2)
         // nil (not stated) and n both leave the toggle off; only a genuine 0 is "Free".
         _isFree = State(initialValue: editing?.price == 0)
         _priceText = State(initialValue: (editing?.price).flatMap { $0 > 0 ? String($0) : nil } ?? "")
@@ -91,9 +94,13 @@ struct ComposeLessonTypeSheet: View {
                 }
 
                 Section {
-                    Stepper(value: $capacity, in: 1...50) {
-                        // A one-person lesson reads "1-on-1"; any larger group states the ceiling.
-                        if capacity == 1 {
+                    // Range starts at 0 = "Not stated" so a migrated legacy type keeps that state and
+                    // the group-size line stays omitted (matches `LessonType.capacity` semantics and the
+                    // Duration "Not set" pattern); 1 reads "1-on-1"; larger states the ceiling.
+                    Stepper(value: $capacity, in: 0...50) {
+                        if capacity == 0 {
+                            Text("Not stated").font(FloweFont.sans(14)).foregroundStyle(Color.floweMuted)
+                        } else if capacity == 1 {
                             Text("1-on-1").font(FloweFont.sans(14))
                         } else {
                             Text("^[\(capacity) spot](inflect: true)").font(FloweFont.sans(14))
@@ -259,13 +266,20 @@ struct ComposeLessonTypeSheet: View {
         }
 
         // Free → a genuine 0; not free + a typed amount → that amount; not free + blank → nil (price
-        // not stated), never a fabricated 0.
-        let price: Int? = isFree ? 0 : Int(priceText.trimmingCharacters(in: .whitespaces))
+        // not stated), never a fabricated 0. Parse via `Self.wholeNumber` (NOT bare `Int(_:)`) so a
+        // non-ASCII numeric keyboard — Eastern-Arabic-Indic digits on an Arabic keyboard, which the
+        // app ships — or a grouping separator doesn't silently drop the amount to nil and hide the
+        // instructor from Discover.
+        let price: Int? = isFree ? 0 : Self.wholeNumber(priceText)
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedDetails = details.trimmingCharacters(in: .whitespacesAndNewlines)
+        // A percentage fee is clamped to 0…100 — `CancellationPolicy.amount` computes `price * fee/100`,
+        // so an un-clamped 150% would show the student a fee larger than the session itself. A flat
+        // (currency) fee has no such ceiling.
+        let rawFee = cancelWindowHours > 0 ? (Self.wholeNumber(feeText) ?? 0) : 0
         let policy = CancellationPolicy(
             windowHours: cancelWindowHours,
-            fee: cancelWindowHours > 0 ? (Int(feeText.trimmingCharacters(in: .whitespaces)) ?? 0) : 0,
+            fee: feeIsPercent ? min(rawFee, 100) : rawFee,
             feeIsPercent: feeIsPercent
         )
 
@@ -284,10 +298,20 @@ struct ComposeLessonTypeSheet: View {
         }
         dismiss()
     }
-}
 
-#Preview {
-    ComposeLessonTypeSheet()
-        .environment(MockDataStore.preview)
-        .environment(AppSettings())
+    /// Parse a user-typed whole-number amount that may contain non-ASCII digits (e.g. the
+    /// Eastern-Arabic-Indic ٠–٩ an Arabic keyboard's number pad emits) or grouping separators.
+    /// Bare `Int("٥٠")` / `Int("1,000")` both return nil — which silently voided prices and no-show
+    /// fees for exactly the Arabic-market users this app targets. Map each Unicode decimal digit to
+    /// its value via `wholeNumberValue` and drop everything else; nil only when there is no digit at
+    /// all (a blank field → "price not stated", preserved). The field is a whole-shekel `.numberPad`,
+    /// so no decimal point is possible — a stray separator is grouping, correctly ignored.
+    private static func wholeNumber(_ text: String) -> Int? {
+        var digits = ""
+        for ch in text where ch.isNumber {
+            guard let v = ch.wholeNumberValue, (0...9).contains(v) else { continue }
+            digits.append(Character("\(v)"))
+        }
+        return digits.isEmpty ? nil : Int(digits)
+    }
 }

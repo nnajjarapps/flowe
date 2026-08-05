@@ -12,11 +12,15 @@ struct InstructorDashboardView: View {
     @State private var showAvailability = false
     @State private var showEditProfile = false
     @State private var showPaywall = false
+    @State private var showStudioWizard = false
     @State private var showComposeEvent = false
     @State private var showShield = false
     @State private var showCoveragePicker = false
     @State private var showCoverageInbox = false
     @State private var selectedEvent: CommunityEvent?
+    @State private var selectedOpportunity: Opportunity?
+    @State private var manageOpportunity: Opportunity?
+    @State private var showComposeOpportunity = false
 
     /// The No-Show Shield card surfaces only when there's something to act on — a session to judge,
     /// a fee to reconcile, or a risky upcoming booking worth a nudge.
@@ -28,9 +32,13 @@ struct InstructorDashboardView: View {
     private var shieldSubtitle: String {
         var parts: [String] = []
         let awaiting = data.sessionsAwaitingAttendance.count
-        if awaiting > 0 { parts.append("\(awaiting) to review") }
-        if data.totalOwed > 0 { parts.append("\(settings.money(data.totalOwed)) owed") }
-        return parts.isEmpty ? "Cancellation protection" : parts.joined(separator: " · ")
+        if awaiting > 0 { parts.append(String(localized: "\(awaiting) to review")) }
+        if data.totalOwed > 0 { parts.append(String(localized: "\(settings.money(data.totalOwed)) owed")) }
+        if !parts.isEmpty { return parts.joined(separator: " · ") }
+        // Nothing to act on → say whether protection is actually ON, or prompt setup.
+        return data.hasActiveCancellationPolicy
+            ? String(localized: "Cancellation protection is on")
+            : String(localized: "Tap to protect against no-shows")
     }
 
     /// The OWNER coverage card surfaces once someone has claimed a session this instructor handed off —
@@ -40,7 +48,7 @@ struct InstructorDashboardView: View {
 
     private var ownerCoverageSubtitle: String {
         let n = data.myClaims.count
-        return n == 1 ? "1 instructor can cover — pick one" : "\(n) instructors can cover — pick one"
+        return n == 1 ? String(localized: "1 instructor can cover — pick one") : String(localized: "\(n) instructors can cover — pick one")
     }
 
     /// The REPLACER inbox surfaces when there's an inbound offer to claim, or cover pay still owed for
@@ -50,9 +58,9 @@ struct InstructorDashboardView: View {
     private var coverInboxSubtitle: String {
         var parts: [String] = []
         let offers = data.myOffers.count
-        if offers > 0 { parts.append(offers == 1 ? "1 to claim" : "\(offers) to claim") }
-        if data.totalCoverOwed > 0 { parts.append("\(settings.money(data.totalCoverOwed)) owed") }
-        return parts.isEmpty ? "Cover for nearby instructors" : parts.joined(separator: " · ")
+        if offers > 0 { parts.append(offers == 1 ? String(localized: "1 to claim") : String(localized: "\(offers) to claim")) }
+        if data.totalCoverOwed > 0 { parts.append(String(localized: "\(settings.money(data.totalCoverOwed)) owed")) }
+        return parts.isEmpty ? String(localized: "Cover for nearby instructors") : parts.joined(separator: " · ")
     }
 
     /// Accepted sessions scheduled for today — not the whole book of business. Pending requests
@@ -64,9 +72,9 @@ struct InstructorDashboardView: View {
         }
     }
 
-    /// Requests still awaiting an accept/decline.
+    /// Requests still awaiting an accept/decline. De-duped so a standing weekly series is ONE card.
     private var pendingRequests: [Booking] {
-        data.incomingBookings.filter { $0.status == .pending }
+        data.pendingRequestCards
     }
 
     /// Instructor's first name, preferring the listing (which they can edit) and falling back to the
@@ -81,19 +89,17 @@ struct InstructorDashboardView: View {
     }
 
     /// This week's earnings: accepted or completed sessions whose date falls in the current
-    /// Monday–Sunday week, priced at the instructor's rate. Was previously *every* outstanding
-    /// confirmed session with no date scope — which duplicated the profile's PROJECTED tile and made
-    /// the "THIS WEEK" label wrong. Payment is collected directly from the student, so this is a
-    /// projection, not a balance.
+    /// Monday–Sunday week, summing each booked lesson type's own price. Was previously *every*
+    /// outstanding confirmed session with no date scope — which duplicated the profile's PROJECTED tile
+    /// and made the "THIS WEEK" label wrong. Payment is collected directly from the student, so this is
+    /// a projection, not a balance.
     private var weekEarnings: Int {
-        let price = data.currentInstructor?.price ?? 0
         let now = Date()
-        let count = data.incomingBookings.filter { booking in
+        return data.incomingBookings.filter { booking in
             guard booking.status == .confirmed || booking.status == .completed,
                   let end = booking.sessionEnd(now: now) else { return false }
             return FloweWeek.isInCurrentWeek(end, now: now)
-        }.count
-        return count * price
+        }.reduce(0) { $0 + data.sessionEarning(for: $1) }
     }
 
     private var ratingDisplay: String {
@@ -115,9 +121,10 @@ struct InstructorDashboardView: View {
                     visibilityBanner
                 }
 
-                if shieldSignal {
-                    shieldCard
-                }
+                // Always present, not signal-gated: a new instructor needs to DISCOVER the shield and
+                // learn how to turn it on — hiding it until a fee is already owed is why it read as
+                // "unclear how to use". The subtitle carries the state (action items / on / not set up).
+                shieldCard
 
                 if ownerCoverageSignal {
                     ownerCoverageCard
@@ -145,15 +152,85 @@ struct InstructorDashboardView: View {
                             message: "When students book you, their sessions will show up here."
                         )
                     } else {
-                        ForEach(todaysSessions) { booking in
-                            SessionRow(booking: booking)
+                        // A group/duet class shows as ONE row with a fullness count, not N duplicate rows.
+                        ForEach(data.sessionGroups(todaysSessions)) { group in
+                            if group.isGroup {
+                                SessionRow(booking: group.primary,
+                                           rosterCount: group.bookings.count, capacity: group.capacity)
+                            } else {
+                                // Render every booking in a non-group slot, not just the first — else a
+                                // second session sharing the slot key silently vanishes from Today.
+                                ForEach(group.bookings) { SessionRow(booking: $0) }
+                            }
+                        }
+                    }
+                }
+
+                // Flowe Pro career marketplace (Phase 3). Cold-start liquidity surface: browse open
+                // gigs to pick up, and post + manage your own. See [[FlowePro]].
+                if !data.myOpportunities.isEmpty {
+                    VStack(alignment: .leading, spacing: FlowSpacing.md) {
+                        SectionHeader(text: "YOUR OPPORTUNITIES")
+                        ForEach(data.myOpportunities) { opp in
+                            Button { manageOpportunity = opp } label: {
+                                OpportunityCard(opportunity: opp)
+                            }
+                            .buttonStyle(.plain)
+                            .flowePressable()
+                        }
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: FlowSpacing.md) {
+                    HStack {
+                        SectionHeader(text: "OPPORTUNITIES")
+                        Spacer()
+                        Button {
+                            // Recruiting is the paid half of the Flowe Pro marketplace: posting an
+                            // opportunity is a premium **Boost** perk (applying is always free). A
+                            // non-Boost instructor meets the paywall instead of the composer. Existing
+                            // posts stay manageable after a lapse — creation is gated, management isn't,
+                            // matching the events flow below. See [[FlowePro]] / [[Paywall]].
+                            if subscription.isBoosted { showComposeOpportunity = true } else { showPaywall = true }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Label("Post", systemImage: "plus")
+                                    .font(FloweFont.sans(13, .medium))
+                                    .foregroundStyle(Color.flowePinkDeep)
+                                // Signals that Post is a Boost feature, so the paywall isn't a jolt.
+                                if !subscription.isBoosted {
+                                    Text("BOOST")
+                                        .font(FloweFont.mono(8))
+                                        .foregroundStyle(Color.flowePinkDeep)
+                                        .padding(.horizontal, 6).padding(.vertical, 2)
+                                        .background(Color.flowePink.opacity(0.14), in: Capsule())
+                                }
+                            }
+                        }
+                        .accessibilityIdentifier("dashboard.postOpportunity")
+                    }
+                    if data.openOpportunities.isEmpty {
+                        Text("No open opportunities nearby yet — post one to find a sub or grow your team.")
+                            .font(FloweFont.sans(13))
+                            .foregroundStyle(Color.floweMuted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        ForEach(data.openOpportunities) { opp in
+                            Button { selectedOpportunity = opp } label: {
+                                OpportunityCard(opportunity: opp)
+                            }
+                            .buttonStyle(.plain)
+                            .flowePressable()
                         }
                     }
                 }
 
                 VStack(alignment: .leading, spacing: FlowSpacing.md) {
                     SectionHeader(text: "QUICK ACTIONS")
-                    QuickActionsGrid(onTap: handle)
+                    QuickActionsGrid(
+                        onTap: handle,
+                        showSetupStudio: StudioSetupState(data: data, subscription: subscription).incompleteCoreSteps
+                    )
                 }
 
                 // Omitted entirely when the organizer has no events — a "YOUR EVENTS" header over
@@ -172,13 +249,20 @@ struct InstructorDashboardView: View {
             .padding(.bottom, FlowSpacing.xxxl)
         }
         .background(Color.flowWhite.ignoresSafeArea())
+        .task { await data.syncBookings(asInstructor: true) }
         .task { await data.syncEvents(asOrganizer: true) }
         .task { await data.syncCoverage(asInstructor: true) }
+        .task { await data.syncOpportunities() }
+        // Manual pull-to-refresh, restored alongside the on-appear .task + foreground re-sync: on a
+        // serverless CloudKit app there's no live socket, so a swipe-down is the one instant way to
+        // pull just-landed requests / event responses / coverage claims. Mirrors the .task syncs.
         .refreshable {
             await data.syncBookings(asInstructor: true)
             await data.syncEvents(asOrganizer: true)
             await data.syncCoverage(asInstructor: true)
+            await data.syncOpportunities()
         }
+        .fullScreenCover(isPresented: $showStudioWizard) { StudioSetupWizard() }
         .sheet(isPresented: $showAvailability) { AvailabilityView() }
         .sheet(isPresented: $showEditProfile) { EditProfileView() }
         .sheet(isPresented: $showPaywall) { PaywallView() }
@@ -191,6 +275,9 @@ struct InstructorDashboardView: View {
             // cancel / delete. Everywhere else (the student Community browse) leaves this false.
             EventDetailView(event: event, manageable: true)
         }
+        .sheet(item: $selectedOpportunity) { OpportunityDetailView(opportunity: $0) }
+        .sheet(item: $manageOpportunity) { OpportunityDetailView(opportunity: $0, manageable: true) }
+        .sheet(isPresented: $showComposeOpportunity) { ComposeOpportunitySheet() }
     }
 
     /// No-Show Shield entry — sessions to judge, fees owed, or a risky booking to nudge.
@@ -214,7 +301,7 @@ struct InstructorDashboardView: View {
             .padding(FlowSpacing.lg)
             .floweCard(cornerRadius: 18)
         }
-        .buttonStyle(.plain)
+        .flowePressable()
         .accessibilityIdentifier("dashboard.noShowShield")
     }
 
@@ -240,7 +327,7 @@ struct InstructorDashboardView: View {
             .padding(FlowSpacing.lg)
             .floweCard(cornerRadius: 18)
         }
-        .buttonStyle(.plain)
+        .flowePressable()
         .accessibilityIdentifier("dashboard.coverageOwner")
     }
 
@@ -266,7 +353,7 @@ struct InstructorDashboardView: View {
             .padding(FlowSpacing.lg)
             .floweCard(cornerRadius: 18)
         }
-        .buttonStyle(.plain)
+        .flowePressable()
         .accessibilityIdentifier("dashboard.coverInbox")
     }
 
@@ -292,12 +379,13 @@ struct InstructorDashboardView: View {
             .background(FlowGradients.gradDark)
             .clipShape(RoundedRectangle(cornerRadius: 20))
         }
-        .buttonStyle(.plain)
+        .flowePressable()
         .accessibilityIdentifier("dashboard.getDiscovered")
     }
 
     private func handle(_ action: QuickAction) {
         switch action.kind {
+        case .setupStudio:  showStudioWizard = true
         case .availability: showAvailability = true
         case .messages:     router.openMessages()
         case .earnings:     router.openEarnings()
@@ -350,17 +438,17 @@ struct InstructorDashboardView: View {
     private var kpiRow: some View {
         HStack(spacing: FlowSpacing.md) {
             StatTile(value: "\(todaysSessions.count)", label: "TODAY")
+                .contentTransition(.numericText())
+                .animation(FloweMotion.spring, value: todaysSessions.count)
+                .floweAppear(0)
             StatTile(value: settings.money(weekEarnings), label: "THIS WEEK", accent: .floweSuccess)
+                .contentTransition(.numericText())
+                .animation(FloweMotion.spring, value: weekEarnings)
+                .floweAppear(1)
             StatTile(value: ratingDisplay, label: "RATING", accent: .flowePink)
+                .contentTransition(.numericText())
+                .animation(FloweMotion.spring, value: ratingDisplay)
+                .floweAppear(2)
         }
     }
-}
-
-#Preview {
-    InstructorDashboardView()
-        .environment(MockDataStore.preview)
-        .environment(SubscriptionService())
-        .environment(AppSettings())
-        .environment(AppSession())
-        .environment(InstructorRouter())
 }

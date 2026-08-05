@@ -189,9 +189,3 @@ private extension View {
             .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.floweBorder, lineWidth: 1))
     }
 }
-
-#Preview {
-    EditStudentProfileView()
-        .environment(MockDataStore.preview)
-        .environment(AppSession())
-}

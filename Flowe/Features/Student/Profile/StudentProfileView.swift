@@ -26,11 +26,18 @@ struct StudentProfileView: View {
     let onClose: () -> Void
 
     @Environment(MockDataStore.self) private var data
+    @Environment(\.locale) private var locale
+
+    /// Presents the instructor's PRIVATE notes editor for this client.
+    @State private var showNoteEditor = false
 
     // MARK: - Resolved data
 
     /// The student's cached public profile, or nil until the first fetch lands.
     private var profile: StudentProfile? { data.studentProfile(forOwnerID: studentID) }
+
+    /// The instructor's PRIVATE clinical/safety note about this client (private DB only), if any.
+    private var note: ClientNote? { data.clientNote(forStudentID: studentID) }
 
     /// The instructor's OWN bookings with this student — the sole source of relationship context.
     private var mySessions: [Booking] {
@@ -102,6 +109,11 @@ struct StudentProfileView: View {
         }
         .presentationDragIndicator(.hidden)   // the hero owns a custom xmark; no grabber over the photo
         .accessibilityIdentifier("student.profile")
+        .sheet(isPresented: $showNoteEditor) {
+            ClientNoteEditorView(studentID: studentID, studentName: displayName) {
+                showNoteEditor = false
+            }
+        }
         .task {
             // Non-pruning single fetch — it can only insert or update this student's row, never delete
             // the one this open view is rendering.
@@ -255,6 +267,8 @@ struct StudentProfileView: View {
                 }
             }
 
+            privateNotes
+
             yourHistory
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -279,11 +293,11 @@ struct StudentProfileView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     if let last = lastSession {
                         historyRow(icon: "clock.arrow.circlepath",
-                                   label: "Last session · \(last.date)")
+                                   label: "Last session · \(last.localizedDate(locale))")
                     }
                     if let next = nextSession {
                         historyRow(icon: "calendar",
-                                   label: "Next session · \(next.date)")
+                                   label: "Next session · \(next.localizedDate(locale))")
                     }
                 }
             }
@@ -300,6 +314,102 @@ struct StudentProfileView: View {
             Text(verbatim: label)
                 .font(FloweFont.sans(14))
                 .foregroundStyle(Color.floweInk)
+        }
+    }
+
+    // MARK: - Private notes (instructor-only clinical/safety notes)
+
+    /// The instructor's PRIVATE notes about this client — injuries, pregnancy, conditions, emergency
+    /// contact, goals. This data lives ONLY in the private CloudKit database (see [[ClientNote]]); the
+    /// lock affordance makes that promise explicit. The whole block is a button that opens the editor.
+    private var privateNotes: some View {
+        section("PRIVATE NOTES") {
+            Button { showNoteEditor = true } label: {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "lock.fill")
+                            .font(.system(size: 10))
+                        Text("Private to you — only you can see this")
+                            .font(FloweFont.mono(10))
+                    }
+                    .foregroundStyle(Color.floweMuted)
+
+                    if let note, note.hasContent {
+                        noteReadRows(note)
+                    } else {
+                        HStack(spacing: 8) {
+                            Image(systemName: "square.and.pencil")
+                                .font(.system(size: 14))
+                                .foregroundStyle(Color.flowePinkDeep)
+                            Text("Add private notes")
+                                .font(FloweFont.sans(14))
+                                .foregroundStyle(Color.floweMuted)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(16)
+                .floweCard(cornerRadius: 18)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("student.privateNotes")
+        }
+    }
+
+    /// The structured read-out of a saved note — one labelled row per populated field. Safety-critical
+    /// fields (injury / pregnancy / conditions) always render when set; the rest only when non-empty.
+    @ViewBuilder
+    private func noteReadRows(_ note: ClientNote) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if note.hasInjury {
+                noteRow(icon: "cross.case.fill", tint: .floweCancel,
+                        label: "Injury", value: note.injuryNote)
+            }
+            if note.isPregnant {
+                noteRow(icon: "figure.stand", tint: .flowePinkDeep,
+                        label: "Pregnant", value: note.pregnancyNote)
+            }
+            // Trim before the emptiness test so a whitespace-only field doesn't render a labelled-but-blank
+            // row (matching ClientNote.hasFlags/hasContent, which trim).
+            if !note.conditions.trimmed.isEmpty {
+                noteRow(icon: "allergens", tint: .floweCancel,
+                        label: "Conditions", value: note.conditions)
+            }
+            if !note.emergencyContact.trimmed.isEmpty {
+                noteRow(icon: "phone.fill", tint: .flowePinkDeep,
+                        label: "Emergency contact", value: note.emergencyContact)
+            }
+            if !note.goals.trimmed.isEmpty {
+                noteRow(icon: "target", tint: .flowePinkDeep,
+                        label: "Goals", value: note.goals)
+            }
+            if !note.notes.trimmed.isEmpty {
+                noteRow(icon: "note.text", tint: .floweMuted,
+                        label: "Notes", value: note.notes)
+            }
+        }
+    }
+
+    /// One labelled note row: an icon, a localized field label, and the instructor's verbatim text.
+    private func noteRow(icon: String, tint: Color, label: LocalizedStringKey, value: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 14))
+                .foregroundStyle(tint)
+                .frame(width: 18)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label)
+                    .font(FloweFont.mono(9))
+                    .foregroundStyle(Color.floweMuted)
+                    .textCase(.uppercase)
+                if !value.isEmpty {
+                    Text(verbatim: value)
+                        .font(FloweFont.sans(14))
+                        .foregroundStyle(Color.floweInk)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Spacer(minLength: 0)
         }
     }
 
@@ -340,4 +450,9 @@ struct StudentProfileView: View {
         f.dateFormat = "yyyy"
         return f
     }()
+}
+
+private extension String {
+    /// Whitespace/newline-trimmed copy — for emptiness tests that shouldn't count blank text.
+    var trimmed: String { trimmingCharacters(in: .whitespacesAndNewlines) }
 }

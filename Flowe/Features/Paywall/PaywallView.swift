@@ -17,8 +17,10 @@ struct PaywallView: View {
             ScrollView {
                 VStack(spacing: FlowSpacing.xl) {
                     hero
-                    ForEach(SubscriptionTier.allCases) { tier in
+                        .floweAppear(0)
+                    ForEach(Array(SubscriptionTier.allCases.enumerated()), id: \.element) { index, tier in
                         tierCard(tier)
+                            .floweAppear(index + 1)
                     }
                     if subscription.products.isEmpty {
                         Text("Fetching the latest prices…")
@@ -139,7 +141,7 @@ struct PaywallView: View {
                 .background(isCurrent ? AnyShapeStyle(Color.floweMuted.opacity(0.4)) : AnyShapeStyle(FlowGradients.gradDark))
                 .clipShape(RoundedRectangle(cornerRadius: 16))
             }
-            .buttonStyle(.plain)
+            .flowePressable()
             .disabled(isCurrent || product == nil || purchasing != nil)
         }
         .padding(16)
@@ -191,9 +193,4 @@ struct PaywallView: View {
         }
         .padding(.top, 4)
     }
-}
-
-#Preview {
-    PaywallView()
-        .environment(SubscriptionService())
 }

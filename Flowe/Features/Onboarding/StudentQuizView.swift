@@ -369,7 +369,3 @@ private struct QuizOptionCard: View {
         .buttonStyle(.plain)
     }
 }
-
-#Preview {
-    StudentQuizView(existing: nil) { _ in } onSkip: { }
-}

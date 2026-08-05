@@ -13,7 +13,10 @@ struct StudentListing {
 
     init?(record: CKRecord) {
         guard let name = record["name"] as? String else { return nil }   // name is required, else nil
-        ownerID = record.recordID.recordName
+        // recordName is namespaced `student-<ownerID>` (see StudentDirectoryService.recordName(for:));
+        // strip the prefix so `ownerID` stays the BARE id every caller matches on.
+        let rn = record.recordID.recordName
+        ownerID = rn.hasPrefix("student-") ? String(rn.dropFirst("student-".count)) : rn
         self.name = name
         bio = record["bio"] as? String
         memberSince = record["memberSince"] as? Date ?? .distantPast
@@ -35,6 +38,16 @@ struct StudentListing {
 final class StudentDirectoryService {
     static let recordType = "StudentProfile"
 
+    /// Namespaced recordName — `student-<ownerID>`, NOT the bare ownerID. `InstructorListing`
+    /// (CatalogService) already keys its record on the bare ownerID in this same public default zone,
+    /// and CloudKit recordNames are unique per zone across ALL record types. A dual-role user (one Apple
+    /// id that publishes both an InstructorListing and a StudentProfile — role is chosen per sign-in with
+    /// no guard) would otherwise collide: the second publish fetches the wrong-typed record by that
+    /// shared name, stamps foreign fields, and the locked Production schema rejects the save, leaving one
+    /// role silently unpublishable (identical to the fixed PublicKey/InstructorListing collision). The
+    /// `student-` prefix keeps the two records distinct; publish/fetch/remove MUST all route through here.
+    static func recordName(for ownerID: String) -> String { "student-\(ownerID)" }
+
     #if CLOUDKIT_ENABLED
     private let database = CKContainer(identifier: FloweModelContainer.cloudKitContainerID).publicCloudDatabase
     #endif
@@ -44,7 +57,7 @@ final class StudentDirectoryService {
     func publish(_ profile: StudentProfile) async -> Bool {
         #if CLOUDKIT_ENABLED
         guard let ownerID = profile.ownerID, !profile.name.isEmpty else { return false }
-        let id = CKRecord.ID(recordName: ownerID)
+        let id = CKRecord.ID(recordName: Self.recordName(for: ownerID))
         let record = (try? await database.record(for: id)) ?? CKRecord(recordType: Self.recordType, recordID: id)
 
         record["name"] = profile.name
@@ -90,7 +103,7 @@ final class StudentDirectoryService {
         #if CLOUDKIT_ENABLED
         guard !ownerIDs.isEmpty else { return [] }
         do {
-            let results = try await database.records(for: ownerIDs.map { CKRecord.ID(recordName: $0) })
+            let results = try await database.records(for: ownerIDs.map { CKRecord.ID(recordName: Self.recordName(for: $0)) })
             return results.values.compactMap { try? $0.get() }.compactMap(StudentListing.init)
         } catch {
             return []   // schema not deployed / offline / no records yet
@@ -127,7 +140,7 @@ final class StudentDirectoryService {
     /// Remove the student's profile (e.g. account deletion).
     func remove(ownerID: String) async {
         #if CLOUDKIT_ENABLED
-        _ = try? await database.deleteRecord(withID: CKRecord.ID(recordName: ownerID))
+        _ = try? await database.deleteRecord(withID: CKRecord.ID(recordName: Self.recordName(for: ownerID)))
         #endif
     }
 }

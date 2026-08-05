@@ -1,6 +1,23 @@
 import SwiftUI
 import SwiftData
 import Observation
+import CoreLocation
+
+/// The identity to render for an authored record, resolved LIVE at display time from the author's
+/// current public profile rather than the denormalised snapshot frozen onto the record at creation.
+///
+/// A student who posts before completing their profile, then fills in their name + photo, must have
+/// every past post / comment / review / booking row show the new identity — the snapshot on those
+/// records can never be edited by anyone but the author (and re-stamps itself from the remote each
+/// sync), so display-time resolution is the only durable fix. See `MockDataStore.displayIdentity`.
+///
+/// `img` is an Unsplash id for instructor authors (empty for students, who carry an uploaded `photo`
+/// or nothing); `photo` is an uploaded blob. Both feed straight into `AvatarView`/`RemoteImage`.
+struct AuthorIdentity {
+    var name: String
+    var img: String
+    var photo: Data?
+}
 
 /// Repository facade over SwiftData. Keeps the same public API the screens already use, so the
 /// storage swap (JSON → `ModelContext`, later CloudKit-synced) doesn't ripple into the views.
@@ -20,12 +37,25 @@ final class MockDataStore {
     private(set) var bookings: [Booking] = []
     private(set) var messages: [Message] = []
     private(set) var blocked: [BlockedUser] = []
+    /// The instructor's PRIVATE clinical/safety notes about their clients — injuries, pregnancy,
+    /// conditions. Private-DB only (see [[ClientNote]]); NEVER published to any public record.
+    private(set) var clientNotes: [ClientNote] = []
     private(set) var reviews: [Review] = []
     private(set) var events: [CommunityEvent] = []
     /// Every cached lesson type — the owner's own rows plus any fetched for an instructor a student is
     /// viewing. Kept as `@Model` rows (not `ResolvedLessonType`) because the editor mutates them and
     /// the sync merges into them; views consume the flattened `lessonTypes(for:)` resolver instead.
     private(set) var lessonTypes: [LessonType] = []
+    /// Cached career-marketplace opportunities (Flowe Pro — see [[FlowePro]]). Local cache of a public
+    /// record, like `instructors`; fetched via a future OpportunityService, seeded for now.
+    private(set) var opportunities: [Opportunity] = []
+    /// Cached applications to opportunities (both mine-as-applicant and mine-as-poster's-inbox).
+    private(set) var opportunityApplications: [OpportunityApplication] = []
+    /// Cached poster decisions on applications (the pipeline stage).
+    private(set) var applicationDecisions: [ApplicationDecision] = []
+    /// Cached peer recommendations (Flowe Pro Phase 5) — endorsements addressed to an instructor, fetched
+    /// when their profile is viewed, plus the signed-in instructor's own written ones. See [[FlowePro]].
+    private(set) var recommendations: [InstructorRecommendation] = []
 
     private let catalog = CatalogService()
     private let studentDirectory = StudentDirectoryService()
@@ -39,6 +69,8 @@ final class MockDataStore {
     private let eventService = EventService()
     private let lessonTypeService = LessonTypeService()
     private let coverageService = CoverageService()
+    private let opportunityService = OpportunityService()
+    private let recommendationService = RecommendationService()
 
     // MARK: - Feed load state
 
@@ -50,23 +82,22 @@ final class MockDataStore {
     private(set) var bookingsPhase: LoadPhase = .idle
     private(set) var communityPhase: LoadPhase = .idle
     private(set) var eventsPhase: LoadPhase = .idle
-    /// Suppresses public-catalog network calls (previews + UI tests).
-    private let isPreview: Bool
+    /// Always `false`. Retained only because ~60 call sites still `guard !isPreview`; the app no
+    /// longer has any seed / preview / offline mode — every path talks to the CloudKit-synced store.
+    private let isPreview = false
 
-    /// The shipping app starts EMPTY — no mock data is seeded into the (CloudKit-synced) store.
-    /// Sample data is only loaded for SwiftUI previews and UI tests (`seed: true`).
-    /// - Parameters:
-    ///   - reset: wipe all stored models first (UI-test isolation).
-    ///   - offline: skip public-catalog sync/publish (UI tests run deterministically offline).
-    init(_ context: ModelContext, seed: Bool = false, reset: Bool = false, offline: Bool = false) {
+    /// The app is CloudKit-only: the store starts EMPTY and fills purely from the synced public/
+    /// private databases. No mock, seed, or preview data is ever loaded, in any build configuration.
+    init(_ context: ModelContext) {
         self.context = context
-        self.isPreview = seed || offline
-        if reset { Self.deleteAll(context) }
-        if seed { SeedLoader.seedIfNeeded(context) }
         refresh()
+        #if DEBUG
+        seedDevDataIfRequested()
+        #endif
     }
 
-    /// Removes every stored model — used to give each UI test a clean slate.
+    /// Wipes every locally-stored model — used when the signed-in user deletes their account (after the
+    /// public-DB records are swept) so no stale data lingers in the on-device store.
     private static func deleteAll(_ context: ModelContext) {
         try? context.delete(model: Instructor.self)
         try? context.delete(model: StudentProfile.self)
@@ -75,15 +106,11 @@ final class MockDataStore {
         try? context.delete(model: Booking.self)
         try? context.delete(model: Message.self)
         try? context.delete(model: BlockedUser.self)
+        try? context.delete(model: ClientNote.self)
         try? context.delete(model: Review.self)
         try? context.delete(model: CommunityEvent.self)
         try? context.delete(model: LessonType.self)
         try? context.save()
-    }
-
-    /// Fresh in-memory store seeded with sample data — for SwiftUI previews only.
-    static var preview: MockDataStore {
-        MockDataStore(FloweModelContainer.make(inMemory: true).mainContext, seed: true)
     }
 
     func refresh() {
@@ -103,6 +130,9 @@ final class MockDataStore {
         blocked     = (try? context.fetch(
             FetchDescriptor<BlockedUser>(sortBy: [SortDescriptor(\.createdAt, order: .reverse)])
         )) ?? []
+        clientNotes = (try? context.fetch(
+            FetchDescriptor<ClientNote>(sortBy: [SortDescriptor(\.updatedAt, order: .reverse)])
+        )) ?? []
         reviews     = (try? context.fetch(
             FetchDescriptor<Review>(sortBy: [SortDescriptor(\.createdAt, order: .reverse)])
         )) ?? []
@@ -115,6 +145,16 @@ final class MockDataStore {
         // exact sequence the instructor arranged.
         lessonTypes = (try? context.fetch(
             FetchDescriptor<LessonType>(sortBy: [SortDescriptor(\.order, order: .forward)])
+        )) ?? []
+        opportunities = (try? context.fetch(
+            FetchDescriptor<Opportunity>(sortBy: [SortDescriptor(\.createdAt, order: .reverse)])
+        )) ?? []
+        opportunityApplications = (try? context.fetch(
+            FetchDescriptor<OpportunityApplication>(sortBy: [SortDescriptor(\.createdAt, order: .reverse)])
+        )) ?? []
+        applicationDecisions = (try? context.fetch(FetchDescriptor<ApplicationDecision>())) ?? []
+        recommendations = (try? context.fetch(
+            FetchDescriptor<InstructorRecommendation>(sortBy: [SortDescriptor(\.createdAt, order: .reverse)])
         )) ?? []
         applyCompletions()
     }
@@ -146,6 +186,45 @@ final class MockDataStore {
         instructors.first { $0.legacyId == id }
     }
 
+    /// Resolve a cached listing by its owner id — the RELIABLE instructor key. Legacy `instructorId`
+    /// (an Int) is 0 for a booking whose instructor wasn't cached at materialization, so `instructor(id:)`
+    /// can miss; `instructorOwnerID` never does. Used by the "Your Teachers" rebook rail.
+    func instructor(ownerID: String?) -> Instructor? {
+        guard let ownerID else { return nil }
+        return instructors.first { $0.ownerID == ownerID }
+    }
+
+    // MARK: - Saved instructors (local wishlist)
+
+    private static let savedInstructorsKey = "flowe.savedInstructors"
+
+    /// Instructor ownerIDs the student saved — a LOCAL wishlist (UserDefaults, THIS device only; a
+    /// cross-device version is a deferred additive-schema upgrade). Ordered most-recently-saved first.
+    /// `@Observable`, so toggling live-refreshes every heart + the profile rail.
+    private(set) var savedInstructorIDs: [String] =
+        UserDefaults.standard.stringArray(forKey: MockDataStore.savedInstructorsKey) ?? []
+
+    func isSaved(_ ownerID: String?) -> Bool {
+        guard let ownerID else { return false }
+        return savedInstructorIDs.contains(ownerID)
+    }
+
+    /// Save / unsave an instructor. Local-only — never publishes to CloudKit.
+    func toggleSaved(_ ownerID: String?) {
+        guard let ownerID, !ownerID.isEmpty else { return }
+        if let idx = savedInstructorIDs.firstIndex(of: ownerID) {
+            savedInstructorIDs.remove(at: idx)
+        } else {
+            savedInstructorIDs.insert(ownerID, at: 0)   // most-recently-saved first
+        }
+        UserDefaults.standard.set(savedInstructorIDs, forKey: Self.savedInstructorsKey)
+    }
+
+    /// Saved instructors resolved to cached listings (most-recently-saved first); unresolved ids skipped.
+    var savedInstructors: [Instructor] {
+        savedInstructorIDs.compactMap { instructor(ownerID: $0) }
+    }
+
     /// Instructors students can see: an active subscription (Visible/Boost), a set-up listing,
     /// and a fresh subscription check. Boosted first, then by rating, then order.
     var visibleInstructors: [Instructor] {
@@ -165,6 +244,11 @@ final class MockDataStore {
     var publishedInstructors: [Instructor] { visibleInstructors }
 
     private static func isEligible(_ ins: Instructor) -> Bool {
+        // `ins.price > 0` now means "has at least one PRICED lesson type": `price` is the derived
+        // cheapest lesson-type price (see `Instructor.startingPrice` + `publishMyListing`), so this line
+        // preserves the old discoverability semantics unchanged. It relies on `publishMyListing`
+        // re-deriving `price` BEFORE the listing is published/evaluated — do not repoint it at
+        // `lessonTypes(for:)`: this is static and remote instructors carry no cached LessonType rows.
         guard ins.visibility != .none, ins.price > 0, !ins.name.isEmpty else { return false }
         // 7-day TTL backstop: a lapsed subscription on a device that never reopened stays hidden.
         if let verified = ins.visibilityVerifiedAt {
@@ -179,17 +263,89 @@ final class MockDataStore {
         guard let listing = instructors.first(where: { $0.ownerID == ownerID }) else { return }
         listing.visibility = level
         listing.visibilityVerifiedAt = Date()
+        // Mark for republish BEFORE the network attempt (mirrors `publishMyListing`). A DOWNGRADE
+        // to `.none` that fails to reach CloudKit — device offline, signed out of iCloud, or
+        // throttled — would otherwise leave the PUBLIC listing stuck at visibility>0 (the instructor
+        // stays discoverable and bookable) with nothing to correct it: this is a fire-and-forget
+        // Task, not a retried write. Setting `pendingPublish` hands the retry to `flushPendingListing`
+        // on the next instructor sync / foreground. Only ever the signed-in instructor's own listing
+        // reaches here (sole caller passes `session.ownerID`), so it IS `currentInstructor` and the
+        // flush — which keys off `currentInstructor.pendingPublish` — will pick it up.
+        listing.pendingPublish = true
         save()
-        if !isPreview { Task { await catalog.publish(listing) } }
+        // Advance the own-listing baseline from this publish's server timestamp too, so a
+        // visibility-only push doesn't leave `lastSyncedAt` stale and trigger a spurious self
+        // re-apply on the next foreground.
+        if !isPreview {
+            Task {
+                if let ts = await catalog.publish(listing) {
+                    listing.lastSyncedAt = ts
+                    listing.pendingPublish = false
+                    save()
+                }
+            }
+        }
+        // A downgrade hides the listing, but any CommunityEvent the instructor already published is a
+        // SEPARATE public record `applyVisibility` doesn't touch — so a lapsed instructor would still
+        // surface in Community → Events. Call those off too.
+        if level == .none { retractEventsOnDowngrade() }
+    }
+
+    /// Call off the signed-in instructor's FUTURE, not-already-cancelled events when their subscription
+    /// lapses (`applyVisibility(.none)`). Uses `cancelEvent` (not `deleteEvent`) so students who already
+    /// registered see the class was called off rather than having it silently vanish, and so it rides
+    /// the audited cancel → upload → retry path. Past and already-cancelled events are skipped. Only the
+    /// signed-in instructor's own events are reachable via `myEvents`, matching `applyVisibility`'s scope.
+    private func retractEventsOnDowngrade() {
+        let now = Date()
+        for event in myEvents where !event.cancelled && event.endsAt >= now {
+            cancelEvent(event)
+        }
     }
 
     // MARK: - Bookings
 
-    var upcomingBookings: [Booking] { myBookings.filter { $0.status.isUpcoming } }
-    var pastBookings: [Booking] { myBookings.filter { !$0.status.isUpcoming } }
+    /// Upcoming sessions, SOONEST first — a stable, sensible order (the raw cache order looked jumbled
+    /// when switching tabs). `sessionStart` is cheap now that Booking's formatters are cached.
+    ///
+    /// A booking whose session has already ENDED is excluded even when its status is still "upcoming":
+    /// a `.pending` request is never expired by `applyCompletions` (which only heals `.confirmed`), so a
+    /// never-accepted request keeps a past `sessionStart` and — under the soonest-first sort — would
+    /// otherwise float to the very TOP of the list, above every live session. Time-gating on
+    /// `sessionEnd` keeps such dead/stale rows out of Upcoming (a `.confirmed` past session is separately
+    /// healed to `.completed` on the next sync and then lands in Past).
+    var upcomingBookings: [Booking] {
+        let now = Date()
+        return myBookings
+            .filter { $0.status.isUpcoming && ($0.sessionEnd(now: now) ?? .distantFuture) >= now }
+            .sorted { ($0.sessionStart() ?? .distantFuture) < ($1.sessionStart() ?? .distantFuture) }
+    }
+    /// Past sessions, MOST RECENT first.
+    var pastBookings: [Booking] {
+        myBookings.filter { !$0.status.isUpcoming }
+            .sorted { ($0.sessionStart() ?? .distantPast) > ($1.sessionStart() ?? .distantPast) }
+    }
 
     var upcomingCount: Int { upcomingBookings.count }
     var completedCount: Int { myBookings.filter { $0.status == .completed }.count }
+
+    /// Distinct instructors the signed-in student has booked (any non-cancelled booking), MOST-RECENTLY
+    /// seen first — the "Your Teachers" one-tap rebook rail on the profile. Resolved against the local
+    /// catalog cache by ownerID; a booked instructor no longer cached locally is skipped (their listing
+    /// re-caches on the next Discover sync). No new data, no schema.
+    var bookedInstructors: [Instructor] {
+        var seen = Set<String>()
+        var result: [Instructor] = []
+        for booking in myBookings
+            .filter({ $0.status != .cancelled })
+            .sorted(by: { ($0.sessionStart() ?? .distantPast) > ($1.sessionStart() ?? .distantPast) }) {
+            guard let ownerID = booking.instructorOwnerID, !seen.contains(ownerID),
+                  let ins = instructor(ownerID: ownerID) else { continue }
+            seen.insert(ownerID)
+            result.append(ins)
+        }
+        return result
+    }
 
     /// Sessions this instructor has actually delivered.
     var instructorCompletedCount: Int {
@@ -203,14 +359,35 @@ final class MockDataStore {
     // be exactly the mock data these screens are meant to replace. Every number below is something
     // that actually happened.
 
-    /// Earnings priced at the instructor's rate. Payment is arranged directly with the student, so
+    /// The earning for one booked session — the price of the ACTUAL lesson type booked, resolved by
+    /// name. Falls back to 0 (never crashes) when the booking's type was renamed/deleted so its name no
+    /// longer matches any owned row, or when the type carries no price: earnings then under-count rather
+    /// than fabricate a number. Distinct from `sessionPrice(for:)`, whose `?? me.price` no-show-fee base
+    /// is intentionally the derived rate.
+    func sessionEarning(for b: Booking) -> Int {
+        guard let me = currentInstructor else { return 0 }
+        return ownedLessonTypes(for: me).first { $0.name == b.type }?.price ?? 0
+    }
+
+    /// The price of an owned lesson type resolved by name, for the earnings-by-type breakdown. 0 when
+    /// the name no longer resolves or the type is unpriced — mirrors `sessionEarning`.
+    func priceForType(_ name: String) -> Int {
+        guard let me = currentInstructor else { return 0 }
+        return ownedLessonTypes(for: me).first { $0.name == name }?.price ?? 0
+    }
+
+    /// Earnings summed from the ACTUAL booked lesson-type prices, not a single rate × count — each
+    /// instructor now prices per lesson type. Payment is arranged directly with the student, so
     /// `collected` is what completed sessions were worth and `projected` what accepted-but-not-yet-
     /// delivered sessions will be worth — a forecast, not an in-app balance.
     var instructorEarnings: (collected: Int, projected: Int) {
-        let price = currentInstructor?.price ?? 0
-        let completed = incomingBookings.filter { $0.status == .completed }.count
-        let confirmed = incomingBookings.filter { $0.status == .confirmed }.count
-        return (completed * price, confirmed * price)
+        let collected = incomingBookings
+            .filter { $0.status == .completed }
+            .reduce(0) { $0 + sessionEarning(for: $1) }
+        let projected = incomingBookings
+            .filter { $0.status == .confirmed }
+            .reduce(0) { $0 + sessionEarning(for: $1) }
+        return (collected, projected)
     }
 
     /// Delivered + accepted sessions grouped by type (Private, Duet, …) — a real dimension, unlike
@@ -255,24 +432,83 @@ final class MockDataStore {
         return hours == hours.rounded() ? String(format: "%.0f", hours) : String(format: "%.1f", hours)
     }
 
+    /// The outcome of a booking attempt. `.slotTaken` (the atomic seat claim lost a race) and
+    /// `.selfDuplicate` (this student already holds the slot) must NOT create a phantom local booking —
+    /// the sheet keeps the user on the picker and refreshes availability instead of showing success.
+    enum BookingResult: Equatable {
+        case booked            // an admitted seat claimed (or degraded to unlocked offline) and the booking created
+        case waitlisted(rank: Int)  // the group class was full → an OVERFLOW seat claimed; booking created, on the waitlist
+        case slotTaken         // the slot was just booked by someone else — pick another time
+        case selfDuplicate     // this student already booked/holds this exact slot
+        case failed            // reserved (booking currently never returns this — a claim failure degrades to .booked)
+    }
+
     /// Creates a booking from a completed BookingSheet flow and publishes it to the shared
     /// database so the instructor actually receives it.
     ///
     /// The booking starts `pending`: it is a *request* until the instructor accepts. Payment is
     /// arranged directly with the instructor — this release takes no money in-app.
-    func addBooking(instructor: Instructor, day: String, time: String, type: String) {
-        let nextId = (bookings.map(\.legacyId).max() ?? 0) + 1
-        let topOrder = (bookings.map(\.order).min() ?? 0) - 1   // smaller order sorts first
+    ///
+    /// Before anything is created it acquires an ATOMIC per-seat lock on the physical slot
+    /// (instructor+date+time) via `BookingService.claimSeat` — the serverless mutex that stops two
+    /// students holding the same 1-on-1 slot. A lost claim returns `.slotTaken` WITHOUT inserting a row.
+    @discardableResult
+    func addBooking(instructor: Instructor, day: String, time: String, type: String) async -> BookingResult {
         // Resolve the chosen type name to its authored lesson type: a stated duration wins, so a
         // "90 min" reformer no longer collapses to the old Private/other 55-vs-50 guess. A migrated
         // bare name (durationMinutes 0) or an unresolved past type falls back to that heuristic, so a
-        // booking always carries some duration.
-        let stated = ownedLessonTypes(for: instructor).first { $0.name == type }?.durationMinutes ?? 0
+        // booking always carries some duration. Capacity (seats) comes from the same resolved type.
+        let lessonType = ownedLessonTypes(for: instructor).first { $0.name == type }
+        let stated = lessonType?.durationMinutes ?? 0
         let duration = stated > 0 ? "\(stated) min" : (type == "Private" ? "55 min" : "50 min")
+        let capacity = lessonType?.capacity ?? 0   // 0 (unstated) => claimSeat normalizes to 1 seat
+
+        // One-off self-collision guard (client-side, fast + clear message): an EXACT-date match on this
+        // instructor+time+date. The atomic hold is the cross-device backstop.
+        let bookingDate = Self.formatDay(day)
+        let selfClash = myBookings.contains {
+            $0.status != .cancelled
+                && $0.instructorOwnerID == instructor.ownerID
+                && $0.time == time
+                && $0.date == bookingDate
+        }
+        if selfClash { return .selfDuplicate }
+
+        // Defensive backstop: never create a one-off on a date the instructor has closed. The picker
+        // already dims/disables a closed day (`isBookable(onDate:)`), so this only catches a stale
+        // in-flight tap; it degrades as before when the date can't be resolved. `.slotTaken` prompts a
+        // clean re-pick with refreshed availability.
+        if let resolved = Self.date(forPickerValue: day), instructor.isClosedOverride(onDate: resolved) {
+            return .slotTaken
+        }
+
+        // Atomic seat claim BEFORE creating anything. A lost race (.slotTaken) returns without inserting
+        // so no phantom booking is left behind; a claim that can't run (offline / preview / schema not
+        // deployed) degrades to an UNLOCKED booking (today's behavior) rather than blocking the student.
+        // A real group/duet type (cap >= 2) allows the claim to overflow into a WAITLIST seat when every
+        // admitted seat is taken, rather than dead-ending on `.slotTaken`. A Private (cap 1 / unstated)
+        // never sets allowWaitlist, so it stays the hard 1-on-1 mutex.
+        var holdName: String? = nil
+        var waitlistRank: Int? = nil
+        if !isPreview, let instructorID = instructor.ownerID, let token = Booking.timeToken(time),
+           let date = Self.date(forPickerValue: day) {
+            switch await bookingService.claimSeat(instructorID: instructorID,
+                                                  date: Booking.seriesDateString(date),
+                                                  time: token, capacity: capacity,
+                                                  allowWaitlist: capacity >= 2) {
+            case .claimed(let name):               holdName = name
+            case .waitlisted(let name, let rank):  holdName = name; waitlistRank = rank
+            case .slotTaken:                       return .slotTaken
+            case .failed:                          holdName = nil   // degrade to unlocked
+            }
+        }
+
+        let nextId = (bookings.map(\.legacyId).max() ?? 0) + 1
+        let topOrder = (bookings.map(\.order).min() ?? 0) - 1   // smaller order sorts first
         let booking = Booking(
             legacyId: nextId,
             instructorId: instructor.legacyId,
-            date: Self.formatDay(day),
+            date: bookingDate,
             time: time,
             type: type,
             duration: duration,
@@ -281,18 +517,201 @@ final class MockDataStore {
             order: topOrder,
             instructorOwnerID: instructor.ownerID,
             studentID: currentUserID,
-            studentName: currentUserName
+            studentName: currentUserName,
+            holdRecordName: holdName
         )
-        // Marked pending up front: if the app is killed before the upload finishes, the next
-        // sync retries it rather than losing the booking.
-        booking.pendingUpload = true
+        // A WAITLISTED booking does NOT publish a public SessionBooking — only its overflow SlotHold seat
+        // (already saved by claimSeat) persists the waitlist position server-side. Publishing it would put
+        // a seatless waitlister in the instructor's request inbox, where accepting it would mis-count
+        // earnings and could No-Show-fee someone who never had a seat. It is published only on promotion
+        // (see promoteWaitlistedSeats), when it actually holds an admitted seat.
+        let isWaitlist = waitlistRank != nil
+        // Marked pending up front (non-waitlist only): if the app is killed before the upload finishes, the
+        // next sync retries it rather than losing the booking.
+        booking.pendingUpload = !isWaitlist
+        booking.bookedCapacity = capacity   // freeze so promotion/top-up survive a cold type cache
         context.insert(booking)
         save()
 
+        guard !isWaitlist, !isPreview,
+              let instructorID = instructor.ownerID,
+              let studentID = currentUserID else {
+            return waitlistRank.map { .waitlisted(rank: $0) } ?? .booked
+        }
+        Task { await upload(booking, instructorID: instructorID, studentID: studentID) }
+        return .booked
+    }
+
+    /// Live seat occupancy for an instructor's slots on a picker day, as `[HHmm token: seats taken]`, so
+    /// the booking picker can show a full time as disabled. Best-effort: returns `[:]` when the day can't
+    /// be resolved or the query fails — the atomic claim at confirm is the real guarantee, this is only a
+    /// display hint. `day` is the English/POSIX picker value ("EEE MMM d").
+    func slotOccupancy(for instructor: Instructor, day: String) async -> [String: Int] {
+        guard let instructorID = instructor.ownerID,
+              let date = Self.date(forPickerValue: day) else { return [:] }
+        let dateString = Booking.seriesDateString(date)
+        return await bookingService.fetchSlotOccupancy(instructorID: instructorID, date: dateString) ?? [:]
+    }
+
+    // MARK: - Standing (recurring weekly) bookings
+    //
+    // A standing slot ("every Tuesday 9am until I cancel") is materialized as ONE ordinary pending
+    // Booking per matching weekday out to the 12-week horizon, every occurrence sharing a deterministic
+    // recordName `sb-<seriesUUID>-<yyyy-MM-dd>`. Because each week is a normal Booking row, every
+    // existing surface (My Sessions, calendar, No-Show Shield, reviews, earnings) keeps working
+    // unchanged. The instructor approves the series ONCE (a single `series-<id>` decision); weeks that
+    // roll into the horizon later auto-confirm against that same decision (see `status(for:)`).
+
+    /// Mint a series and materialize its full-horizon batch of weekly occurrences, then upload each.
+    /// Each week claims its own seat in the SAME slot namespace as one-offs, so a standing week and a
+    /// one-off on the same instructor+date+time genuinely contend; a week that's already full is SKIPPED
+    /// (graceful degrade — never a silent double-book). Returns `.selfDuplicate` on a standing self-clash,
+    /// `.slotTaken` only if EVERY week was full (nothing materialized), else `.booked`.
+    @discardableResult
+    private func addStandingSeries(instructor: Instructor, day: String, time: String,
+                                   type: String, duration: String, capacity: Int) async -> BookingResult {
+        guard let anchor = Self.date(forPickerValue: day) else {
+            // Fall back to a single booking if the picked day can't be resolved to a real date.
+            return await addBooking(instructor: instructor, day: day, time: time, type: type)
+        }
+        // Self-collision guard: a student can't hold two standing slots on the same instructor +
+        // weekday + time. The atomic per-week hold is the cross-device backstop against real overbooking.
+        let weekday = String(FloweWeek.bookingDateString(for: anchor).prefix(3))
+        // Only another STANDING slot on the same weekday+time collides. Scoping to `isRecurring` avoids a
+        // false positive where a lone one-off on some Tuesday would block ALL future Tuesday series (both
+        // store the "EEE, …" date, so a bare `hasPrefix` can't tell a one-off from a series).
+        let clash = myBookings.contains {
+            $0.isRecurring
+                && $0.status != .cancelled
+                && $0.instructorOwnerID == instructor.ownerID
+                && $0.time == time
+                && $0.date.hasPrefix(weekday)
+        }
+        if clash { return .selfDuplicate }
+
+        let seriesID = UUID().uuidString
+        let created = await materializeSeriesOccurrences(
+            instructor: instructor, from: anchor, time: time, type: type,
+            duration: duration, seriesID: seriesID, approved: false, capacity: capacity
+        )
+        save()
         guard !isPreview,
               let instructorID = instructor.ownerID,
-              let studentID = currentUserID else { return }
-        Task { await upload(booking, instructorID: instructorID, studentID: studentID) }
+              let studentID = currentUserID else {
+            return created.isEmpty ? .slotTaken : .booked
+        }
+        Task {
+            for booking in created { await uploadSeries(booking, instructorID: instructorID, studentID: studentID) }
+        }
+        return created.isEmpty ? .slotTaken : .booked
+    }
+
+    /// Insert (but do not upload) the missing weekly occurrences of a series from `from` out to the
+    /// horizon, returning the newly-inserted rows. Idempotent against the local cache — an occurrence
+    /// whose deterministic recordName already exists is skipped, so top-up never duplicates a week.
+    ///
+    /// Each new week first CLAIMS its seat on the physical slot: `.claimed` → the row carries the hold;
+    /// `.slotTaken` → the week is SKIPPED (never overbooked); `.failed` (offline / preview / schema not
+    /// deployed) → the row is created UNLOCKED so a standing booking is never blocked. `capacity` is the
+    /// booked type's seat count (0 unstated → 1 seat).
+    @discardableResult
+    private func materializeSeriesOccurrences(instructor: Instructor, from: Date, time: String,
+                                              type: String, duration: String, seriesID: String,
+                                              approved: Bool, capacity: Int,
+                                              calendar: Calendar = .current) async -> [Booking] {
+        let startToday = calendar.startOfDay(for: Date())
+        let horizonEnd = calendar.date(byAdding: .day, value: FloweWeek.maxDayID, to: startToday) ?? from
+        var nextId = bookings.map(\.legacyId).max() ?? 0
+        var topOrder = bookings.map(\.order).min() ?? 0
+        var created: [Booking] = []
+        let token = Booking.timeToken(time)
+        var date = from
+        while date <= horizonEnd {
+            // Skip a week the instructor made unbookable AT THIS TIME: a CLOSED (vacation) date, OR a
+            // CUSTOM override that moved/removed this series' time. `date` advances at the END of the loop
+            // body, so advance here too before `continue` or a skipped date spins forever. Gated on
+            // `hasDateOverride` so a NORMAL week is never touched (no format-match risk), and a token-less
+            // instructor placeholder — which top-up may pass — reports no override (empty `hours`) → never
+            // skips the whole series. Subsumes the old CLOSED-only check (a closed date has an override and
+            // empty `hours(onDate:)`, so it can't contain the time).
+            if instructor.hasDateOverride(onDate: date), !instructor.hours(onDate: date).contains(time) {
+                date = calendar.date(byAdding: .day, value: 7, to: date) ?? date.addingTimeInterval(7 * 86_400)
+                continue
+            }
+            let recordName = Booking.seriesRecordName(seriesID: seriesID, occurrenceDate: date)
+            if !bookings.contains(where: { $0.remoteID == recordName }) {
+                // Claim this week's seat before minting the row.
+                var holdName: String? = nil
+                var skip = false
+                if !isPreview, let instructorID = instructor.ownerID, let token {
+                    switch await bookingService.claimSeat(instructorID: instructorID,
+                                                          date: Booking.seriesDateString(date),
+                                                          time: token, capacity: capacity) {
+                    case .claimed(let name):        holdName = name
+                    case .waitlisted(let name, _):  holdName = name   // unreachable (series never allowWaitlist); treat as claimed
+                    case .slotTaken:                skip = true       // week full — degrade gracefully, skip it
+                    case .failed:                   holdName = nil     // offline / schema missing — unlocked week
+                    }
+                }
+                if !skip {
+                    nextId += 1; topOrder -= 1
+                    let booking = Booking(
+                        legacyId: nextId,
+                        instructorId: instructor.legacyId,
+                        date: FloweWeek.bookingDateString(for: date),
+                        time: time,
+                        type: type,
+                        duration: duration,
+                        status: approved ? .confirmed : .pending,
+                        ownerID: currentUserID,
+                        order: topOrder,
+                        remoteID: recordName,           // deterministic name set up front — parseable offline
+                        instructorOwnerID: instructor.ownerID,
+                        studentID: currentUserID,
+                        studentName: currentUserName,
+                        holdRecordName: holdName
+                    )
+                    booking.bookedCapacity = capacity   // freeze so a later top-up reads the right capacity
+                    booking.pendingUpload = true
+                    context.insert(booking)
+                    created.append(booking)
+                }
+            }
+            date = calendar.date(byAdding: .day, value: 7, to: date) ?? date.addingTimeInterval(7 * 86_400)
+        }
+        return created
+    }
+
+    /// Upload one series occurrence by its deterministic recordName (fetch-or-create, idempotent). The
+    /// recordName stays set even on failure (it is deterministic and already parseable); only
+    /// `pendingUpload` toggles, so the next sync retries it.
+    private func uploadSeries(_ booking: Booking, instructorID: String, studentID: String) async {
+        let saved = await bookingService.create(
+            instructorID: instructorID,
+            studentID: studentID,
+            studentName: booking.studentName,
+            date: booking.date,
+            time: booking.time,
+            type: booking.type,
+            duration: booking.duration,
+            recordName: booking.remoteID
+        )
+        booking.pendingUpload = saved == nil
+        save()
+    }
+
+    /// The real `Date` for a booking day-picker value ("EEE MMM d", English/POSIX), found by scanning
+    /// the bookable horizon — within 12 weeks a "MMM d" is unambiguous, so no year is needed.
+    private static func date(forPickerValue value: String, calendar: Calendar = .current) -> Date? {
+        let start = calendar.startOfDay(for: Date())
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "EEE MMM d"
+        for offset in 0...FloweWeek.maxDayID {
+            guard let date = calendar.date(byAdding: .day, value: offset, to: start) else { continue }
+            if f.string(from: date) == value { return date }
+        }
+        return nil
     }
 
     /// Push a locally-created booking to the shared database, flagging it for retry if it fails.
@@ -316,6 +735,10 @@ final class MockDataStore {
         booking.status = confirmed ? .confirmed : .cancelled
         booking.pendingDecision = true
         save()
+        // Reconcile reminders immediately on a local status flip — a foreground accept/decline
+        // changes no scenePhase and triggers no sync, so without this a just-declined session could
+        // keep its pending reminder (and fire) until the next sync.
+        Task { await PushService.shared.scheduleSessionReminders() }
         guard !isPreview, let remoteID = booking.remoteID else { return }
         Task {
             let delivered = await bookingService.respond(bookingID: remoteID, confirmed: confirmed)
@@ -324,17 +747,153 @@ final class MockDataStore {
         }
     }
 
-    /// Student cancels their own booking.
+    /// Student cancels their own booking. Also RELEASES the seat hold so the slot reopens: a deleted
+    /// hold recordName goes absent and is immediately re-claimable. The `holdRecordName` is nil'd only on
+    /// a confirmed release, so a release that fails offline is retried by `releaseOrphanedHolds` on the
+    /// next sync (delete of an already-absent hold counts as a successful release, so no infinite retry).
     func cancel(_ booking: Booking) {
         booking.status = .cancelled
         booking.pendingDecision = true
         save()
-        guard !isPreview, let remoteID = booking.remoteID else { return }
+        // Cancel this session's pending reminder now, not on the next sync — a foreground cancel a
+        // few minutes before start must not still fire "your session is soon".
+        Task { await PushService.shared.scheduleSessionReminders() }
+        guard !isPreview else { booking.holdRecordName = nil; return }
+        if let hold = booking.holdRecordName {
+            Task {
+                if await bookingService.releaseSeat(recordName: hold) {
+                    booking.holdRecordName = nil
+                    save()
+                }
+            }
+        }
+        guard let remoteID = booking.remoteID else { return }
         Task {
             let delivered = await bookingService.cancel(bookingID: remoteID)
             booking.pendingDecision = !delivered
             save()
         }
+    }
+
+    // MARK: - Standing series: approve / skip / end
+
+    /// Instructor approves (`confirmed: true`) or ends (`confirmed: false`) a whole standing series with
+    /// ONE decision — never per week. Called from the de-duped series request card. Optimistically
+    /// resolves local occurrences; the next sync re-derives the same state from the series decision.
+    func respondSeries(_ booking: Booking, confirmed: Bool) {
+        guard let sid = booking.seriesID else { return }
+        let now = Date()
+        if confirmed {
+            for occ in incomingBookings where occ.seriesID == sid && occ.status == .pending {
+                occ.status = .confirmed
+            }
+        } else {
+            // End: future occurrences resolve cancelled (resolver-driven; the student-owned record is
+            // NOT flipped, so no student fee is ever mis-attributed to an instructor-initiated end).
+            for occ in incomingBookings where occ.seriesID == sid {
+                if (occ.sessionStart(now: now) ?? .distantPast) >= now && occ.status != .completed {
+                    occ.status = .cancelled
+                }
+            }
+        }
+        save()
+        // A one-shot series approval confirms up to 12 weeks (or an end cancels them) with no sync in
+        // between; reconcile reminders against the new local state right away. (endSeriesAsStudent
+        // reconciles transitively — it cancels each future occurrence via `cancel`.)
+        Task { await PushService.shared.scheduleSessionReminders() }
+        guard !isPreview else { return }
+        let studentID = booking.studentID
+        Task { await bookingService.respondSeries(seriesID: sid, confirmed: confirmed, studentID: studentID) }
+    }
+
+    /// Student ends their whole standing series: cancel every FUTURE non-cancelled occurrence (each a
+    /// normal student cancel), persist a local tombstone so this device's rolling top-up stops
+    /// re-materializing the series, AND write a durable server-side `seriesend-<id>` decision. The
+    /// server-side tombstone is what makes the end survive a reinstall / second device — without it the
+    /// local UserDefaults tombstone is gone, no remote end exists, and top-up would resurrect the series
+    /// (minting fresh confirmed/pending weeks) as horizon rolls forward. Past/completed weeks untouched.
+    func endSeriesAsStudent(_ booking: Booking) {
+        guard let sid = booking.seriesID else { return }
+        markSeriesEnded(sid)
+        let now = Date()
+        let future = bookings.filter {
+            $0.seriesID == sid && $0.status != .cancelled
+                && ($0.sessionStart(now: now) ?? .distantPast) >= now
+        }
+        for occ in future { cancel(occ) }
+        save()
+        guard !isPreview else { return }
+        // studentID: nil — no self-push; the resolver/top-up guard only read bookingID + respondedAt.
+        Task { await bookingService.respondSeries(seriesID: sid, confirmed: false, studentID: nil) }
+    }
+
+    /// Pending requests de-duplicated so a 12-week standing series shows as ONE inbox card (its soonest
+    /// pending occurrence). One-off requests pass through unchanged. Used by the instructor calendar and
+    /// dashboard so a standing slot doesn't spam the inbox with 12 identical cards.
+    var pendingRequestCards: [Booking] {
+        let now = Date()
+        // A request for a session that has already ENDED is dead — it can't be meaningfully accepted —
+        // and (soonest-first) would otherwise float above every live request. Gate it out, mirroring
+        // `upcomingBookings`, so the inbox only surfaces still-actionable requests.
+        let pending = incomingBookings
+            .filter { $0.status == .pending && ($0.sessionEnd(now: now) ?? .distantFuture) >= now }
+            .sorted { ($0.sessionStart() ?? .distantFuture) < ($1.sessionStart() ?? .distantFuture) }
+        var seenSeries = Set<String>()
+        var out: [Booking] = []
+        for booking in pending {
+            if let sid = booking.seriesID {
+                if seenSeries.contains(sid) { continue }
+                seenSeries.insert(sid)
+            }
+            out.append(booking)
+        }
+        return out
+    }
+
+    /// A group/duet class's ROSTER — the students booked into ONE physical slot — or a singleton wrapper
+    /// for a 1-on-1. The model is NOT collapsed: each seat stays its own `Booking` (so earnings, No-Show
+    /// Shield, reviews and per-student decisions stay per-row); this only groups for DISPLAY.
+    struct SlotGroup: Identifiable {
+        let id: String
+        let bookings: [Booking]
+        /// The booked type's capacity (0 when uncached). A real group/duet is `>= 2`.
+        let capacity: Int
+        /// Render as a roster (group card / one dashboard row) vs a single 1-on-1 card.
+        var isGroup: Bool { capacity >= 2 }
+        /// The representative booking for the shared time/type header.
+        var primary: Booking { bookings[0] }
+    }
+
+    /// Group a day's bookings by physical slot identity (instructor owner + date + time + type) so a
+    /// group/duet class renders as ONE roster entity instead of N scattered rows, while a 1-on-1 stays a
+    /// singleton. First-seen order is preserved. Same de-dup shape as `pendingRequestCards`, keyed on the
+    /// slot instead of the series. Capacity is resolved from the booked type (`>= 2` ⇒ group).
+    func sessionGroups(_ dayBookings: [Booking]) -> [SlotGroup] {
+        var order: [String] = []
+        var byKey: [String: [Booking]] = [:]
+        for b in dayBookings {
+            let key = "\(b.instructorOwnerID ?? "")|\(b.date)|\(b.time)|\(b.type)"
+            if byKey[key] == nil { order.append(key) }
+            byKey[key, default: []].append(b)
+        }
+        return order.map { key in
+            let group = byKey[key] ?? []
+            return SlotGroup(id: key, bookings: group, capacity: group.first.flatMap { bookingCapacity($0) } ?? 0)
+        }
+    }
+
+    /// Series the student has ended locally — a persisted tombstone (mirrors `deletedMessagesKey`) so
+    /// top-up stops extending them even before the instructor's end-decision has been fetched.
+    private let endedSeriesKey = "flowe.endedSeries"
+
+    private func markSeriesEnded(_ seriesID: String) {
+        var ids = Set(UserDefaults.standard.stringArray(forKey: endedSeriesKey) ?? [])
+        ids.insert(seriesID)
+        UserDefaults.standard.set(Array(ids), forKey: endedSeriesKey)
+    }
+
+    private var endedSeriesIDs: Set<String> {
+        Set(UserDefaults.standard.stringArray(forKey: endedSeriesKey) ?? [])
     }
 
     /// Re-send anything that never reached the server — a booking made offline, or a decision
@@ -344,6 +903,13 @@ final class MockDataStore {
             guard let instructorID = booking.instructorOwnerID,
                   let studentID = booking.studentID else { continue }
             await upload(booking, instructorID: instructorID, studentID: studentID)
+        }
+        // Series occurrences carry their deterministic recordName up front (remoteID != nil), so they
+        // are retried through the idempotent series path rather than the one-off create above.
+        for booking in bookings where booking.pendingUpload && booking.isRecurring {
+            guard let instructorID = booking.instructorOwnerID,
+                  let studentID = booking.studentID else { continue }
+            await uploadSeries(booking, instructorID: instructorID, studentID: studentID)
         }
         for booking in bookings where booking.pendingDecision {
             guard let remoteID = booking.remoteID else { continue }
@@ -373,8 +939,18 @@ final class MockDataStore {
 
     /// Pull bookings for whichever side the user is on, merge in the instructor's decisions, and
     /// cache the result locally so the UI works offline.
+    /// Guards against a second `syncBookings` starting while one is mid-flight. `syncBookings` suspends
+    /// at several `await`s and is reachable concurrently (pull-to-refresh, sign-in `.task`, scenePhase,
+    /// push delivery). Two interleaved runs could each promote the SAME waitlister into a DIFFERENT freed
+    /// seat (the seat mutex can't catch distinct indices) → an overbook + orphaned hold. Set/checked
+    /// synchronously on the main actor before the first await, so the check-and-set is atomic.
+    private var isSyncingBookings = false
+
     func syncBookings(asInstructor: Bool) async {
         guard !isPreview, let currentUserID else { return }
+        guard !isSyncingBookings else { return }
+        isSyncingBookings = true
+        defer { isSyncingBookings = false }
         if bookingsPhase != .loaded { bookingsPhase = .loading }
         if asInstructor { await flushPendingListing() } else { await flushPendingStudentProfile() }
         await flushPendingWrites()
@@ -386,20 +962,44 @@ final class MockDataStore {
             return
         }
         bookingsPhase = .loaded
-        guard !remote.isEmpty else { return }
+        guard !remote.isEmpty else {
+            // A successful fetch that returned nothing still needs the reminder reconcile: it
+            // clear-then-rebuilds from live LOCAL confirmed bookings, so a session cancelled while its
+            // remote record was already gone doesn't leave a dangling reminder waiting on the scenePhase
+            // backstop. Idempotent — reads local state, schedules nothing new when there's nothing due.
+            await PushService.shared.scheduleSessionReminders()
+            return
+        }
 
-        let decisions = await bookingService.fetchDecisions(bookingIDs: remote.map(\.id))
+        // The decision id list is the occurrence recordNames PLUS the series-level ids
+        // (`series-<id>` / `seriesend-<id>`) for every distinct series seen, so the resolver can see a
+        // one-time series approval or end. `fetchDecisions` already takes an arbitrary `bookingID IN`
+        // list — only this caller changes.
+        var decisionIDs = Set(remote.map(\.id))
+        for entry in remote {
+            if let sid = Booking.seriesID(fromRecordName: entry.id) {
+                decisionIDs.insert("series-\(sid)")
+                decisionIDs.insert("seriesend-\(sid)")
+            }
+        }
+        let decisions = await bookingService.fetchDecisions(bookingIDs: Array(decisionIDs))
         var nextId = bookings.map(\.legacyId).max() ?? 0
         var nextOrder = bookings.map(\.order).max() ?? 0
 
         for entry in remote {
-            let status = Self.status(for: entry, decision: decisions[entry.id])
+            let status = Self.status(for: entry, decisions: decisions)
             if let cached = bookings.first(where: { $0.remoteID == entry.id }) {
-                // Don't undo a local decision whose write hasn't landed yet (offline accept, or a
-                // decision saved since this fetch started) — that would flip the row back to
-                // Pending and re-prompt the instructor for something they already answered.
+                // Don't undo a local decision whose write hasn't landed yet — that would flip the row
+                // back and re-prompt / resurrect. Two cases:
+                //  (1) an offline accept/decline saved since this fetch started (status re-derives
+                //      .pending because the decision record isn't visible yet), and
+                //  (2) an in-flight student CANCEL whose remote write failed transiently while the fetch
+                //      still returned the record un-cancelled (status re-derives .confirmed). Without this
+                //      the cancel is reverted to .confirmed AND flushPendingWrites then pushes a CONFIRM
+                //      (it keys the retry on the now-clobbered status), permanently resurrecting it.
                 let losesLocalDecision = status == .pending && cached.status != .pending
-                if !losesLocalDecision { cached.status = status }
+                let losesLocalCancel = cached.pendingDecision && cached.status == .cancelled && status != .cancelled
+                if !losesLocalDecision && !losesLocalCancel { cached.status = status }
                 // No-Show Shield: flag a fee-worthy late cancellation (instructor side only).
                 if asInstructor { flagLateCancelIfNeeded(cached, entry: entry) }
                 continue
@@ -423,7 +1023,234 @@ final class MockDataStore {
             context.insert(booking)
             if asInstructor { flagLateCancelIfNeeded(booking, entry: entry) }
         }
+
+        // STUDENT-side rolling top-up: extend every active standing series to the horizon as weeks roll
+        // in. Runs on a successful fetch so it can honor a remote `seriesend` tombstone and the local
+        // ended-series tombstone. The eager full-horizon batch is created at booking time, so this only
+        // ADDS the newly-in-range weeks. No instructor-side write is needed — rolled-in weeks resolve to
+        // confirmed against the single series-approve decision automatically.
+        if !asInstructor { await topUpStandingSeries(decisions: decisions) }
+        // Free the seat for any of the student's own bookings now resolved cancelled but still holding a
+        // seat — this is what releases the hold on an INSTRUCTOR-initiated decline/end (the instructor
+        // can't delete the student's creator-owned hold), plus a retry for any student cancel whose
+        // release failed offline. Idempotent: a released hold is nil'd so it isn't re-swept.
+        if !asInstructor { await releaseOrphanedHolds() }
+        // STUDENT-side deterministic waitlist promotion: re-derive, from the live seat set every device
+        // sees identically, whether this student is now the earliest waitlister for a slot with a freed
+        // in-capacity seat, and if so move its own hold into that seat (creator-write). No server trigger.
+        if !asInstructor { await promoteWaitlistedSeats() }
+        // Instructor-side: warm the profiles (name + photo) of every student on the freshly-fetched
+        // schedule, so their avatars render in the calendar / dashboard / request cards. Previously
+        // `syncStudentProfiles()` ran ONLY once at login (FlowApp), so a booking that arrived since —
+        // via pull-to-refresh or a push — showed a gradient placeholder until the app was relaunched.
+        // Keyed off `remote` (the authoritative set of students on the schedule) and routed through the
+        // de-duped `fetchAuthorProfiles`, which skips self/blocked/instructors and ALREADY-CACHED ids —
+        // so once every current student is cached this is a cheap no-op, not a per-refresh re-download.
+        if asInstructor {
+            await fetchAuthorProfiles(Set(remote.compactMap { $0.studentID }))
+        }
+        // Reconcile local session reminders against the freshly-resolved booking set. This is THE
+        // single source of truth for reminders (alongside releaseOrphanedHolds / promoteWaitlistedSeats):
+        // it recomputes the desired reminders from the confirmed, future bookings and clears any whose
+        // session was cancelled/declined/ended/completed or has passed — so a stale reminder can never
+        // outlive its booking. Both roles reconcile: the student is reminded of their own sessions, the
+        // instructor of the sessions on their schedule.
+        await PushService.shared.scheduleSessionReminders()
         save()
+    }
+
+    /// Release the seat holds of any of the signed-in student's bookings that have resolved `.cancelled`
+    /// but still carry a `holdRecordName`. Covers instructor decline / end-series (the seat frees on the
+    /// student's device, since only the hold's creator can delete it) and retries an offline student
+    /// cancel. Runs on the student side of `syncBookings` after status resolution.
+    private func releaseOrphanedHolds() async {
+        for booking in myBookings where booking.status == .cancelled {
+            guard let hold = booking.holdRecordName else { continue }
+            if await bookingService.releaseSeat(recordName: hold) {
+                booking.holdRecordName = nil
+            }
+        }
+        save()
+    }
+
+    // MARK: - Group classes: waitlist derivation + deterministic promotion
+    //
+    // A group/duet class is NOT a new record type — it reuses the SlotHold seat mutex with OVERFLOW
+    // seats. Admitted seats are `0..<capacity`; a full-class booker atomically wins the first free
+    // seat `>= capacity` (its waitlist rank = seatIndex − capacity). Waitlisted-ness is DERIVED off the
+    // seat index vs the booked type's cached `LessonType.capacity` — no stored column, no BookingStatus
+    // case. Promotion is a pure function of the visible SlotHold set, computed identically on every
+    // device (mirrors `EventService.admitted`), and only the promoted student's OWN device performs the
+    // seat move (creator-write, like `reconcileAttendance`).
+
+    /// The seat capacity of the `LessonType` a booking was made against, resolved from the cached lesson
+    /// types by the booking's instructor owner + type name (works on BOTH sides: the instructor owns the
+    /// rows; a student cached them via `syncLessonTypes` when booking). Nil when no matching type is
+    /// cached, so callers degrade rather than guess.
+    func bookingCapacity(_ booking: Booking) -> Int? {
+        guard let owner = booking.instructorOwnerID else { return nil }
+        if let live = lessonTypes.first(where: { $0.ownerID == owner && $0.name == booking.type })?.capacity {
+            return live
+        }
+        // Cache miss (cold / 2nd device / renamed type): fall back to the capacity frozen on the booking
+        // at claim time, so waitlist promotion doesn't stall on an uncached lesson type.
+        return booking.bookedCapacity > 0 ? booking.bookedCapacity : nil
+    }
+
+    /// True when a booking occupies an OVERFLOW seat — i.e. it is on the waitlist, not admitted. Derived
+    /// purely from the hold's seat index vs the cached group capacity; false when there is no hold, the
+    /// capacity isn't cached, the type isn't a real group (`< 2`), or the booking is already cancelled
+    /// (a cancelled overflow hold is being released). On the INSTRUCTOR's device incoming bookings carry
+    /// no `holdRecordName` (seat index is student-private), so this is always false there — the roster
+    /// shows counts only, by design.
+    func isWaitlisted(_ booking: Booking) -> Bool {
+        guard booking.status != .cancelled,
+              let seat = booking.seatIndex,
+              let cap = bookingCapacity(booking), cap >= 2 else { return false }
+        return seat >= cap
+    }
+
+    /// The student's 1-based waitlist position (#1 = next in line), from the seat index vs capacity, or
+    /// nil when not waitlisted. A DISPLAY hint: it counts from the raw seat index, so it can overstate
+    /// the position if earlier waitlisters have left; it corrects to a real seat on the next sync when
+    /// this student is promoted. The authoritative ordering lives in `promoteWaitlistedSeats`.
+    func waitlistRank(for booking: Booking) -> Int? {
+        guard isWaitlisted(booking), let seat = booking.seatIndex,
+              let cap = bookingCapacity(booking) else { return nil }
+        return seat - cap + 1
+    }
+
+    /// The (POSIX `yyyy-MM-dd` date, `HHmm` time) of a hold recordName
+    /// `hold-<instr>-<yyyy-MM-dd>-<HHmm>-<seat>`, read from the TAIL so dashes inside the instructorID
+    /// don't confuse it (from the end: seat, HHmm, then dd, MM, yyyy are the five trailing tokens).
+    /// Reading straight off the stored hold string keeps promotion byte-consistent with the key every
+    /// other device sees. Nil if the shape doesn't match.
+    private static func holdSlot(_ name: String) -> (date: String, time: String)? {
+        let p = name.split(separator: "-")
+        guard p.count >= 7 else { return nil }   // hold, instr(>=1), yyyy, MM, dd, HHmm, seat
+        let n = p.count
+        return (date: "\(p[n - 5])-\(p[n - 4])-\(p[n - 3])", time: String(p[n - 2]))
+    }
+
+    /// Deterministic client-side waitlist promotion — no server trigger. For each of the signed-in
+    /// student's OWN waitlisted (overflow-seat) bookings, re-derive from the live seat set whether this
+    /// student is the earliest waitlister (rank 0) for a slot that now has a free in-capacity seat, and
+    /// if so move its hold from the overflow seat into the lowest free admitted seat. Only this student's
+    /// device can do it (creator-write). Every device computes the same rank from the same visible seat
+    /// set, so nobody jumps the queue. If the rank-0 student is OFFLINE, lower-ranked online waitlisters
+    /// still SEE that student's lower overflow index → compute rank > 0 → do not promote; the freed seat
+    /// stays absent (can briefly look free in the picker) until the rank-0 student next syncs — a
+    /// documented EventRegistration-style eventual-consistency window, seniority preserved.
+    private func promoteWaitlistedSeats() async {
+        guard !isPreview, let currentUserID else { return }
+        let mine = myBookings.filter { isWaitlisted($0) }
+        guard !mine.isEmpty else { return }
+        for booking in mine {
+            guard let hold = booking.holdRecordName,
+                  let (dateString, token) = Self.holdSlot(hold),
+                  let owner = booking.instructorOwnerID,
+                  let cap = bookingCapacity(booking), cap >= 2,
+                  let myK = booking.seatIndex else { continue }
+            guard let live = await bookingService.fetchSlotHolds(instructorID: owner, date: dateString),
+                  let liveSeats = live[token] else { continue }
+            // Re-read after the await: the student may have cancelled this exact booking mid-fetch (which
+            // nils holdRecordName and frees the seat). Claiming now would resurrect a dead hold.
+            guard isWaitlisted(booking), booking.holdRecordName == hold else { continue }
+            // My rank among overflow holders present in the live set: how many overflow seats below mine.
+            let myRank = liveSeats.filter { $0 >= cap && $0 < myK }.count
+            guard myRank == 0 else { continue }   // a senior waitlister is still ahead — not my turn
+            let freeSeats = (0..<cap).filter { !liveSeats.contains($0) }.sorted()
+            guard !freeSeats.isEmpty else { continue }
+            // Claim the lowest free admitted seat; on loss (a fresh booker or a racing promotion won it)
+            // try the next free seat, and abort on failure — never double-book, never drop the overflow.
+            seatLoop: for seat in freeSeats {
+                switch await bookingService.claimSeat(instructorID: owner, date: dateString, time: token, seat: seat) {
+                case .claimed(let newName):
+                    booking.holdRecordName = newName
+                    save()
+                    _ = await bookingService.releaseSeat(recordName: hold)   // free the old overflow seat
+                    // The waitlist entry never published a SessionBooking (so a seatless waitlister never
+                    // reached the instructor). Now that it holds an ADMITTED seat, publish it as a normal
+                    // pending request the instructor can accept. `owner` is the instructor bound above.
+                    if booking.remoteID == nil {
+                        await upload(booking, instructorID: owner, studentID: currentUserID)
+                    }
+                    break seatLoop
+                case .slotTaken:
+                    continue seatLoop
+                case .failed, .waitlisted:
+                    break seatLoop
+                }
+            }
+        }
+        save()
+    }
+
+    /// Extend each active standing series (no local ended tombstone, no fetched `seriesend` decision)
+    /// whose latest materialized week is short of the horizon, materializing and uploading the missing
+    /// weeks. New weeks are born `.confirmed` when the series is already approved, else `.pending`.
+    private func topUpStandingSeries(decisions: [String: RemoteDecision]) async {
+        guard let currentUserID else { return }
+        let ended = endedSeriesIDs
+        let mine = bookings.filter { $0.isRecurring && ($0.studentID == nil || $0.studentID == currentUserID) }
+        let bySeries = Dictionary(grouping: mine, by: { $0.seriesID ?? "" })
+        for (sid, occs) in bySeries where !sid.isEmpty {
+            if ended.contains(sid) { continue }
+            if decisions["seriesend-\(sid)"] != nil { continue }
+            guard let earliest = occs.compactMap({ Self.occurrenceDate($0) }).min(),
+                  let template = occs.max(by: { (Self.occurrenceDate($0) ?? .distantPast) < (Self.occurrenceDate($1) ?? .distantPast) }),
+                  let instructor = instructors.first(where: { $0.ownerID == template.instructorOwnerID })
+                    ?? instructorPlaceholder(from: template)
+            else { continue }
+            let approved = decisions["series-\(sid)"]?.confirmed == true
+            // Seats for a newly-in-range week honor the booked type's capacity. Prefer the value FROZEN on
+            // an existing occurrence (bookedCapacity) — the live cache may be cold or the instructor a
+            // hours-less placeholder, which would wrongly collapse a real group to a 1-seat slot and skip
+            // its weeks. Fall back to the live lookup only when no occurrence carries a frozen capacity.
+            let frozenCap = occs.map(\.bookedCapacity).max() ?? 0
+            let capacity = frozenCap > 0
+                ? frozenCap
+                : (ownedLessonTypes(for: instructor).first { $0.name == template.type }?.capacity ?? 0)
+            let calendar = Calendar.current
+            // Re-scan from the series' weekday anchor on/after today — NOT just past the last materialized
+            // week. `materializeSeriesOccurrences` skips any week whose recordName already exists (no dup,
+            // and no redundant claim, since the seat claim sits inside that existence guard), so anchoring
+            // here also RE-ATTEMPTS the seat claim for an INTERIOR week that was full at first materialize
+            // and has since freed up. Anchoring at last+7 (the old behavior) dropped such a gap forever.
+            let startToday = calendar.startOfDay(for: Date())
+            var anchor = earliest
+            while anchor < startToday {
+                guard let bumped = calendar.date(byAdding: .day, value: 7, to: anchor) else { break }
+                anchor = bumped
+            }
+            let created = await materializeSeriesOccurrences(
+                instructor: instructor, from: anchor, time: template.time, type: template.type,
+                duration: template.duration, seriesID: sid, approved: approved, capacity: capacity, calendar: calendar
+            )
+            guard !created.isEmpty else { continue }
+            save()
+            guard !isPreview, let instructorID = template.instructorOwnerID else { continue }
+            Task { for booking in created { await uploadSeries(booking, instructorID: instructorID, studentID: currentUserID) } }
+        }
+    }
+
+    /// A minimal `Instructor` carrying only the ids `materializeSeriesOccurrences` reads, for a series
+    /// whose instructor listing isn't in the local cache (so top-up never stalls on a missing listing).
+    private func instructorPlaceholder(from template: Booking) -> Instructor? {
+        guard let ownerID = template.instructorOwnerID else { return nil }
+        // A bare, uninserted value carrier — `materializeSeriesOccurrences` only reads legacyId/ownerID.
+        return Instructor(legacyId: template.instructorId, ownerID: ownerID)
+    }
+
+    /// The occurrence `Date` parsed from a series booking's recordName suffix ("yyyy-MM-dd"). Used for
+    /// top-up bookkeeping — deterministic and independent of `sessionStart`'s nearest-year reconstruction.
+    private static func occurrenceDate(_ booking: Booking, calendar: Calendar = .current) -> Date? {
+        guard let s = booking.occurrenceDateString else { return nil }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        f.timeZone = calendar.timeZone
+        return f.date(from: s)
     }
 
     /// A booking is pending until the instructor responds; a student cancellation always wins; and a
@@ -434,13 +1261,42 @@ final class MockDataStore {
     /// transition — would be clobbered the next time this returned `.confirmed`). Nothing else in
     /// production ever produced `.completed`, which left the Past tab, instructor earnings/sessions
     /// and the whole review flow permanently unreachable.
-    private static func status(for booking: RemoteBooking, decision: RemoteDecision?,
+    /// For a standing series, a single decision covers every week, resolved here in precedence order:
+    /// (1) a decision addressed to THIS occurrence — a one-off's decision, or an instructor accept/
+    /// decline of a single week — wins; else (2) an instructor series-END tombstone cancels FUTURE
+    /// weeks only (start ≥ end time), leaving past/completed weeks resolving as approved so reviews and
+    /// earnings survive; else (3) the one-time series APPROVAL confirms every week, including weeks that
+    /// rolled into the horizon after approval; else `.pending`. A student-owned cancel always wins.
+    private static func status(for booking: RemoteBooking, decisions: [String: RemoteDecision],
                                now: Date = Date()) -> BookingStatus {
         if booking.cancelled { return .cancelled }
-        guard let decision else { return .pending }
-        guard decision.confirmed else { return .cancelled }
-        return Booking.isOver(date: booking.date, time: booking.time, duration: booking.duration, now: now)
-            ? .completed : .confirmed
+        let over = Booking.isOver(date: booking.date, time: booking.time, duration: booking.duration, now: now)
+
+        // 1. A decision addressed to this specific occurrence id (one-off, or a single skipped/accepted
+        //    week of a series). Highest precedence.
+        if let decision = decisions[booking.id] {
+            guard decision.confirmed else { return .cancelled }
+            return over ? .completed : .confirmed
+        }
+
+        // A series occurrence with no per-week decision resolves against the series-level decisions.
+        if let sid = Booking.seriesID(fromRecordName: booking.id) {
+            // 2. Instructor ended the series: future weeks (start ≥ the end time) are cancelled WITHOUT
+            //    touching the student-owned record, so no student fee is mis-flagged; past weeks fall
+            //    through to the approval below and keep their approve→completed resolution.
+            if let ended = decisions["seriesend-\(sid)"],
+               let start = Booking.sessionStart(date: booking.date, time: booking.time, duration: booking.duration, now: now),
+               start >= ended.respondedAt {
+                return .cancelled
+            }
+            // 3. One-time series approval — covers weeks materialized after it too.
+            if let approve = decisions["series-\(sid)"], approve.confirmed {
+                return over ? .completed : .confirmed
+            }
+            return .pending
+        }
+
+        return .pending
     }
 
     /// "Thu Jul 10" → "Thu, Jul 10" to match the booking-card format.
@@ -459,6 +1315,14 @@ final class MockDataStore {
         guard let me = currentInstructor else { return CancellationPolicy() }
         return ownedLessonTypes(for: me).first { $0.name == booking.type }?.cancellationPolicy
             ?? CancellationPolicy()
+    }
+
+    /// Whether the No-Show Shield is actually protecting anything — i.e., at least one of the
+    /// instructor's own lesson types carries an active cancellation policy (a window + a fee). Drives
+    /// the shield's "is it set up?" guidance so "You're covered" is never shown when nothing is.
+    var hasActiveCancellationPolicy: Bool {
+        guard let me = currentInstructor else { return false }
+        return ownedLessonTypes(for: me).contains { $0.cancellationPolicy.isActive }
     }
 
     /// Price used to resolve a percentage fee — the matching lesson type's price, else the rate.
@@ -519,12 +1383,50 @@ final class MockDataStore {
         return noShowStrikes(forStudentID: sid) > 0
     }
 
+    // MARK: - Client notes (private clinical/safety notes)
+    //
+    // Instructor-authored PRIVATE notes about a client (injuries, pregnancy, conditions). Keyed by
+    // studentID: one note per client. These live ONLY in the CloudKit private database (see
+    // [[ClientNote]] + [[SwiftData-Container]]); there is deliberately NO service, NO upload path, NO
+    // flushPendingWrites entry — identical private-mirror posture to [[BlockedUser]]. NEVER read a
+    // ClientNote inside any *Service, and NEVER copy one onto a Booking (Booking is double-written to
+    // the world-readable public SessionBooking record — that would leak health data).
+
+    /// This instructor's single private note about a client, if one exists.
+    func clientNote(forStudentID studentID: String) -> ClientNote? {
+        clientNotes.first { $0.studentID == studentID }
+    }
+
+    /// Create-or-update the instructor's private note for a client (find-first-by-studentID upsert;
+    /// uniqueness enforced here, not by a DB constraint). Saves to the private store only.
+    func saveClientNote(studentID: String, hasInjury: Bool, injuryNote: String,
+                        isPregnant: Bool, pregnancyNote: String, conditions: String,
+                        notes: String, emergencyContact: String, goals: String) {
+        guard !studentID.isEmpty else { return }
+        let note = clientNotes.first { $0.studentID == studentID }
+            ?? {
+                let n = ClientNote(studentID: studentID)
+                context.insert(n)
+                return n
+            }()
+        note.hasInjury = hasInjury; note.injuryNote = injuryNote
+        note.isPregnant = isPregnant; note.pregnancyNote = pregnancyNote
+        note.conditions = conditions; note.notes = notes
+        note.emergencyContact = emergencyContact; note.goals = goals
+        note.updatedAt = Date()
+        save()   // context.save() + refresh() → glyphs re-render reactively
+    }
+
     /// Flag a late cancellation for a fee. Called during the instructor's booking sync: a booking is a
     /// late-cancel when it was cancelled inside the policy's notice window before the session start.
     /// The cancel time is the record's last modification (cancel is the last write it ever receives).
     /// Idempotent — once flagged, collected or waived, it is never re-flagged.
     private func flagLateCancelIfNeeded(_ booking: Booking, entry: RemoteBooking) {
-        guard booking.status == .cancelled, booking.feeStatus == .none, booking.attendance == .unknown,
+        // Only a STUDENT cancellation (SessionBooking.cancelled=1) can carry a late-cancel fee. An
+        // instructor decline / series-skip / series-end resolves to `.cancelled` via a decision without
+        // flipping this flag, so it correctly never incurs a fee.
+        guard entry.cancelled,
+              booking.status == .cancelled, booking.feeStatus == .none, booking.attendance == .unknown,
               let cancelledAt = entry.modifiedAt, let start = booking.sessionStart() else { return }
         let policy = policy(for: booking)
         guard policy.isActive else { return }
@@ -621,6 +1523,7 @@ final class MockDataStore {
             counterpartID: message.recipientID
         ) ?? message.text
         let remoteID = await messagingService.send(
+            recordName: message.recordName,          // deterministic → idempotent, never a duplicate
             conversationID: message.conversationID,
             senderID: message.senderID,
             senderName: message.senderName,
@@ -684,7 +1587,30 @@ final class MockDataStore {
         }
     }
 
-    /// Mark everything received in a thread as read (called when the thread is opened).
+    /// Counterparts' fetched read markers (the "Seen" indicator). In-memory only — a remote signal, not
+    /// a persisted model — keyed by (conversationID, readerID). `@Observable` tracks it, so a fetched
+    /// receipt re-renders the open thread.
+    private var readReceipts: [RemoteReadReceipt] = []
+
+    private func cacheReadReceipt(_ receipt: RemoteReadReceipt) {
+        if let i = readReceipts.firstIndex(where: {
+            $0.conversationID == receipt.conversationID && $0.readerID == receipt.readerID
+        }) {
+            readReceipts[i] = receipt
+        } else {
+            readReceipts.append(receipt)
+        }
+    }
+
+    /// When `readerID` last read `conversationID`, if we've fetched their receipt — drives "Seen".
+    func lastReadAt(conversationID: String, by readerID: String) -> Date? {
+        readReceipts.first { $0.conversationID == conversationID && $0.readerID == readerID }?.lastReadAt
+    }
+
+    /// Mark everything received in a thread as read (called when the thread is opened), and — so the
+    /// SENDER can show "Seen" — publish our own read marker for the conversation, stamped to the newest
+    /// message we hold (a value in the sender's own clock domain, so their `sentAt <= lastReadAt`
+    /// comparison is skew-proof for the messages they sent).
     func markThreadRead(with counterpartID: String) {
         guard let me = currentUserID else { return }
         let id = Message.conversationID(me, counterpartID)
@@ -695,6 +1621,9 @@ final class MockDataStore {
             changed = true
         }
         if changed { save() }
+        guard !isPreview, changed else { return }   // only acknowledge when we newly read something
+        let readUpTo = messages.filter { $0.conversationID == id }.map(\.sentAt).max() ?? Date()
+        Task { await messagingService.publishReadReceipt(conversationID: id, readerID: me, lastReadAt: readUpTo) }
     }
 
     /// Pull all messages involving this user and cache anything new.
@@ -710,10 +1639,13 @@ final class MockDataStore {
     /// Refresh a single thread — cheaper than a full sync while a conversation is open.
     func syncThread(with counterpartID: String) async {
         guard !isPreview, let me = currentUserID else { return }
-        let remote = await messagingService.fetchThread(
-            conversationID: Message.conversationID(me, counterpartID)
-        )
+        let convo = Message.conversationID(me, counterpartID)
+        let remote = await messagingService.fetchThread(conversationID: convo)
         await merge(remote, me: me)
+        // Pull the counterpart's read marker so our own outgoing bubbles can show "Seen".
+        if let receipt = await messagingService.fetchReadReceipt(conversationID: convo, readerID: counterpartID) {
+            cacheReadReceipt(receipt)
+        }
     }
 
     /// Ensure my end-to-end messaging keypair exists and my public key is published, so others can
@@ -725,18 +1657,33 @@ final class MockDataStore {
 
     private func merge(_ remote: [RemoteMessage], me: String) async {
         guard !remote.isEmpty else { return }
-        let known = Set(messages.compactMap(\.remoteID))
         // Tombstoned ids the user deleted — never re-insert them, or a sync would resurrect a
         // message they removed from the conversation.
         let deleted = Set(UserDefaults.standard.stringArray(forKey: deletedMessagesKey) ?? [])
-        var inserted = false
-        for entry in remote where !known.contains(entry.id) && !deleted.contains(entry.id) {
-            // Decrypt the wire text into plaintext for the local (on-device-only) cache. The
-            // counterpart is whichever party isn't me — the shared secret is the same either way.
+
+        // Decrypt EVERYTHING first. Decryption is the only suspension point in this function, so
+        // doing it up front lets the known-check + insert pass below run with no `await` in between
+        // — which is what makes it safe against a second `merge` (two feeds sync at once) slipping
+        // the same record past the check before either has inserted it. Without this the pre-await
+        // `known` snapshot is stale by insert time and the same message lands twice.
+        var decrypted: [(RemoteMessage, String)] = []
+        for entry in remote where !deleted.contains(entry.id) {
             let counterpartID = entry.senderID == me ? entry.recipientID : entry.senderID
             let plaintext = await messageCrypto.decrypt(
                 entry.text, conversationID: entry.conversationID, counterpartID: counterpartID
             )
+            decrypted.append((entry, plaintext))
+        }
+
+        // Read `known` AFTER the awaits (so a sibling merge's just-saved rows are visible), and shield
+        // a message I sent that is still uploading: its deterministic recordName is known before the
+        // upload finishes, so the copy fetched back from the server can't land as a second row.
+        var known = Set(messages.compactMap {
+            $0.remoteID ?? ($0.senderID == me ? $0.recordName : nil)
+        })
+        var inserted = false
+        for (entry, plaintext) in decrypted where !known.contains(entry.id) {
+            known.insert(entry.id)   // also dedup an id that appears twice within this one batch
             context.insert(Message(
                 remoteID: entry.id,
                 conversationID: entry.conversationID,
@@ -1047,13 +1994,67 @@ final class MockDataStore {
         postableInstructors.isEmpty ? [.tip] : [.tip, .checkin, .review]
     }
 
-    /// The author's uploaded profile photo, if they have a listing.
+    /// Resolve who to SHOW as the author of a record, LIVE, from their current profile — never the
+    /// frozen name/photo denormalised onto the record when it was written. The single shared resolver
+    /// behind every author render site (community posts + comments, reviews, booking rows, event
+    /// organizers), so a student who completes their profile after posting is recognised everywhere.
     ///
-    /// Instructors have one; a student has no listing and so no avatar, and falls back to the
-    /// gradient placeholder. This is the only source — the post itself carries no author image.
-    func authorPhoto(for post: FeedPost) -> Data? {
-        guard let authorID = post.ownerID else { return nil }
-        return instructors.first { $0.ownerID == authorID }?.photo
+    /// Precedence, cache-first (no `await`, no fetch on the render path — reads only the in-memory
+    /// `@Observable` arrays, so a profile that lands via `fetchAuthorProfiles` re-renders the row):
+    ///   1. SELF — the signed-in user's own identity is always locally current, so their own
+    ///      posts/comments reflect an edit with no round-trip. Instructor session → own listing;
+    ///      student session → own `StudentProfile`; either falls back to the live session name.
+    ///   2. INSTRUCTOR cache — a listing gives an Unsplash `img` avatar even with no uploaded photo,
+    ///      and the catalog is warm (syncCatalog runs before syncCommunity). Tried before students.
+    ///   3. STUDENT profile cache — the changeable public source of truth, fetched by exact ownerID.
+    ///   4. SNAPSHOT — the record's denormalised name, so it degrades to exactly today's behaviour
+    ///      and never renders blank when the snapshot held something.
+    func displayIdentity(ownerID: String?, fallbackName: String) -> AuthorIdentity {
+        let fb = AuthorIdentity(name: fallbackName, img: "", photo: nil)
+        guard let id = ownerID, !id.isEmpty else { return fb }
+        // 1) Own identity — always locally current.
+        if id == currentUserID {
+            if let ins = currentInstructor {
+                let n = ins.name.isEmpty ? (currentUserName.isEmpty ? fallbackName : currentUserName) : ins.name
+                return AuthorIdentity(name: n, img: ins.img, photo: ins.photo)
+            }
+            let p = currentStudentProfile
+            let n = (p?.name.isEmpty == false) ? p!.name : (currentUserName.isEmpty ? fallbackName : currentUserName)
+            return AuthorIdentity(name: n, img: "", photo: p?.photo)
+        }
+        // 2) Instructor catalog cache (Unsplash img avatar even without an uploaded photo).
+        if let ins = instructors.first(where: { $0.ownerID == id }) {
+            return AuthorIdentity(name: ins.name.isEmpty ? fallbackName : ins.name, img: ins.img, photo: ins.photo)
+        }
+        // 3) Student profile cache (fetched by exact ownerID via fetchAuthorProfiles).
+        if let sp = studentProfiles.first(where: { $0.ownerID == id }), !sp.name.isEmpty {
+            return AuthorIdentity(name: sp.name, img: "", photo: sp.photo)
+        }
+        // 4) Frozen snapshot — never worse than today.
+        return fb
+    }
+
+    /// Pre-warm the resolver's cache for a batch of authors seen in the feed / a comment thread.
+    ///
+    /// Idempotent, and NON-ENUMERABLE-SAFE: it only ever fetches ownerIDs already harvested from
+    /// posts/comments (i.e. ids we already know), never a broad `StudentProfile` query — students stay
+    /// undiscoverable. Instructors are skipped (they resolve from the catalog cache), as are self and
+    /// blocked authors. Upserts into `studentProfiles`; the `@Observable` write re-renders open rows.
+    func fetchAuthorProfiles(_ ownerIDs: Set<String>) async {
+        guard !isPreview else { return }
+        let wanted = ownerIDs
+            .subtracting([currentUserID].compactMap { $0 })
+            .subtracting(blockedIDs)
+            .filter { id in !instructors.contains(where: { $0.ownerID == id }) }
+            // Skip authors already cached — otherwise every feed re-sync re-downloads every author's
+            // full StudentProfile (photo CKAsset included) and forces an unconditional `refresh()`.
+            // A profile edit is picked up by the owner's own republish, not by re-fetching here.
+            .filter { id in !studentProfiles.contains(where: { $0.ownerID == id }) }
+        guard !wanted.isEmpty else { return }
+        let listings = await studentDirectory.fetch(ownerIDs: Array(wanted))
+        guard !listings.isEmpty else { return }
+        upsert(listings)
+        save()
     }
 
     /// Replies on a post, oldest first, minus blocked authors.
@@ -1158,6 +2159,47 @@ final class MockDataStore {
     /// records the post has, and this user only ever creates or deletes their own (see
     /// `CommunityService`). The local numbers move immediately so the tap feels answered, and the
     /// next sync replaces them with what the server actually holds.
+    /// One person who liked a post, resolved for the "Liked by" list.
+    struct PostLiker: Identifiable, Equatable {
+        let id: String          // ownerID
+        let name: String
+        let img: String         // instructor listing avatar id, if any
+        let photo: Data?        // uploaded photo, if any
+    }
+
+    /// Liker ownerIDs per post remoteID. The feed itself only needs the COUNT, but the "Liked by"
+    /// list needs identities — `RemoteLike` carries the liker's `authorID`, which `refreshEngagement`
+    /// otherwise collapses into a bare count, so we stash the ids here to name them on demand.
+    private(set) var likeAuthorsByPost: [String: [String]] = [:]
+
+    /// Everyone who liked a post, as displayable rows — the data behind the Instagram-style "Liked by"
+    /// sheet, open to any viewer. Blocked likers are hidden. The signed-in user's OWN like is folded in
+    /// from `post.liked` so the list always agrees with the heart and the count even before a like
+    /// (or unlike) has round-tripped to the server.
+    func likers(for post: FeedPost) -> [PostLiker] {
+        var ids = post.remoteID.map { likeAuthorsByPost[$0] ?? [] } ?? []
+        if let me = currentUserID {
+            if post.liked && !ids.contains(me) { ids.insert(me, at: 0) }
+            if !post.liked { ids.removeAll { $0 == me } }
+        }
+        return ids
+            .filter { !isBlocked($0) }
+            .map { id in
+                let ident = displayIdentity(ownerID: id, fallbackName: "")
+                return PostLiker(id: id, name: ident.name, img: ident.img, photo: ident.photo)
+            }
+    }
+
+    /// Refresh the liker list for a single post (called when the "Liked by" sheet opens), so it reflects
+    /// likes that landed since the last full engagement sweep and warms the likers' profiles for names
+    /// and avatars. Targeted — one post's likes, not the whole feed's.
+    func refreshLikers(for post: FeedPost) async {
+        guard !isPreview, let remoteID = post.remoteID else { return }
+        guard let likes = await communityService.fetchLikes(postIDs: [remoteID]) else { return }
+        likeAuthorsByPost[remoteID] = likes.map(\.authorID)
+        await fetchAuthorProfiles(Set(likes.map(\.authorID)))   // saves + refreshes
+    }
+
     func toggleLike(_ post: FeedPost) {
         post.liked.toggle()
         post.likes = max(0, post.likes + (post.liked ? 1 : -1))
@@ -1270,6 +2312,9 @@ final class MockDataStore {
         }
         communityPhase = .loaded
         mergePosts(posts)
+        // Warm the resolver so posts by students who have since completed their profile show the
+        // current name/photo, not the snapshot frozen at post time. By known ownerID only.
+        await fetchAuthorProfiles(Set(self.posts.compactMap(\.ownerID)))
         await refreshEngagement()
         await fetchMissingPostImages()
     }
@@ -1304,6 +2349,8 @@ final class MockDataStore {
         await flushPendingCommunityWrites()
         guard let remote = await communityService.fetchComments(postIDs: [remoteID]) else { return }
         mergeComments(remote, for: [remoteID])
+        // Same as the feed: resolve commenters' current identity by their known ownerIDs.
+        await fetchAuthorProfiles(Set(comments(for: post).map(\.authorID)))
     }
 
     /// Re-send anything that never reached the server: a post written offline, a like taken while
@@ -1387,9 +2434,13 @@ final class MockDataStore {
         // treating them alike would zero every count the moment the user went offline.
         if let likes = await communityService.fetchLikes(postIDs: ids) {
             let byPost = Dictionary(grouping: likes, by: \.postID)
+            // Keep the liker ids (not just the count) so the "Liked by" list can name them, and warm
+            // their profiles so the names/avatars resolve without a per-open round-trip.
+            await fetchAuthorProfiles(Set(likes.map(\.authorID)))
             for post in posts {
                 guard let remoteID = post.remoteID else { continue }
                 let rows = byPost[remoteID] ?? []
+                likeAuthorsByPost[remoteID] = rows.map(\.authorID)
                 let mine = rows.contains { $0.authorID == me }
                 if post.pendingLike {
                     // An undelivered tap: keep the user's own state, and keep the count consistent
@@ -1458,11 +2509,462 @@ final class MockDataStore {
     /// `EventDetailView`.
     var lastJoinOutcome: JoinOutcome?
 
+    // MARK: - Event approval (organizer accepts join requests, like lesson bookings)
+
+    /// A student's standing with one event.
+    enum EventRequestState: Equatable { case notRequested, requested, accepted, declined }
+
+    /// Registration rows per event id — kept so an ORGANIZER can list who's requested. Populated by
+    /// `reconcileAttendance` from the public store.
+    private(set) var eventRegistrationRows: [String: [RemoteRegistration]] = [:]
+    /// Organizer decisions per event: `[eventID: [studentID: accepted]]`. Absence of a key = still
+    /// pending (undecided). Populated by `reconcileAttendance`.
+    private(set) var eventDecisions: [String: [String: Bool]] = [:]
+
+    /// The signed-in student's standing with an event: not requested → requested (awaiting the
+    /// organizer) → accepted / declined.
+    func requestState(for event: CommunityEvent) -> EventRequestState {
+        guard let me = currentUserID, let remoteID = event.remoteID else {
+            return event.joined ? .requested : .notRequested
+        }
+        if let accepted = eventDecisions[remoteID]?[me] { return accepted ? .accepted : .declined }
+        return event.joined ? .requested : .notRequested
+    }
+
+    /// Pending join requests for an event I organize — registrations with no decision yet, oldest first.
+    func pendingRequests(for event: CommunityEvent) -> [RemoteRegistration] {
+        guard let remoteID = event.remoteID else { return [] }
+        let decided = eventDecisions[remoteID] ?? [:]
+        return (eventRegistrationRows[remoteID] ?? [])
+            .filter { decided[$0.studentID] == nil }
+            .sorted { $0.joinedAt < $1.joinedAt }
+    }
+
+    /// Students I've accepted into an event I organize.
+    func acceptedGuests(for event: CommunityEvent) -> [RemoteRegistration] {
+        guard let remoteID = event.remoteID else { return [] }
+        let decided = eventDecisions[remoteID] ?? [:]
+        return (eventRegistrationRows[remoteID] ?? [])
+            .filter { decided[$0.studentID] == true }
+            .sorted { $0.joinedAt < $1.joinedAt }
+    }
+
+    /// Total undecided requests across every event I organize — a dashboard/badge signal.
+    var myEventsPendingRequestCount: Int {
+        myEvents.reduce(0) { $0 + pendingRequests(for: $1).count }
+    }
+
+    /// Organizer accepts or declines one request. Writes an `EventDecision` (I'm the creator — I can't
+    /// edit the student's own registration), optimistically caches it, then reconciles.
+    func respondToEventRequest(_ registration: RemoteRegistration, accepted: Bool) {
+        guard let me = currentUserID,
+              let event = events.first(where: { $0.remoteID == registration.eventID }) else { return }
+        eventDecisions[registration.eventID, default: [:]][registration.studentID] = accepted   // optimistic
+        save()
+        guard !isPreview else { return }
+        Task {
+            _ = await eventService.setEventDecision(
+                accepted: accepted, eventID: registration.eventID,
+                studentID: registration.studentID, organizerID: me
+            )
+            await refreshAttendance(for: event)
+        }
+    }
+
     /// The events a student should see: blocked organizers gone, deletions already hidden, and a
     /// cancelled event hidden from everyone *except* someone who joined it — they keep seeing it wear
     /// a "Cancelled" badge, which is the only way they learn of the cancellation (there is no push).
     var visibleEvents: [CommunityEvent] {
         events.filter { !isBlocked($0.organizerID) && !$0.pendingDelete && (!$0.cancelled || $0.joined) }
+    }
+
+    // MARK: - Opportunities (Flowe Pro career marketplace)
+
+    /// Open opportunities the signed-in instructor can browse — excludes their OWN posts, closed/filled
+    /// ones, and blocked posters. Newest first. Distance ranking + eligibility gating land with the
+    /// full browse screen; this is the cold-start feed. See [[FlowePro]].
+    var openOpportunities: [Opportunity] {
+        opportunities
+            .filter { $0.status == .open && $0.posterID != currentUserID && !isBlocked($0.posterID) }
+            .sorted { $0.createdAt > $1.createdAt }
+    }
+
+    /// The signed-in instructor's OWN posted opportunities (any status), for the manage screen.
+    var myOpportunities: [Opportunity] {
+        guard let me = currentUserID else { return [] }
+        return opportunities.filter { $0.posterID == me }.sorted { $0.createdAt > $1.createdAt }
+    }
+
+    /// The browse feed for a STUDENT: open opportunities they can actually act on. A student has no
+    /// instructor listing, so the eligibility gate blocks them on `certifiedOnly` posts — surfacing those
+    /// would be a wall of "you can't apply". So the student browse is the `openToAll` slice (apprentice /
+    /// assistant / front-desk / space), which is exactly the student-facing half of [[FlowePro]].
+    var studentBrowsableOpportunities: [Opportunity] {
+        Self.studentBrowsable(openOpportunities)
+    }
+
+    /// Opportunities the signed-in user has an ACTIVE (non-withdrawn) application to — the "Applied" tab
+    /// of the student browse, where they track each application's pipeline stage. Newest post first.
+    var myAppliedOpportunities: [Opportunity] {
+        guard let me = currentUserID else { return [] }
+        return Self.appliedOpportunities(opportunities, applications: opportunityApplications, applicantID: me)
+    }
+
+    // Pure filters behind the two properties above — extracted so they're unit-testable without a live
+    // store / SwiftData container (see FloweUnitTests/OpportunityBrowseTests). Behaviour lives here; the
+    // properties just supply the current inputs.
+
+    /// The `openToAll` slice a student may apply to. Input is expected already status/poster/blocked-filtered.
+    /// `nonisolated` — pure over its inputs, touches no actor state, so it's callable off the main actor.
+    nonisolated static func studentBrowsable(_ open: [Opportunity]) -> [Opportunity] {
+        open.filter { $0.eligibility == .openToAll }
+    }
+
+    /// Opportunities `applicantID` has a live (non-withdrawn) application to, matched by the opportunity
+    /// `key` the application stored, newest post first. Withdrawn applications drop out so a withdrawn
+    /// gig leaves the Applied tab.
+    nonisolated static func appliedOpportunities(_ opportunities: [Opportunity],
+                                                 applications: [OpportunityApplication],
+                                                 applicantID: String) -> [Opportunity] {
+        let appliedKeys = Set(
+            applications
+                .filter { $0.applicantID == applicantID && !$0.withdrawn }
+                .map(\.opportunityID)
+        )
+        return opportunities
+            .filter { appliedKeys.contains($0.key) }
+            .sorted { $0.createdAt > $1.createdAt }
+    }
+
+    /// Post a new opportunity: create it locally (poster = me, location from my studio listing), then
+    /// publish it to the public catalog. Offline/preview leaves it local with its deterministic name,
+    /// so it still shows on the manage screen and uploads on the next flush path.
+    func addOpportunity(kind: OpportunityKind, eligibility: OpportunityEligibility,
+                        title: String, about: String, payText: String, commitment: String) {
+        guard let me = currentUserID else { return }
+        let ins = currentInstructor
+        let posterName = (ins?.name.isEmpty == false) ? ins!.name : currentUserName
+        let opp = Opportunity(
+            posterID: me, posterName: posterName, kind: kind, eligibility: eligibility, status: .open,
+            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+            about: about.trimmingCharacters(in: .whitespacesAndNewlines),
+            location: ins?.address ?? "",
+            payText: payText.trimmingCharacters(in: .whitespacesAndNewlines),
+            commitment: commitment.trimmingCharacters(in: .whitespacesAndNewlines),
+            createdAt: Date()
+        )
+        opp.latitude = ins?.latitude
+        opp.longitude = ins?.longitude
+        opp.remoteID = opp.recordName   // deterministic up front — the poster owns/edits this record
+        context.insert(opp)
+        save()
+        guard !isPreview else { return }
+        Task { await uploadOpportunity(opp) }
+    }
+
+    private func uploadOpportunity(_ opp: Opportunity) async {
+        let saved = await opportunityService.publish(
+            recordName: opp.recordName,
+            posterID: opp.posterID, posterName: opp.posterName,
+            kind: opp.kindRaw, eligibility: opp.eligibilityRaw, status: opp.statusRaw,
+            title: opp.title, about: opp.about, location: opp.location,
+            latitude: opp.latitude, longitude: opp.longitude,
+            payText: opp.payText, commitment: opp.commitment,
+            startsAt: opp.startsAt, createdAt: opp.createdAt
+        )
+        opp.remoteID = saved ?? opp.recordName
+        save()
+    }
+
+    /// Close an opportunity (no longer accepting) — flips status locally + on the server.
+    func closeOpportunity(_ opp: Opportunity) {
+        opp.statusRaw = OpportunityStatus.closed.rawValue
+        save()
+        guard !isPreview, let rid = opp.remoteID else { return }
+        Task { await opportunityService.setStatus(recordName: rid, status: opp.statusRaw) }
+    }
+
+    /// Delete an opportunity — removes it locally and from the shared store (creator-write).
+    func deleteOpportunity(_ opp: Opportunity) {
+        let rid = opp.remoteID
+        context.delete(opp)
+        save()
+        guard !isPreview, let rid else { return }
+        Task { await opportunityService.delete(recordName: rid) }
+    }
+
+    // MARK: - Opportunity applications (Flowe Pro Phase 4)
+
+    /// The signed-in user's own application to an opportunity (to resolve the applied/withdrawn state).
+    func myApplication(for opportunity: Opportunity) -> OpportunityApplication? {
+        guard let me = currentUserID else { return nil }
+        return opportunityApplications.first { $0.opportunityID == opportunity.key && $0.applicantID == me }
+    }
+
+    /// Active applications to an opportunity I posted — the poster's inbox for that opp (withdrawn hidden,
+    /// blocked applicants dropped). Oldest first, so the earliest applicant leads.
+    func applications(for opportunity: Opportunity) -> [OpportunityApplication] {
+        opportunityApplications
+            .filter { $0.opportunityID == opportunity.key && !$0.withdrawn && !isBlocked($0.applicantID) }
+            .sorted { $0.createdAt < $1.createdAt }
+    }
+
+    /// Apply to an opportunity (idempotent — re-applying updates the note / un-withdraws). Creates the
+    /// applicant-owned record locally + publishes it, addressed to the poster.
+    func apply(to opportunity: Opportunity, note: String) {
+        guard let me = currentUserID, me != opportunity.posterID else { return }
+        // A user with their own instructor listing is applying as an instructor; otherwise as a student.
+        let role: ApplicantRole = (currentInstructor != nil) ? .instructor : .student
+        let app = myApplication(for: opportunity) ?? {
+            let fresh = OpportunityApplication(
+                opportunityID: opportunity.key, posterID: opportunity.posterID,
+                applicantID: me, applicantName: currentUserName, role: role)
+            context.insert(fresh)
+            return fresh
+        }()
+        app.note = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        app.withdrawn = false
+        app.remoteID = app.recordName
+        save()
+        guard !isPreview else { return }
+        Task { await uploadApplication(app) }
+    }
+
+    /// Withdraw my application — flips the flag locally + on the server (kept, not deleted, so the poster
+    /// sees it disappear rather than a dangling record).
+    func withdrawApplication(for opportunity: Opportunity) {
+        guard let app = myApplication(for: opportunity) else { return }
+        app.withdrawn = true
+        save()
+        guard !isPreview else { return }
+        Task { await uploadApplication(app) }
+    }
+
+    private func uploadApplication(_ app: OpportunityApplication) async {
+        let saved = await opportunityService.applyToOpportunity(
+            recordName: app.recordName, opportunityID: app.opportunityID, posterID: app.posterID,
+            applicantID: app.applicantID, applicantName: app.applicantName,
+            applicantRole: app.applicantRoleRaw, note: app.note, withdrawn: app.withdrawn,
+            createdAt: app.createdAt)
+        app.remoteID = saved ?? app.recordName
+        save()
+    }
+
+    // MARK: - Application pipeline stage (Phase 4b)
+
+    /// The current pipeline stage of one application — the poster's decision if any, else `.applied`.
+    func stage(for application: OpportunityApplication) -> ApplicationStage {
+        applicationDecisions.first {
+            $0.opportunityID == application.opportunityID && $0.applicantID == application.applicantID
+        }?.stage ?? .applied
+    }
+
+    /// The signed-in APPLICANT's stage on an opportunity they applied to (drives "Shortlisted" / "Hired"
+    /// / "Not selected" in the apply bar). `.applied` until the poster decides.
+    func myApplicationStage(for opportunity: Opportunity) -> ApplicationStage {
+        guard let me = currentUserID else { return .applied }
+        return applicationDecisions.first {
+            $0.opportunityID == opportunity.key && $0.applicantID == me
+        }?.stage ?? .applied
+    }
+
+    /// Poster moves an applicant to a stage: upsert the decision (they're the creator → can edit it),
+    /// then publish it addressed to the applicant.
+    func setStage(for application: OpportunityApplication, to stage: ApplicationStage) {
+        guard let me = currentUserID, me == application.posterID else { return }
+        let decision = applicationDecisions.first {
+            $0.opportunityID == application.opportunityID && $0.applicantID == application.applicantID
+        } ?? {
+            let fresh = ApplicationDecision(opportunityID: application.opportunityID,
+                                            applicantID: application.applicantID, posterID: me)
+            context.insert(fresh)
+            return fresh
+        }()
+        decision.stageRaw = stage.rawValue
+        decision.updatedAt = Date()
+        decision.remoteID = decision.recordName
+        save()
+        guard !isPreview else { return }
+        Task {
+            let saved = await opportunityService.setDecision(
+                recordName: decision.recordName, opportunityID: decision.opportunityID,
+                applicantID: decision.applicantID, posterID: me, stage: stage.rawValue,
+                updatedAt: decision.updatedAt)
+            decision.remoteID = saved ?? decision.recordName
+            save()
+        }
+    }
+
+    /// Pull open opportunities (the browse feed) + my own from the public catalog and merge them into
+    /// the local cache. Insert-by-remoteID with a status refresh for ones already held. Offline / preview
+    /// no-ops. This is what makes a poster's opportunity reach OTHER instructors in production.
+    func syncOpportunities() async {
+        guard !isPreview, let me = currentUserID else { return }
+        async let openRemote = opportunityService.fetchOpen()
+        async let mineRemote = opportunityService.fetchMine(posterID: me)
+        let remotes = ((await openRemote) ?? []) + ((await mineRemote) ?? [])
+        guard !remotes.isEmpty else { return }
+
+        let known = Set(opportunities.compactMap(\.remoteID))
+        var changed = false
+        for r in remotes {
+            if let existing = opportunities.first(where: { $0.remoteID == r.id }) {
+                // A poster may have closed/filled it since we last saw it.
+                if existing.statusRaw != r.status { existing.statusRaw = r.status; changed = true }
+            } else if !known.contains(r.id) {
+                let o = Opportunity(
+                    remoteID: r.id, posterID: r.posterID, posterName: r.posterName,
+                    kind: OpportunityKind(rawValue: r.kind) ?? .cover,
+                    eligibility: OpportunityEligibility(rawValue: r.eligibility) ?? .openToAll,
+                    status: OpportunityStatus(rawValue: r.status) ?? .open,
+                    title: r.title, about: r.about, location: r.location,
+                    payText: r.payText, commitment: r.commitment,
+                    startsAt: r.startsAt, createdAt: r.createdAt)
+                o.latitude = r.latitude; o.longitude = r.longitude
+                context.insert(o)
+                changed = true
+            }
+        }
+
+        // Applications: the poster's inbox (addressed to me) + my own (as an applicant). Merge by
+        // recordName, updating note/withdrawn on ones already held.
+        async let inbox = opportunityService.fetchApplications(posterID: me)
+        async let mineApps = opportunityService.fetchMyApplications(applicantID: me)
+        let remoteApps = ((await inbox) ?? []) + ((await mineApps) ?? [])
+        for r in remoteApps {
+            if let existing = opportunityApplications.first(where: { $0.recordName == r.id || $0.remoteID == r.id }) {
+                if existing.note != r.note || existing.withdrawn != r.withdrawn {
+                    existing.note = r.note; existing.withdrawn = r.withdrawn; changed = true
+                }
+            } else {
+                let a = OpportunityApplication(
+                    opportunityID: r.opportunityID, posterID: r.posterID,
+                    applicantID: r.applicantID, applicantName: r.applicantName,
+                    role: ApplicantRole(rawValue: r.applicantRole) ?? .instructor,
+                    note: r.note, withdrawn: r.withdrawn, createdAt: r.createdAt)
+                a.remoteID = r.id
+                context.insert(a)
+                changed = true
+            }
+        }
+
+        // Pipeline decisions: mine-as-poster + mine-as-applicant. Upsert the stage by recordName.
+        async let posterDec = opportunityService.fetchDecisions(posterID: me)
+        async let myDec = opportunityService.fetchMyDecisions(applicantID: me)
+        let remoteDecisions = ((await posterDec) ?? []) + ((await myDec) ?? [])
+        for r in remoteDecisions {
+            if let existing = applicationDecisions.first(where: { $0.recordName == r.id || $0.remoteID == r.id }) {
+                if existing.stageRaw != r.stage { existing.stageRaw = r.stage; existing.updatedAt = r.updatedAt; changed = true }
+            } else {
+                let d = ApplicationDecision(opportunityID: r.opportunityID, applicantID: r.applicantID,
+                                           posterID: r.posterID,
+                                           stage: ApplicationStage(rawValue: r.stage) ?? .applied,
+                                           updatedAt: r.updatedAt)
+                d.remoteID = r.id
+                context.insert(d)
+                changed = true
+            }
+        }
+        if changed { save() }
+    }
+
+    // MARK: - Peer recommendations (Flowe Pro Phase 5)
+
+    /// Recommendations addressed to an instructor — their profile's peer endorsements. Newest first;
+    /// a blocked author's endorsement is hidden, like a blocked student's review.
+    func recommendations(for ownerID: String) -> [InstructorRecommendation] {
+        Self.recommendations(recommendations, for: ownerID, blocked: blockedIDs)
+    }
+
+    /// Pure filter behind `recommendations(for:)` — extracted `nonisolated static` so it's unit-testable
+    /// without a live store (see FloweUnitTests/RecommendationTests), like the opportunity-browse filters.
+    nonisolated static func recommendations(_ all: [InstructorRecommendation],
+                                            for ownerID: String,
+                                            blocked: Set<String>) -> [InstructorRecommendation] {
+        all
+            .filter { $0.toID == ownerID && !blocked.contains($0.fromID) }
+            .sorted { $0.createdAt > $1.createdAt }
+    }
+
+    /// Peer recommendations of the signed-in instructor's own profile — the endorsements shown on it.
+    var myRecommendations: [InstructorRecommendation] {
+        guard let me = currentUserID else { return [] }
+        return recommendations(for: me)
+    }
+
+    /// Refresh the recommendations on the signed-in instructor's own profile.
+    func syncMyRecommendations() async {
+        guard let me = currentUserID else { return }
+        await syncRecommendations(forInstructor: me)
+    }
+
+    /// The signed-in instructor's recommendation of `ownerID`, if they've written one — toggles the
+    /// compose sheet between "Recommend" and "Edit / Remove".
+    func myRecommendation(for ownerID: String) -> InstructorRecommendation? {
+        guard let me = currentUserID else { return nil }
+        return recommendations.first { $0.fromID == me && $0.toID == ownerID }
+    }
+
+    /// Write (or edit) a peer recommendation of another instructor. Idempotent — re-writing upserts the
+    /// same `rec-<me>-<them>` record. Guarded: no self-recommendation, and only an instructor may author one.
+    func writeRecommendation(to ownerID: String, text: String) {
+        guard let me = currentUserID, me != ownerID, currentInstructor != nil else { return }
+        let rec = myRecommendation(for: ownerID) ?? {
+            let fresh = InstructorRecommendation(fromID: me, fromName: currentUserName, toID: ownerID)
+            context.insert(fresh)
+            return fresh
+        }()
+        rec.fromName = currentUserName
+        rec.text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        rec.createdAt = Date()
+        rec.remoteID = rec.recordName
+        save()
+        guard !isPreview else { return }
+        Task { await uploadRecommendation(rec) }
+    }
+
+    /// Remove my recommendation of an instructor — local + shared store (`_creator`-write lets me delete
+    /// my own).
+    func deleteRecommendation(to ownerID: String) {
+        guard let rec = myRecommendation(for: ownerID) else { return }
+        let rid = rec.remoteID
+        context.delete(rec)
+        save()
+        guard !isPreview, let rid else { return }
+        Task { await recommendationService.delete(recordName: rid) }
+    }
+
+    private func uploadRecommendation(_ rec: InstructorRecommendation) async {
+        let saved = await recommendationService.publish(
+            recordName: rec.recordName, fromID: rec.fromID, fromName: rec.fromName,
+            toID: rec.toID, text: rec.text, createdAt: rec.createdAt)
+        rec.remoteID = saved ?? rec.recordName
+        save()
+    }
+
+    /// Pull the peer recommendations shown on `ownerID`'s profile + the signed-in instructor's own
+    /// authored ones. Merge by recordName, updating text/name on ones already held. Offline / preview no-ops.
+    func syncRecommendations(forInstructor ownerID: String) async {
+        guard !isPreview, let me = currentUserID else { return }
+        async let forProfile = recommendationService.fetchFor(toID: ownerID)
+        async let mineRemote = recommendationService.fetchMine(fromID: me)
+        let remotes = ((await forProfile) ?? []) + ((await mineRemote) ?? [])
+        guard !remotes.isEmpty else { return }
+        var changed = false
+        for r in remotes {
+            if let existing = recommendations.first(where: { $0.recordName == r.id || $0.remoteID == r.id }) {
+                if existing.text != r.text || existing.fromName != r.fromName {
+                    existing.text = r.text; existing.fromName = r.fromName; changed = true
+                }
+            } else {
+                let rec = InstructorRecommendation(fromID: r.fromID, fromName: r.fromName,
+                                                   toID: r.toID, text: r.text, createdAt: r.createdAt)
+                rec.remoteID = r.id
+                context.insert(rec)
+                changed = true
+            }
+        }
+        if changed { save() }
     }
 
     /// The signed-in organizer's own events. Upcoming first (soonest-first), then past
@@ -1657,10 +3159,10 @@ final class MockDataStore {
         // the rail shows "not sent yet", so there is nothing to join yet.
         guard case .open = event.status else { return }
 
-        // Optimistic local move so the tap feels answered.
+        // Optimistic local move so the tap feels answered. `joined` now means "I've REQUESTED to
+        // join"; the organizer still has to accept (see `requestState`). The attendee count is the
+        // number ACCEPTED, so a pending request must NOT bump it — reconcile recomputes it.
         event.joined = true
-        // nil stays nil — bumping to 1 would assert a total on evidence never gathered.
-        if let c = event.attendees { event.attendees = c + 1 }
         event.pendingJoin = true
         save()
 
@@ -1691,8 +3193,9 @@ final class MockDataStore {
     /// Leave an event, withdrawing this student's own registration record.
     func leave(_ event: CommunityEvent) {
         guard let me = currentUserID, let remoteID = event.remoteID else { return }
+        // Withdraw my request. `attendees` is the accepted count now, so don't decrement it here —
+        // reconcile recomputes it after the registration is removed.
         event.joined = false
-        if let c = event.attendees { event.attendees = max(0, c - 1) }
         event.pendingJoin = true
         save()
 
@@ -1860,44 +3363,39 @@ final class MockDataStore {
         // nil means the query failed — NOT "nobody joined". Conflating them would zero every count
         // offline and could withdraw a genuine registration on no evidence.
         guard let rows = await eventService.fetchRegistrations(eventIDs: eventIDs) else { return }
-        let byEvent = Dictionary(grouping: rows, by: \.eventID)
+        // Decisions ride on top — best-effort. A nil (query failed) leaves the decision cache intact
+        // rather than blanking accept/decline answers already shown.
+        let decisionRows = await eventService.fetchEventDecisions(eventIDs: eventIDs)
 
-        var toWithdraw: [CommunityEvent] = []
-        var lost: [CommunityEvent] = []
+        let regsByEvent = Dictionary(grouping: rows, by: \.eventID)
+        let decByEvent = decisionRows.map { Dictionary(grouping: $0, by: \.eventID) }
 
         for event in subjects {
             guard let remoteID = event.remoteID else { continue }
-            let mineRows = byEvent[remoteID] ?? []
-            let admitted = EventService.admitted(mineRows, capacity: event.capacity)
-            let mine = admitted.contains(me)
-            if event.pendingJoin {
-                // An undelivered join/leave: keep the user's own desired state and keep the count
-                // consistent with it, the same correction `refreshEngagement` makes for a pending like.
-                event.attendees = mineRows.count
-                    + (event.joined && !mine ? 1 : 0)
-                    - (!event.joined && mine ? 1 : 0)
-            } else {
-                let wasJoined = event.joined
-                // The TRUE count, not the admitted count — `spotsLeft` clamps at 0 anyway, and the
-                // organizer must see the overflow.
-                event.attendees = mineRows.count
-                event.joined = mine
-                if wasJoined && !mine { lost.append(event) }                        // I was in, now I'm not
-                if !mine, mineRows.contains(where: { $0.studentID == me }) {         // holding a losing record
-                    toWithdraw.append(event)
-                }
+            let mineRows = regsByEvent[remoteID] ?? []
+            eventRegistrationRows[remoteID] = mineRows                 // keep rows for the organizer's queue
+            if let decByEvent {
+                eventDecisions[remoteID] = Dictionary(
+                    (decByEvent[remoteID] ?? []).map { ($0.studentID, $0.accepted) },
+                    uniquingKeysWith: { _, newest in newest }
+                )
+            }
+            let decided = eventDecisions[remoteID] ?? [:]
+
+            // The count is how many the organizer has ACCEPTED — that's what "going" and `spotsLeft`
+            // mean now that joining is request→accept. A pending request consumes no spot until accepted.
+            let acceptedCount = mineRows.reduce(0) { $0 + (decided[$1.studentID] == true ? 1 : 0) }
+            event.attendees = acceptedCount
+
+            if !event.pendingJoin {
+                // `joined` = "I have a live registration" (pending OR accepted OR declined-but-not-yet-
+                // withdrawn); `requestState` surfaces which. Keep the read-after-write guard: if my
+                // just-written row isn't indexed yet, don't drop my optimistic request.
+                let myRowPresent = mineRows.contains { $0.studentID == me }
+                if myRowPresent { event.joined = true }
+                else if !event.joined { event.joined = false }
             }
         }
-
-        // Withdraw my own losing registration (the only record I may delete), then surface the loss.
-        for event in toWithdraw {
-            guard let remoteID = event.remoteID else { continue }
-            _ = await eventService.setRegistration(
-                false, eventID: remoteID, studentID: me, studentName: currentUserName,
-                eventTitle: event.title, organizerID: event.organizerID ?? ""
-            )
-        }
-        for event in lost { lastJoinOutcome = .missedOut(title: event.title) }
         save()
     }
 
@@ -2083,9 +3581,16 @@ final class MockDataStore {
     /// name cache is derived — never by a view — so the catalog String List, the resolver fallback and
     /// `InstructorCard` all stay consistent with the rich rows. Rows queued for deletion are excluded.
     private func rederiveSessionTypeCache(for instructor: Instructor) {
-        instructor.sessionTypes = ownedLessonTypes(for: instructor)
-            .filter { !$0.pendingDelete }
-            .map(\.name)
+        guard let owner = instructor.ownerID else { return }
+        // Read owned rows straight from the CONTEXT, not the `lessonTypes` cache: callers derive this
+        // immediately after `context.insert(newType)` but BEFORE `save()→refresh()` repopulates the
+        // cache, so the cache still lags by one — which left the just-added type (or the very first one)
+        // out of the name cache, and thus out of the profile's OFFERS + the published catalog listing.
+        // A context fetch reflects pending inserts, so it always sees the newest row.
+        let owned = ((try? context.fetch(FetchDescriptor<LessonType>())) ?? [])
+            .filter { $0.ownerID == owner && !$0.pendingDelete }
+            .sorted { $0.order < $1.order }
+        instructor.sessionTypes = owned.map(\.name)
     }
 
     /// One-time upgrade for the signed-in owner: materialise a minimal `LessonType` per existing
@@ -2108,6 +3613,11 @@ final class MockDataStore {
             created.append(type)
         }
         save()
+        // These materialized rows are unpriced (price nil → derived floor 0), so a legacy record's
+        // stale human-entered `Instructor.price` (e.g. 120) would keep advertising a "from 120" with no
+        // bookable priced type. Re-derive + republish through the single seam, exactly like every other
+        // lesson-type mutation, so the price drops to 0 immediately and the "add pricing" nudge fires.
+        publishMyListing()
         guard !isPreview else {
             for type in created { type.pendingUpload = false }
             save()
@@ -2261,12 +3771,18 @@ final class MockDataStore {
 
     private func publishMyListing() {
         guard let me = currentInstructor else { return }
+        // SINGLE re-derivation seam. `Instructor.price` is no longer human-entered — it is the cheapest
+        // priced lesson type, recomputed here so CatalogService, `isEligible`, MatchEngine and every
+        // remote-feed reader keep working with ZERO CloudKit schema change. Every mutation path funnels
+        // through here: `commit()` (Edit Profile / Availability save) and all lesson-type CRUD ops.
+        me.price = Instructor.startingPrice(from: ownedLessonTypes(for: me))
         // Marked before the attempt so a crash or a kill mid-publish still retries.
         me.pendingPublish = true
         save()
         guard !isPreview else { return }
         Task {
-            if await catalog.publish(me) {
+            if let ts = await catalog.publish(me) {
+                me.lastSyncedAt = ts
                 me.pendingPublish = false
                 save()
             }
@@ -2277,7 +3793,8 @@ final class MockDataStore {
     /// because `syncCatalog` is student-side only and would never reach this.
     func flushPendingListing() async {
         guard !isPreview, let me = currentInstructor, me.pendingPublish else { return }
-        if await catalog.publish(me) {
+        if let ts = await catalog.publish(me) {
+            me.lastSyncedAt = ts
             me.pendingPublish = false
             save()
         }
@@ -2323,6 +3840,11 @@ final class MockDataStore {
         }
         // Hide cached listings (not mine) that are no longer visible.
         for ins in instructors where ins.ownerID != nil && ins.ownerID != currentUserID {
+            #if DEBUG
+            // Keep local dev fixtures visible in Discover even though the public catalog fetch never
+            // returns them (they were never published). Compiled out of release. See seedDevDataIfRequested.
+            if ins.ownerID!.hasPrefix(Self.devSeedPrefix) { continue }
+            #endif
             if !owners.contains(ins.ownerID!) { ins.visibilityRaw = 0 }
         }
         save()
@@ -2358,6 +3880,31 @@ final class MockDataStore {
         save()
     }
 
+    /// Resolve one instructor by ownerID for a share/deep link. Direct catalog fetch by recordName
+    /// (works even for a hidden listing); returns the persisted `Instructor` the profile sheet needs,
+    /// or `nil` for our own id, a blocked id, preview/offline with no cache, or an empty fetch
+    /// (bad link OR offline — indistinguishable, see `catalog.fetch`).
+    @discardableResult
+    func loadInstructor(ownerID: String) async -> Instructor? {
+        guard !ownerID.isEmpty, ownerID != currentUserID, !isBlocked(ownerID) else { return nil }
+        if let existing = instructors.first(where: { $0.ownerID == ownerID }) {
+            if !isPreview, let l = await catalog.fetch(ownerIDs: [ownerID]).first { apply(l, to: existing); save() }
+            return existing
+        }
+        guard !isPreview else { return nil }
+        let listings = await catalog.fetch(ownerIDs: [ownerID])
+        guard let listing = listings.first, listing.ownerID != currentUserID else { return nil }
+        let nextId = (instructors.map(\.legacyId).max() ?? 0) + 1
+        let nextOrder = (instructors.map(\.order).max() ?? 0) + 1
+        let ins = Instructor(ownerID: listing.ownerID)
+        ins.legacyId = nextId
+        ins.order = nextOrder
+        apply(listing, to: ins)
+        context.insert(ins)
+        save()
+        return ins
+    }
+
     private func apply(_ l: CatalogListing, to ins: Instructor) {
         ins.name = l.name; ins.city = l.city; ins.bio = l.bio; ins.price = l.price
         ins.yearsExp = l.yearsExp
@@ -2365,21 +3912,31 @@ final class MockDataStore {
         ins.available = l.available; ins.hours = l.hours
         ins.rating = l.rating; ins.reviews = l.reviews; ins.img = l.img; ins.cert = l.cert
         ins.paymentMethods = l.paymentMethods
+        // Flowe Pro career layer — the fetched listing carries these, so another user sees the
+        // instructor's headline/story/experience. See [[FlowePro]].
+        ins.headline = l.headline; ins.story = l.story; ins.experienceTokens = l.experience
+        ins.brandColor = l.brandColor
         ins.visibilityRaw = l.visibility
-        // Assigned unconditionally, nil included: an instructor who removed their teaching area must
-        // stop being placed on the map on everyone else's device. Re-snapped on the way in by
-        // `setCoarseLocation`, so a row published at finer precision by any other client still only
-        // resolves to a ~1 km cell here.
-        ins.setCoarseLocation(CoarseLocation(snappingLatitude: l.latitude, longitude: l.longitude))
+        // Assigned unconditionally, nil included: an instructor who removed their studio location must
+        // stop being placed on the map on everyone else's device. Stored EXACTLY (no snapping) — the
+        // studio point is a published business location — alongside the studio `address`.
+        ins.setStudioLocation(latitude: l.latitude, longitude: l.longitude, address: l.address)
         ins.visibilityVerifiedAt = Date()
         // Only overwrite a cached image when the server actually has one. A nil here usually means
         // "this listing has no upload", but for my own listing it can also mean my photo hasn't
         // reached the server yet — and clobbering it would lose the picture the user just chose.
-        if let photo = l.photo { ins.photo = photo }
+        if let photo = l.photo {
+            ins.photo = photo
+            // Hand the avatar to the Notification Service Extension (keyed by ownerID) so an
+            // incoming-DM Communication Notification can show this counterpart's photo. See [[AvatarCache]].
+            if let owner = ins.ownerID { AvatarCache.write(senderID: owner, photo: photo) }
+        }
         // Assigned unconditionally, unlike `photo` above: the nil-skip there protects the owner's
         // own not-yet-uploaded image, but for someone else's cached listing a nil means the
         // instructor removed the certificate — and a withdrawn credential must stop being shown.
         ins.certPhoto = l.certPhoto
+        // Same rule for the brand cover — a removed cover must stop showing on other devices.
+        ins.coverPhoto = l.coverPhoto
     }
 
     /// The signed-in instructor's own listing (resolved by owner), if it exists.
@@ -2391,18 +3948,81 @@ final class MockDataStore {
     /// Ensures the signed-in instructor has an (empty, editable) listing. Called on instructor login.
     @discardableResult
     func ensureInstructorProfile(ownerID: String, name: String, city: String = "") -> Instructor {
-        if let existing = instructors.first(where: { $0.ownerID == ownerID }) { return existing }
-        let nextId = (instructors.map(\.legacyId).max() ?? 0) + 1
-        let nextOrder = (instructors.map(\.order).max() ?? 0) + 1
-        // No backfilled session type: a new instructor starts with zero lesson types (an honest empty
-        // state the editor prompts them to fill), rather than a fake default "Private" nobody authored.
-        let instructor = Instructor(
-            legacyId: nextId, name: name, city: city,
-            order: nextOrder, ownerID: ownerID
-        )
-        context.insert(instructor)
+        let instructor: Instructor
+        if let existing = instructors.first(where: { $0.ownerID == ownerID }) {
+            instructor = existing
+        } else {
+            let nextId = (instructors.map(\.legacyId).max() ?? 0) + 1
+            let nextOrder = (instructors.map(\.order).max() ?? 0) + 1
+            // No backfilled session type: a new instructor starts with zero lesson types (an honest empty
+            // state the editor prompts them to fill), rather than a fake default "Private" nobody authored.
+            instructor = Instructor(
+                legacyId: nextId, name: name, city: city,
+                order: nextOrder, ownerID: ownerID
+            )
+            context.insert(instructor)
+        }
+        #if DEBUG
+        // Two-party test harness: `-flowe.debugForceVisible 1` (or the broader `-flowe.debugBypassStoreKit
+        // 1`, which also opens every app-side subscription gate) grants discoverability WITHOUT a real
+        // StoreKit purchase, so a test instructor appears in the student's Discover feed and is bookable.
+        // Marks the listing for republish so `flushPendingListing` pushes visibility>0 (and the derived
+        // price) to the public catalog — belt-and-suspenders alongside the tier→applyVisibility path, in
+        // case `onChange` misses the launch-time transition. Never ships.
+        let defaults = UserDefaults.standard
+        if defaults.bool(forKey: "flowe.debugForceVisible") || defaults.bool(forKey: "flowe.debugBypassStoreKit") {
+            instructor.visibility = .visible
+            instructor.visibilityVerifiedAt = Date()
+            instructor.pendingPublish = true
+        }
+        #endif
         save()
         return instructor
+    }
+
+    // Throttle chatty foreground re-syncs + prevent the login Task and a near-simultaneous
+    // scenePhase Task from running two concurrent fetch+apply passes over the own row.
+    private var lastOwnListingResyncAt: Date?
+    private var isResyncingOwnListing = false
+
+    private func isBlankProfile(_ ins: Instructor) -> Bool {
+        ins.photo == nil && (ins.bio?.isEmpty ?? true) && ins.specialties.isEmpty
+    }
+
+    /// Sync the signed-in instructor's OWN profile from their public listing across devices
+    /// (last-writer-wins). `Instructor` lives in the Reference `.none` config (LOCAL-ONLY, never
+    /// CloudKit-mirrored), so an instructor's own row does NOT sync device→device via the private DB;
+    /// their public `InstructorListing` is the only cross-device channel. `ensureInstructorProfile`
+    /// creates a blank row on a fresh device; this pulls the listing back and `apply`s it (photo + bio
+    /// + specialties + price + city + availability together). Called on login AND on foreground.
+    ///
+    /// Anti-self-clobber (a stale pull once wiped a just-closed availability — see `syncCatalog`):
+    /// apply ONLY when there are no unpublished local edits (`!pendingPublish`) AND the row is either
+    /// blank OR the server copy is STRICTLY newer than our baseline (`lastSyncedAt`, always a server
+    /// `modificationDate`, never a device clock). `pendingPublish` is re-read AFTER the fetch so an
+    /// edit begun mid-fetch wins. Still the ONLY sanctioned path that applies the current user's own
+    /// listing — the three catalog syncs keep excluding `currentUserID`.
+    func hydrateOwnListingIfNeeded() async {
+        guard !isPreview, !isResyncingOwnListing,
+              let me = currentInstructor, let ownerID = me.ownerID else { return }
+        let blank = isBlankProfile(me)
+        // Never throttle a genuine fresh (blank) hydrate; only throttle chatty foreground re-pulls.
+        if !blank, Date().timeIntervalSince(lastOwnListingResyncAt ?? .distantPast) < 45 { return }
+        guard !me.pendingPublish else { return }
+
+        isResyncingOwnListing = true
+        lastOwnListingResyncAt = Date()
+        defer { isResyncingOwnListing = false }
+
+        guard let listing = await catalog.fetch(ownerIDs: [ownerID]).first,
+              listing.ownerID == ownerID else { return }
+        // Re-read after the await: a local edit begun while the fetch was in flight must win.
+        guard !me.pendingPublish,
+              isBlankProfile(me) || (listing.modifiedAt ?? .distantPast) > (me.lastSyncedAt ?? .distantPast)
+        else { return }
+        apply(listing, to: me)
+        me.lastSyncedAt = listing.modifiedAt   // baseline = server timestamp we just applied
+        save()
     }
 
     // MARK: - Student profiles (public directory, mirror of the instructor listing pipeline)
@@ -2480,10 +4100,21 @@ final class MockDataStore {
         guard !isPreview else { return }
         let wanted = Set(incomingBookings.compactMap(\.studentID))
             .union(conversations.map { $0.counterpart.id })
+            // Reviewers too, so an instructor's review wall resolves the reviewer's CURRENT name/photo
+            // rather than the snapshot `Review.studentName` (re-stamped from the remote each sync).
+            .union(reviews.map(\.studentID))
             .subtracting([currentUserID].compactMap { $0 })
             .subtracting(blockedIDs)
         guard !wanted.isEmpty else { return }
         let listings = await studentDirectory.fetch(ownerIDs: Array(wanted))
+        upsert(listings)
+        save()
+    }
+
+    /// Insert-or-update cached `StudentProfile` rows from fetched listings. Shared by
+    /// `syncStudentProfiles` (bookers / DM partners / reviewers) and `fetchAuthorProfiles` (community
+    /// authors) so both grow the same non-enumerable, by-ownerID-only cache.
+    private func upsert(_ listings: [StudentListing]) {
         var nextId = studentProfiles.map(\.legacyId).max() ?? 0
         var nextOrder = studentProfiles.map(\.order).max() ?? 0
         for listing in listings {
@@ -2499,7 +4130,6 @@ final class MockDataStore {
                 context.insert(p)
             }
         }
-        save()
     }
 
     /// Single non-pruning fetch for one open profile view (mirror of `syncReviews(forInstructor:)`).
@@ -2527,7 +4157,11 @@ final class MockDataStore {
         p.updatedAt = l.updatedAt
         // Only overwrite a cached image when the server actually has one — protects the owner's own
         // not-yet-uploaded photo, exactly like the Instructor rule.
-        if let photo = l.photo { p.photo = photo }
+        if let photo = l.photo {
+            p.photo = photo
+            // Cache the avatar for the Notification Service Extension, keyed by ownerID. See [[AvatarCache]].
+            if let owner = p.ownerID { AvatarCache.write(senderID: owner, photo: photo) }
+        }
     }
 
     // MARK: - Out of Studio (coverage)
@@ -2567,14 +4201,37 @@ final class MockDataStore {
     /// time, minus myself. `visibleInstructors` is already Boost → rating → order, so distance only
     /// reorders peers *within* a tier (and does nothing when there is no fix) — the same rule
     /// `DiscoverView.byDistance` applies, so a boosted instructor is never overtaken by a closer free one.
-    func oosCandidates(for booking: Booking, location: LocationService?) -> [Instructor] {
+    /// Eligible cover candidates for one session, nearest-first.
+    ///
+    /// Distance is measured from the requesting instructor's own **studio location** (their published,
+    /// EXACT studio coordinate — where the session actually happens) to each candidate's studio point.
+    /// The studio point is the source of truth for both ranking and the `radiusKm` cutoff — NOT the
+    /// device's live GPS fix, which is irrelevant to where a handed-off session takes place.
+    ///
+    /// `radiusKm` is the instructor's own "how far will I look for cover" setting (AppSettings). It's
+    /// enforced only when we have a studio location to measure from — if the instructor never set one,
+    /// every distance is nil and we fall back to the tier+rating ranking over the whole eligible set
+    /// rather than dropping everyone to zero. Candidates with no studio location can't be confirmed
+    /// inside the radius, so they're dropped once the radius is in force.
+    func oosCandidates(for booking: Booking, radiusKm: Double? = nil) -> [Instructor] {
         guard let weekday = Self.weekday(from: booking.date) else { return [] }
         let eligible = visibleInstructors.filter { ins in
             ins.ownerID != currentUserID && ins.hours(on: weekday).contains(booking.time)
         }
-        let measured = eligible.map {
-            (instructor: $0,
-             distanceMetres: location?.distance(toLatitude: $0.latitude, longitude: $0.longitude))
+        // Exact studio point → exact studio point (no coarsening). Great-circle metres via CLLocation.
+        let origin = currentInstructor?.studioCoordinate
+        var measured = eligible.map { ins -> (instructor: Instructor, distanceMetres: Double?) in
+            let distance = origin.flatMap { o in
+                ins.studioCoordinate.map { c in
+                    CLLocation(latitude: o.latitude, longitude: o.longitude)
+                        .distance(from: CLLocation(latitude: c.latitude, longitude: c.longitude))
+                }
+            }
+            return (instructor: ins, distanceMetres: distance)
+        }
+        if let radiusKm, radiusKm > 0, origin != nil {
+            let limitMetres = radiusKm * 1000
+            measured = measured.filter { ($0.distanceMetres ?? .greatestFiniteMagnitude) <= limitMetres }
         }
         let ranked = measured.sorted(by: Self.byCoverageDistance).map(\.instructor)
         return Array(ranked.prefix(Self.maxCoverageCandidates))
@@ -2611,6 +4268,25 @@ final class MockDataStore {
                 bookingID: bookingID, requesterID: me, candidateIDs: candidateIDs,
                 sessionType: booking.type, sessionDate: booking.date
             )
+            await syncCoverage(asInstructor: true)
+        }
+    }
+
+    /// Cancel an OOS coverage request the instructor sent: withdraw the offers fanned to the other
+    /// instructors (the swap requests they'd see in their inbox), mark the request cancelled server-side,
+    /// and revert the session locally so it flips straight back to requestable — e.g. to re-send under a
+    /// new date. Persisted. Reached pre-award (the picker only shows open requests).
+    func cancelCoverage(for booking: Booking) {
+        guard let bookingID = booking.remoteID else { return }
+        // Optimistic local teardown: drop the cached request + its offers and clear the cover role.
+        coverRequests.removeAll { $0.bookingID == bookingID }
+        coverOffers.removeAll { $0.bookingID == bookingID }
+        if booking.coverRole == .handedOff { booking.coverRole = .none }
+        save()
+        guard !isPreview else { return }
+        Task {
+            await coverageService.cancelRequest(bookingID: bookingID)
+            await coverageService.withdrawOffers(bookingID: bookingID)
             await syncCoverage(asInstructor: true)
         }
     }
@@ -2666,7 +4342,17 @@ final class MockDataStore {
             coverOffers = offers
             for offer in offers {
                 guard let request = await coverageService.fetchRequest(bookingID: offer.bookingID) else { continue }
-                resolveCovering(request, me: me)
+                // Once the owner has picked ME, the CoverageSession carries the real student — I'm the
+                // one about to teach them, so resolve their profile (name + photo) onto the cover
+                // booking instead of the "cover-…" placeholder. Stays anonymous until I'm actually
+                // awarded (`filledByID == me`), preserving the pre-award privacy of a broadcast offer.
+                var student: (id: String, name: String)?
+                if request.filledByID == me,
+                   let cover = await coverageService.fetchCoverSession(bookingID: request.bookingID) {
+                    await fetchAuthorProfiles([cover.studentID])
+                    student = (cover.studentID, studentProfile(forOwnerID: cover.studentID)?.name ?? "")
+                }
+                resolveCovering(request, me: me, student: student)
             }
         } else {
             // Student side: informational only. Learn whether any of my bookings is being covered — the
@@ -2752,10 +4438,16 @@ final class MockDataStore {
 
     /// Replacer side: a request the owner filled with *me* is a session I'm covering — I'm owed half.
     /// The session belongs to the original instructor, so there is no local booking to attach to until
-    /// we materialise a private shadow for it.
-    private func resolveCovering(_ request: RemoteCoverageRequest, me: String) {
+    /// we materialise a private shadow for it. `student` (resolved from the CoverageSession the owner
+    /// published on award) fills in who I'm actually teaching, so the covered session shows a real name
+    /// + photo rather than the "cover-…" placeholder.
+    private func resolveCovering(_ request: RemoteCoverageRequest, me: String, student: (id: String, name: String)?) {
         guard request.filledByID == me else { return }
         let booking = bookings.first(where: { $0.remoteID == request.bookingID }) ?? materializeCoverShadow(for: request)
+        if let student, !student.id.isEmpty {
+            booking.studentID = student.id
+            if !student.name.isEmpty { booking.studentName = student.name }   // don't clobber a resolved name with a failed re-fetch
+        }
         materializeCover(booking, role: .covering, instructorID: request.requesterID, sessionType: request.sessionType)
     }
 
@@ -2848,3 +4540,235 @@ final class MockDataStore {
         refresh()
     }
 }
+
+#if DEBUG
+// MARK: - Dev fixtures (DEBUG ONLY — never ships, never touches CloudKit)
+
+extension MockDataStore {
+
+    fileprivate static let devSeedPrefix = "dev.seed."
+    /// The signed-in student's debug ownerID (matches `-flowe.debugAppleUserID dev.student`). Stamped
+    /// on seed bookings so instructor-side, student-correlated features resolve against a real id.
+    fileprivate static let devStudentID = "dev.student"
+
+    /// Local test fixture for the simulator. THREE guarantees keep it off CloudKit and out of release:
+    ///  1. `#if DEBUG` — absent from the release binary.
+    ///  2. Runs ONLY with BOTH `-flowe.seedDevData 1` AND `-flowe.disablePrivateSync 1`. The sync-off
+    ///     flag forces the UserData SwiftData config to `.none` (see `FloweModelContainer`), so seeded
+    ///     `Booking`/`LessonType`/`Review` rows stay on-device; `Instructor`/`StudentProfile` are ALWAYS
+    ///     local (Reference `.none`). Without the sync-off flag the seed refuses to run.
+    ///  3. Inserts straight into the local `context`; NEVER calls a publish/upload service.
+    /// Idempotent — clears prior `dev.seed.*` rows first, so editing the fixture + relaunching is clean.
+    func seedDevDataIfRequested() {
+        let defaults = UserDefaults.standard
+        guard defaults.bool(forKey: "flowe.seedDevData") else { return }
+        guard defaults.bool(forKey: "flowe.disablePrivateSync") else {
+            print("⚠️ [DevSeed] Refusing to seed — also pass -flowe.disablePrivateSync 1 so fixtures never reach CloudKit.")
+            return
+        }
+        clearDevSeed()
+
+        let cal = Calendar.current
+        func day(_ offset: Int) -> Date { cal.date(byAdding: .day, value: offset, to: Date()) ?? Date() }
+
+        // Instructors — Reference config (always local). name/price>0/visible/fresh-TTL → eligible.
+        let specs: [(id: Int, owner: String, name: String, spec: [String], from: Int, rating: Double,
+                     reviews: Int, vis: InstructorVisibility, lat: Double, lon: Double, address: String,
+                     years: Int, cert: String, bio: String)] = [
+            (9001, "dev.seed.1", "Maya Cohen",  ["Reformer", "Mat"],     180, 4.9, 32, .boosted, 32.0809, 34.7806, "12 Dizengoff St, Tel Aviv-Yafo", 8,  "STOTT Certified",    "Reformer-focused strength & alignment. Ex-dancer, 8 years teaching."),
+            (9002, "dev.seed.2", "Noa Levi",    ["Mat", "Prenatal"],     150, 4.7, 18, .visible, 32.0750, 34.7750, "5 Rothschild Blvd, Tel Aviv-Yafo", 5, "Prenatal Certified", "Gentle mat & prenatal Pilates in a calm studio."),
+            (9003, "dev.seed.3", "Dana Katz",   ["Reformer", "Tower"],   220, 5.0,  9, .visible, 32.0680, 34.8248, "20 Bialik St, Ramat Gan", 11,        "Polestar Certified", "Rehab-informed Reformer & Tower. Small groups only."),
+            (9004, "dev.seed.4", "Yael Bar",    ["Barre", "Mat"],        160, 4.8, 24, .visible, 32.0900, 34.7700, "8 Ben Yehuda St, Tel Aviv-Yafo", 6,  "Barre Certified",    "High-energy barre + mat. Music-driven classes."),
+            (9005, "dev.seed.5", "Tamar Shani", ["Reformer"],            200, 4.6, 12, .visible, 32.1620, 34.8440, "3 Sokolov St, Herzliya", 4,          "BASI Certified",     "Classical Reformer, one-on-one focus."),
+            (9006, "dev.seed.6", "Rivka Gold",  ["Mat", "Prenatal"],     140, 0.0,  0, .visible, 32.0530, 34.7520, "40 Yefet St, Jaffa", 3,              "Mat Certified",      "New to Flowe — welcoming mat classes in Jaffa."),
+        ]
+
+        for (i, s) in specs.enumerated() {
+            let ins = Instructor()
+            ins.legacyId = s.id
+            ins.ownerID = s.owner
+            ins.name = s.name
+            ins.specialties = s.spec
+            ins.sessionTypes = s.spec            // denormalised names for the student catalog card
+            ins.price = s.from                   // "from" price (>0 → eligible)
+            ins.rating = s.rating
+            ins.reviews = s.reviews
+            ins.visibility = s.vis
+            ins.visibilityVerifiedAt = Date()    // fresh → passes the 7-day eligibility TTL
+            ins.yearsExp = s.years
+            ins.students = s.reviews
+            ins.cert = s.cert
+            ins.bio = s.bio
+            ins.img = ""                         // empty → branded gradient placeholder avatar
+            ins.available = ["Mon", "Tue", "Wed", "Thu", "Fri"]
+            ins.paymentMethods = ["Cash", "Bit"]
+            ins.order = i
+            ins.setStudioLocation(latitude: s.lat, longitude: s.lon, address: s.address)
+            // Flowe Pro career layer (Phase 1) — seed the lead instructor with a headline + work
+            // history so the Pro sections render live. See [[FlowePro]].
+            if s.owner == "\(Self.devSeedPrefix)1" {
+                ins.headline = "Reformer & alignment specialist · ex-dancer, STOTT-certified"
+                ins.story = "I build strength through precise, breath-led Reformer work. Ten years in "
+                    + "studios across Tel Aviv, now growing my own practice on Flowe."
+                ins.brandColor = "#C67B5C"   // warm terracotta — a deliberate studio brand accent
+
+                ins.experienceTokens = [
+                    "2021-now|Independent · Flowe|Founder & lead instructor",
+                    "2018-2021|Studio Viva, Tel Aviv|Senior Reformer instructor",
+                    "2016-2018|BodyLine Pilates|Instructor (apprenticeship → mat & reformer)",
+                ]
+            }
+            context.insert(ins)
+
+            let lt1 = LessonType()
+            lt1.ownerID = s.owner
+            lt1.legacyId = s.id * 10 + 1
+            lt1.name = "\(s.spec[0]) 1-on-1"
+            lt1.details = "Private \(s.spec[0].lowercased()) session tailored to you."
+            lt1.durationMinutes = 50
+            lt1.capacity = 1
+            lt1.price = s.from
+            lt1.createdAt = day(-30); lt1.updatedAt = day(-30)
+            context.insert(lt1)
+
+            if s.spec.count > 1 {
+                let lt2 = LessonType()
+                lt2.ownerID = s.owner
+                lt2.legacyId = s.id * 10 + 2
+                lt2.name = "\(s.spec[1]) Group"
+                lt2.details = "Small \(s.spec[1].lowercased()) group class."
+                lt2.durationMinutes = 55
+                lt2.capacity = 6
+                lt2.price = max(80, s.from - 90)
+                lt2.order = 1
+                lt2.createdAt = day(-30); lt2.updatedAt = day(-30)
+                context.insert(lt2)
+            }
+        }
+
+        // Bookings for the signed-in student (studentID nil → `myBookings` treats them as mine).
+        // Two completed (this week + last week → an active 2-week streak) and one upcoming.
+        func booking(_ owner: String, _ instr: Int, _ type: String, _ dayOffset: Int,
+                     _ time: String, _ status: BookingStatus, _ order: Int) -> Booking {
+            let b = Booking()
+            b.legacyId = 90_000 + order
+            b.instructorId = instr
+            b.instructorOwnerID = owner
+            b.type = type
+            b.date = FloweWeek.bookingDateString(for: day(dayOffset))
+            b.time = time
+            b.duration = "50 min"
+            b.status = status
+            // The signed-in student's ownerID (not nil): `myBookings` still counts these as the
+            // student's own (studentID == currentUserID when launched as dev.student), AND — launched
+            // as the INSTRUCTOR — a real studentID lets the student-correlated surfaces work: No-Show
+            // Shield strikes/risk nudges, the Students list, and student avatars all key on it.
+            b.studentID = Self.devStudentID
+            // A STALE snapshot on purpose: this is the name frozen onto the booking at booking time
+            // (a student who signed up without a name → "Member"). The student later set "Lina" on
+            // their StudentProfile (seeded below). Instructor surfaces must resolve the LIVE name, not
+            // this snapshot — the bug fixed 2026-08-05 in StudentsList + No-Show Shield.
+            b.studentName = "Member"
+            b.order = order
+            // Stamp a deterministic record name so completed seed bookings are reviewable
+            // (canReview requires remoteID != nil). pendingUpload stays false → treated as
+            // already-synced, so the flush/upload paths never touch these local fixtures.
+            b.remoteID = "\(Self.devSeedPrefix)booking.\(order)"
+            return b
+        }
+        context.insert(booking("dev.seed.1", 9001, "Reformer 1-on-1", -2, "9:00 AM", .completed, 2))
+        context.insert(booking("dev.seed.2", 9002, "Mat Group",       -9, "6:00 PM", .completed, 3))
+        context.insert(booking("dev.seed.1", 9001, "Reformer 1-on-1",  3, "9:00 AM", .confirmed, 1))
+        // Two more completed Maya sessions so the No-Show Shield "did they show?" queue has enough to
+        // exercise every path at once: mark one attended, one no-show→collect, one no-show→waive. The
+        // no-shows also give the student (dev.student) strikes → the upcoming confirmed session above
+        // lights up "worth a nudge". (Only surfaced when signed in as the instructor.)
+        context.insert(booking("dev.seed.1", 9001, "Reformer 1-on-1", -3, "10:00 AM", .completed, 4))
+        context.insert(booking("dev.seed.1", 9001, "Reformer 1-on-1", -4, "11:00 AM", .completed, 5))
+
+        // The signed-in student's PUBLIC profile, carrying their CURRENT name ("Lina") — set AFTER the
+        // bookings above froze "Member" onto their snapshot. Instructor surfaces resolve this live via
+        // `displayIdentity`, so it must override the stale snapshot. This is the fixture for the
+        // Students-tab / No-Show-Shield name-sync bug (fixed 2026-08-05).
+        let studentProfile = StudentProfile(ownerID: Self.devStudentID, name: "Lina", memberSince: day(-30))
+        studentProfile.updatedAt = day(-1)
+        context.insert(studentProfile)
+
+        // A couple of reviews on Maya so her Reviews tab isn't empty.
+        let reviewTexts = ["Maya completely fixed my posture — best Reformer teacher in TLV.",
+                           "Calm, precise, and pushes you just enough."]
+        for (i, txt) in reviewTexts.enumerated() {
+            let r = Review()
+            r.instructorID = "dev.seed.1"
+            r.studentID = "dev.seed.reviewer.\(i)"
+            r.studentName = ["Shira", "Amit"][i]
+            r.rating = 5
+            r.text = txt
+            r.bookingID = "dev.seed.review.\(i)"
+            r.createdAt = day(-(i + 1) * 7)
+            context.insert(r)
+        }
+
+        // One community event (organized by Maya) so Community → Events + the request→accept flow can
+        // be exercised. remoteID set so join/requestState resolve locally; createdAt=now spares it from
+        // pruneEvents. Its public-DB write path still no-ops in the sim (no account) — this is a render/
+        // logic fixture, not a live CloudKit round-trip.
+        let event = CommunityEvent(legacyId: 95001, remoteID: "dev.seed.event.1")
+        event.organizerID = "dev.seed.1"
+        event.organizerName = "Maya Cohen"
+        event.title = "Sunrise Reformer Flow"
+        event.about = "A 60-minute energizing Reformer class to start your weekend. All levels welcome."
+        event.location = "12 Dizengoff St, Tel Aviv-Yafo"
+        event.startsAt = day(5)
+        event.durationMinutes = 60
+        event.capacity = 8
+        event.price = 60
+        event.attendees = 0
+        event.createdAt = Date()
+        event.updatedAt = Date()
+        context.insert(event)
+
+        // Flowe Pro career marketplace (Phase 3): a few opportunities posted by OTHER seed instructors,
+        // so the signed-in instructor (Maya = dev.seed.1) sees them in her Opportunities feed (her own
+        // posts are filtered out). Spans the kind spectrum + the eligibility gate. See [[FlowePro]].
+        func opp(_ owner: String, _ name: String, _ kind: OpportunityKind, _ elig: OpportunityEligibility,
+                 _ title: String, _ about: String, _ location: String, _ pay: String, _ commitment: String,
+                 _ startsInDays: Int?, _ createdDaysAgo: Int, _ order: Int) {
+            let o = Opportunity(posterID: owner, posterName: name, kind: kind, eligibility: elig,
+                                title: title, about: about, location: location, payText: pay,
+                                commitment: commitment, startsAt: startsInDays.map { day($0) },
+                                createdAt: day(-createdDaysAgo), order: order)
+            context.insert(o)
+        }
+        opp("dev.seed.2", "Noa Levi", .cover, .certifiedOnly,
+            "Sub my Mat Group — this Thursday AM",
+            "I'm out of town Thursday and need a certified instructor to cover my 8am Mat Group (6 students, all levels). Warm, welcoming studio.",
+            "5 Rothschild Blvd, Tel Aviv-Yafo", "₪180 for the class", "One-off · Thu 8:00", 3, 1, 1)
+        opp("dev.seed.3", "Dana Katz", .recurring, .certifiedOnly,
+            "Weekly Reformer slot — Sunday mornings",
+            "Looking for a reliable Reformer instructor to take a standing Sunday 9am duet slot at my Ramat Gan studio. Rehab-informed approach preferred.",
+            "20 Bialik St, Ramat Gan", "60% split", "Weekly · Sun 9:00", nil, 2, 2)
+        opp("dev.seed.4", "Yael Bar", .apprenticeship, .openToAll,
+            "Barre apprenticeship — learn & assist",
+            "Passionate about barre and want to teach one day? Assist my classes, learn the method, and grow into an instructor. Open to dedicated students — no certification needed.",
+            "8 Ben Yehuda St, Tel Aviv-Yafo", "Unpaid trainee → paid once teaching", "Flexible · 2–3×/week", nil, 4, 3)
+
+        save()   // persists locally + refresh()es the store's arrays
+        print("✅ [DevSeed] Seeded \(specs.count) instructors + lesson types + 5 bookings + 2 reviews + 1 event + 3 opportunities — LOCAL only.")
+    }
+
+    /// Remove every previously-seeded `dev.seed.*` row so a relaunch reseeds cleanly.
+    private func clearDevSeed() {
+        let p = Self.devSeedPrefix
+        for ins in (try? context.fetch(FetchDescriptor<Instructor>())) ?? [] where (ins.ownerID ?? "").hasPrefix(p) { context.delete(ins) }
+        for lt in (try? context.fetch(FetchDescriptor<LessonType>())) ?? [] where (lt.ownerID ?? "").hasPrefix(p) { context.delete(lt) }
+        for b in (try? context.fetch(FetchDescriptor<Booking>())) ?? [] where (b.instructorOwnerID ?? "").hasPrefix(p) { context.delete(b) }
+        for r in (try? context.fetch(FetchDescriptor<Review>())) ?? [] where r.instructorID.hasPrefix(p) { context.delete(r) }
+        for e in (try? context.fetch(FetchDescriptor<CommunityEvent>())) ?? [] where (e.remoteID ?? "").hasPrefix(p) { context.delete(e) }
+        // The seeded student profile is keyed by the exact dev.student id (no `dev.seed.` prefix), so
+        // clear it explicitly.
+        for sp in (try? context.fetch(FetchDescriptor<StudentProfile>())) ?? [] where sp.ownerID == Self.devStudentID { context.delete(sp) }
+        for o in (try? context.fetch(FetchDescriptor<Opportunity>())) ?? [] where o.posterID.hasPrefix(p) { context.delete(o) }
+    }
+}
+#endif

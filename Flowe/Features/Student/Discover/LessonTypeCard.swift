@@ -128,20 +128,3 @@ struct LessonTypeCard: View {
         return runs.dropFirst().reduce(first) { $0 + Text(verbatim: " · ") + $1 }
     }
 }
-
-#Preview {
-    VStack(spacing: 12) {
-        LessonTypeCard(type: ResolvedLessonType(
-            legacyId: 1, name: "Sunrise Reformer",
-            details: "A gentle flowing start to the day on the reformer, suitable for all levels.",
-            durationMinutes: 55, capacity: 4, price: 40))
-        LessonTypeCard(type: ResolvedLessonType(
-            legacyId: 2, name: "Rehab 1-on-1",
-            details: "Focused private work for injury recovery.",
-            durationMinutes: 60, capacity: 1, price: 0))
-        LessonTypeCard(type: ResolvedLessonType(name: "Mat"))   // legacy name-only fallback
-    }
-    .padding(20)
-    .background(Color.flowWhite)
-    .environment(AppSettings())
-}

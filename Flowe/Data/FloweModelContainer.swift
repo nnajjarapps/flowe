@@ -23,7 +23,7 @@ enum FloweModelContainer {
 
         let reference = ModelConfiguration(
             "Reference",
-            schema: Schema([Instructor.self, StudentProfile.self]),
+            schema: Schema([Instructor.self, StudentProfile.self, Opportunity.self, OpportunityApplication.self, ApplicationDecision.self, InstructorRecommendation.self]),
             isStoredInMemoryOnly: inMemory,
             cloudKitDatabase: .none
         )
@@ -31,15 +31,16 @@ enum FloweModelContainer {
         let userData = ModelConfiguration(
             "UserData",
             schema: Schema([FeedPost.self, PostComment.self, Booking.self, Message.self,
-                            BlockedUser.self, Review.self, CommunityEvent.self, LessonType.self]),
+                            BlockedUser.self, Review.self, CommunityEvent.self, LessonType.self,
+                            ClientNote.self]),
             isStoredInMemoryOnly: inMemory,
             cloudKitDatabase: userDataCloudKitDatabase(inMemory: inMemory)
         )
 
         do {
             return try ModelContainer(
-                for: Instructor.self, StudentProfile.self, FeedPost.self, PostComment.self, Booking.self, Message.self,
-                     BlockedUser.self, Review.self, CommunityEvent.self, LessonType.self,
+                for: Instructor.self, StudentProfile.self, Opportunity.self, OpportunityApplication.self, ApplicationDecision.self, InstructorRecommendation.self, FeedPost.self, PostComment.self, Booking.self, Message.self,
+                     BlockedUser.self, Review.self, CommunityEvent.self, LessonType.self, ClientNote.self,
                 configurations: reference, userData
             )
         } catch {
@@ -61,7 +62,15 @@ enum FloweModelContainer {
     private static func userDataCloudKitDatabase(inMemory: Bool) -> ModelConfiguration.CloudKitDatabase {
         #if CLOUDKIT_ENABLED
         // In-memory (previews/tests) never syncs.
-        return inMemory ? .none : .private(cloudKitContainerID)
+        if inMemory { return .none }
+        #if DEBUG
+        // Two-party test harness: with `-flowe.disablePrivateSync 1`, skip the private-DB mirror so
+        // two simulators can share ONE iCloud account without their private stores cross-contaminating
+        // (the two-party flows under test — booking, messaging, community, reviews, student photos —
+        // all travel the PUBLIC database, which is unaffected by this).
+        if UserDefaults.standard.bool(forKey: "flowe.disablePrivateSync") { return .none }
+        #endif
+        return .private(cloudKitContainerID)
         #else
         return .none
         #endif

@@ -22,6 +22,7 @@ struct RoleSelectionView: View {
             .padding(.horizontal, FlowSpacing.xl)
             .padding(.top, FlowSpacing.xxl)
             .padding(.bottom, FlowSpacing.xl)
+            .floweAppear(0)
 
             // Role cards
             VStack(spacing: FlowSpacing.lg) {
@@ -33,8 +34,10 @@ struct RoleSelectionView: View {
                     tint: Color.flowePinkSoft,
                     isSelected: selectedRole == .student
                 ) {
-                    withAnimation(.spring(duration: 0.2)) { selectedRole = .student }
+                    Haptic.selection()
+                    withAnimation(FloweMotion.pop) { selectedRole = .student }
                 }
+                .floweAppear(1)
 
                 RoleCard(
                     tag: "Grow Your Practice",
@@ -44,8 +47,10 @@ struct RoleSelectionView: View {
                     tint: Color.flowePinkDeep,
                     isSelected: selectedRole == .instructor
                 ) {
-                    withAnimation(.spring(duration: 0.2)) { selectedRole = .instructor }
+                    Haptic.selection()
+                    withAnimation(FloweMotion.pop) { selectedRole = .instructor }
                 }
+                .floweAppear(2)
             }
             .padding(.horizontal, FlowSpacing.xl)
 
@@ -135,13 +140,6 @@ private struct RoleCard: View {
                 }
             }
         }
-        .buttonStyle(.plain)
-    }
-}
-
-#Preview {
-    NavigationStack {
-        RoleSelectionView()
-            .environment(AppSession())
+        .flowePressable()
     }
 }

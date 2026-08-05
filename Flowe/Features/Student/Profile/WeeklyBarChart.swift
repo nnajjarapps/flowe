@@ -34,17 +34,3 @@ struct WeeklyBarChart: View {
         .frame(height: maxHeight + 20, alignment: .bottom)
     }
 }
-
-#Preview {
-    WeeklyBarChart(bars: [
-        WeeklyBar(day: "M", minutes: 55),
-        WeeklyBar(day: "T", minutes: 0),
-        WeeklyBar(day: "W", minutes: 60),
-        WeeklyBar(day: "T", minutes: 55),
-        WeeklyBar(day: "F", minutes: 45),
-        WeeklyBar(day: "S", minutes: 50),
-        WeeklyBar(day: "S", minutes: 0),
-    ])
-    .padding()
-    .background(Color.flowWhite)
-}

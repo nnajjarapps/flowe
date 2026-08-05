@@ -109,9 +109,3 @@ struct ReportSheet: View {
         }
     }
 }
-
-#Preview {
-    ReportSheet(reportedID: "preview", reportedName: "Alex Rivera",
-                content: .message, contentID: "1", snapshot: "Example message")
-        .environment(MockDataStore.preview)
-}

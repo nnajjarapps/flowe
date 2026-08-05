@@ -26,7 +26,7 @@ struct CategoryChip: View {
 
     var body: some View {
         Button(action: action) {
-            Text(title)
+            Text(localizedTag: title)
                 .font(FloweFont.sans(12, .medium))
                 .foregroundStyle(isSelected ? .white : Color.floweInk)
                 .padding(.horizontal, 14)

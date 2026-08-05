@@ -5,7 +5,11 @@ import CloudKit
 struct CatalogListing {
     let ownerID: String
     let name: String
+    /// LEGACY free-text city. Still decoded for back-compat reads of older records, but no longer
+    /// published or displayed — `address` replaced it.
     let city: String
+    /// The instructor's exact studio address, shown publicly wherever `city` used to appear.
+    let address: String
     let bio: String?
     let price: Int
     /// Years teaching, as the instructor declared it in Edit Profile. `0` means "not stated" — see
@@ -25,18 +29,34 @@ struct CatalogListing {
     let photo: Data?
     /// Uploaded photo of the certificate itself, if the instructor set one.
     let certPhoto: Data?
+    /// Flowe Pro brand cover/banner photo, if set.
+    let coverPhoto: Data?
     /// `PaymentMethod` raw ids — how this instructor takes payment offline.
     let paymentMethods: [String]
-    /// Coarse teaching area, ~1 km grid (see `CoarseLocation`). Nil when the instructor hasn't set
+    /// Flowe Pro career layer (see [[FlowePro]]): the professional headline, brand story, and
+    /// pipe-encoded work-history rows (`period|place|role`). Empty strings/array when unset.
+    let headline: String
+    let story: String
+    let experience: [String]
+    /// Brand accent as "#RRGGBB", or empty. Part of the Flowe Pro brand kit.
+    let brandColor: String
+    /// The instructor's EXACT studio point (no longer coarsened). Nil when the instructor hasn't set
     /// one — which is most of them, and never a reason to hide a listing.
     let latitude: Double?
     let longitude: Double?
+    /// Server-assigned last-modified timestamp of the CKRecord — intrinsic to every saved/fetched
+    /// record, so it costs no public field and no schema deploy. This is the ONE authoritative clock
+    /// (never the client-set `updatedAt`) that `hydrateOwnListingIfNeeded` compares its local
+    /// baseline against to decide whether the server copy is strictly newer. Nil only on a record
+    /// that was never saved — never the case for one fetched from the server.
+    let modifiedAt: Date?
 
     init?(record: CKRecord) {
         guard let name = record["name"] as? String else { return nil }
         ownerID = record.recordID.recordName
         self.name = name
         city = record["city"] as? String ?? ""
+        address = record["address"] as? String ?? ""
         bio = record["bio"] as? String
         price = record["price"] as? Int ?? 0
         yearsExp = record["yearsExp"] as? Int ?? 0
@@ -49,13 +69,19 @@ struct CatalogListing {
         img = record["img"] as? String ?? ""
         cert = record["cert"] as? String ?? ""
         paymentMethods = record["paymentMethods"] as? [String] ?? []
+        headline = record["headline"] as? String ?? ""
+        story = record["story"] as? String ?? ""
+        experience = record["experience"] as? [String] ?? []
+        brandColor = record["brandColor"] as? String ?? ""
         visibility = record["visibility"] as? Int ?? 0
         updatedAt = record["updatedAt"] as? Date ?? .distantPast
+        modifiedAt = record.modificationDate
         latitude = record["latitude"] as? Double
         longitude = record["longitude"] as? Double
         // CloudKit stages an asset as a local file; read it now, before the temp copy is reclaimed.
         photo = (record["photo"] as? CKAsset)?.fileURL.flatMap { try? Data(contentsOf: $0) }
         certPhoto = (record["certPhoto"] as? CKAsset)?.fileURL.flatMap { try? Data(contentsOf: $0) }
+        coverPhoto = (record["coverPhoto"] as? CKAsset)?.fileURL.flatMap { try? Data(contentsOf: $0) }
     }
 }
 
@@ -71,15 +97,21 @@ final class CatalogService {
     #endif
 
     /// Upsert the instructor's own listing into the public catalog.
+    ///
+    /// Returns the saved record's server `modificationDate` on success (the caller stores it as the
+    /// own-listing re-sync baseline), or nil on any failure. Not a `Bool`: the timestamp is what lets
+    /// `hydrateOwnListingIfNeeded` recognise the publish's own echo and skip re-applying it.
     @discardableResult
-    func publish(_ instructor: Instructor) async -> Bool {
+    func publish(_ instructor: Instructor) async -> Date? {
         #if CLOUDKIT_ENABLED
-        guard let ownerID = instructor.ownerID, !instructor.name.isEmpty else { return false }
+        guard let ownerID = instructor.ownerID, !instructor.name.isEmpty else { return nil }
         let id = CKRecord.ID(recordName: ownerID)
         let record = (try? await database.record(for: id)) ?? CKRecord(recordType: Self.recordType, recordID: id)
 
         record["name"] = instructor.name
-        record["city"] = instructor.city
+        // `city` is no longer written — `address` (the exact studio address) replaced it. The field
+        // stays in the schema and is still decoded for back-compat reads of older records.
+        record["address"] = instructor.address
         record["bio"] = instructor.bio
         record["price"] = instructor.price
         record["yearsExp"] = instructor.yearsExp
@@ -92,29 +124,33 @@ final class CatalogService {
         record["img"] = instructor.img
         record["cert"] = instructor.cert
         record["paymentMethods"] = instructor.paymentMethods
+        record["headline"] = instructor.headline
+        record["story"] = instructor.story
+        record["experience"] = instructor.experienceTokens
+        record["brandColor"] = instructor.brandColor
         record["visibility"] = instructor.visibilityRaw
         record["updatedAt"] = Date()
-        // Coarse only. Snapped again on the way out — `Instructor.coarseLocation` is the single
-        // place a coordinate becomes publishable, and this record is world-readable to every
-        // authenticated user of the app. Assigning nil removes the key, which is how "remove my
-        // location" actually reaches other people's devices.
-        let area = instructor.coarseLocation
-        record["latitude"] = area?.latitude
-        record["longitude"] = area?.longitude
+        // The EXACT studio point (no longer snapped) — students navigate here to book the studio.
+        // Assigning nil removes the key, which is how "remove my studio location" actually reaches
+        // other people's devices.
+        record["latitude"] = instructor.latitude
+        record["longitude"] = instructor.longitude
 
         // A CKAsset is uploaded from a file, so each image has to be staged on disk for the save.
         let staged = instructor.photo.flatMap { Self.stageAsset($0, name: "listing-photo") }
         let stagedCert = instructor.certPhoto.flatMap { Self.stageAsset($0, name: "listing-cert") }
+        let stagedCover = instructor.coverPhoto.flatMap { Self.stageAsset($0, name: "listing-cover") }
         record["photo"] = staged.map { CKAsset(fileURL: $0) }
         record["certPhoto"] = stagedCert.map { CKAsset(fileURL: $0) }
+        record["coverPhoto"] = stagedCover.map { CKAsset(fileURL: $0) }
         defer {
             staged.map { try? FileManager.default.removeItem(at: $0) }
             stagedCert.map { try? FileManager.default.removeItem(at: $0) }
         }
 
         do {
-            _ = try await database.save(record)
-            return true
+            let saved = try await database.save(record)
+            return saved.modificationDate
         } catch let error as CKError where error.code == .serverRecordChanged {
             // Last-writer-wins: take the server record, re-apply our fields, retry once.
             if let server = error.userInfo[CKRecordChangedErrorServerRecordKey] as? CKRecord {
@@ -122,29 +158,46 @@ final class CatalogService {
                 server["price"] = instructor.price
                 server["paymentMethods"] = instructor.paymentMethods
                 server["updatedAt"] = Date()
+                // The edited text fields must survive a conflict too — omitting them let a concurrent
+                // save keep the new photo while silently reverting a just-edited bio (or name/city/
+                // specialties) to the stale server copy. All existing record fields, no schema impact.
+                server["name"] = instructor.name
+                server["address"] = instructor.address
+                server["bio"] = instructor.bio
+                server["yearsExp"] = instructor.yearsExp
+                server["specialties"] = instructor.specialties
+                server["sessionTypes"] = instructor.sessionTypes
+                server["rating"] = instructor.rating
+                server["reviews"] = instructor.reviews
+                server["img"] = instructor.img
+                server["cert"] = instructor.cert
                 // Re-apply availability too — a conflicting save must not resurrect a day the
                 // instructor just closed. A closed day is encoded as ABSENT from `available`, so
                 // taking the server copy without this would silently reopen it from the stale record.
                 server["available"] = instructor.available
                 server["hours"] = instructor.hours
                 // Re-applied including a nil, for the same reason the assets are: a conflicting
-                // save must not resurrect a location the instructor has just removed.
-                server["latitude"] = area?.latitude
-                server["longitude"] = area?.longitude
+                // save must not resurrect a studio location the instructor has just removed. Exact.
+                server["latitude"] = instructor.latitude
+                server["longitude"] = instructor.longitude
                 // The staged files outlive this block (`defer` fires on return), so the retry can
                 // reuse them — otherwise a conflicting save would silently drop the new images.
                 // Both assets are re-applied, including a nil, so a removal survives the conflict.
                 server["photo"] = staged.map { CKAsset(fileURL: $0) }
                 server["certPhoto"] = stagedCert.map { CKAsset(fileURL: $0) }
-                return (try? await database.save(server)) != nil
+                // Return the conflict-resolved save's server timestamp too, so a publish that had to
+                // retry still advances the caller's baseline — otherwise the next foreground pull
+                // would see a newer server record and re-apply this very edit onto its own author.
+                if let saved = try? await database.save(server) { return saved.modificationDate }
+                return nil
             }
-            return false
+            return nil
         } catch {
             // Offline / not signed into iCloud / schema not deployed — non-fatal.
-            return false
+            return nil
         }
         #else
-        return false
+        return nil
         #endif
     }
 

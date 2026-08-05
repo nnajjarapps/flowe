@@ -4,8 +4,6 @@ struct PrimaryButton: View {
     let title: LocalizedStringKey
     let action: () -> Void
 
-    @GestureState private var isPressed = false
-
     var body: some View {
         Button(action: action) {
             Text(title)
@@ -15,17 +13,8 @@ struct PrimaryButton: View {
                 .frame(height: 56)
                 .background(FlowGradients.gradDark)
                 .clipShape(RoundedRectangle(cornerRadius: 14))
-                .scaleEffect(isPressed ? 0.96 : 1)
-                .animation(.spring(duration: 0.15), value: isPressed)
         }
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .updating($isPressed) { _, state, _ in state = true }
-        )
+        // Shared, reduce-motion-aware press feedback (0.96 scale + dim, FloweMotion.pop).
+        .flowePressable()
     }
-}
-
-#Preview {
-    PrimaryButton(title: "Get Started") {}
-        .padding()
 }

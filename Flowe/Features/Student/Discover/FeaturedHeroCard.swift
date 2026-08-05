@@ -7,11 +7,20 @@ struct FeaturedHeroCard: View {
     let instructor: Instructor
     let action: () -> Void
 
-    private var locationLine: String {
-        var parts: [String] = []
-        if !instructor.city.isEmpty { parts.append(instructor.city) }
-        parts.append(contentsOf: instructor.sessionTypes)
-        return parts.joined(separator: " · ")
+    /// Whether there is anything to show in the location line (studio address and/or session types).
+    private var hasLocationLine: Bool {
+        !instructor.address.isEmpty || !instructor.sessionTypes.isEmpty
+    }
+
+    /// Studio address (verbatim) followed by localized session types, joined with " · " via Text
+    /// concatenation — a joined String would render the session types as verbatim English.
+    private var locationText: Text {
+        var pieces: [Text] = []
+        if !instructor.address.isEmpty { pieces.append(Text(instructor.address)) }
+        pieces.append(contentsOf: instructor.sessionTypes.map { Text(localizedTag: $0) })
+        return pieces.enumerated().reduce(Text("")) { acc, e in
+            acc + (e.offset == 0 ? Text("") : Text(" · ")) + e.element
+        }
     }
 
     var body: some View {
@@ -49,11 +58,11 @@ struct FeaturedHeroCard: View {
                         .font(FloweFont.serif(18))
                         .foregroundStyle(.white)
 
-                    if !locationLine.isEmpty {
+                    if hasLocationLine {
                         HStack(spacing: 4) {
                             Image(systemName: "mappin")
                                 .font(.system(size: 11))
-                            Text(locationLine)
+                            locationText
                                 .font(FloweFont.sans(12))
                         }
                         .foregroundStyle(.white.opacity(0.85))
@@ -63,7 +72,9 @@ struct FeaturedHeroCard: View {
 
                 // Top-right blurred price pill
                 if instructor.price > 0 {
-                    Text("\(settings.money(instructor.price))/session")
+                    // "from ₪X/session" = starting price. Nested localization reuses the existing
+                    // "from %@" and "%@/session" keys, so no new positional string is needed.
+                    Text("\(String(localized: "from \(settings.money(instructor.price))"))/session")
                         .font(FloweFont.sans(12, .medium))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 10)
@@ -76,18 +87,7 @@ struct FeaturedHeroCard: View {
             .frame(height: 200)
             .clipShape(RoundedRectangle(cornerRadius: 24))
         }
-        .buttonStyle(.plain)
+        // Standard press feedback; the hero's entrance scale-in is applied by DiscoverView.
+        .flowePressable()
     }
-}
-
-#Preview {
-    let data = MockDataStore.preview
-    return Group {
-        if let first = data.instructors.first {
-            FeaturedHeroCard(instructor: first) {}
-        }
-    }
-    .padding()
-    .background(Color.flowWhite)
-    .environment(AppSettings())
 }

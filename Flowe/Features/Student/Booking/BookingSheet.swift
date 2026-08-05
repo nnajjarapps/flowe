@@ -14,9 +14,22 @@ struct BookingSheet: View {
 
     @State private var step: Int
     @State private var day = ""
+    // The real `Date` behind the chosen day. The pickerValue (`day`) carries no year, so it can't key a
+    // date-specific availability override; this drives the date-aware `hours(onDate:)` resolver.
+    @State private var dayDate: Date?
+    @State private var dayLabel = ""   // localized display of `day` (pickerValue stays English for lookup)
     @State private var time = ""
     @State private var type = ""
     @State private var booked = false
+    @State private var waitlisted = false      // the confirmed booking landed on the waitlist (group class was full)
+    @State private var isConfirming = false   // synchronous in-flight guard against a double-tap self-race
+    @State private var weekOffset = 0   // which forward week the day picker is showing (0 = this week)
+    // Live slot occupancy for the chosen day: [HHmm token: seats taken]. A DISPLAY hint (best-effort);
+    // the atomic seat claim at confirm is the real guarantee. Loaded on entering step 2 and on day change.
+    @State private var occupancy: [String: Int] = [:]
+    @State private var occupancyLoading = false
+    @State private var showBookingAlert = false
+    @State private var bookingAlertMessage = ""
     @State private var showReport = false
     @State private var confirmBlock = false
     @State private var showCertificate = false
@@ -68,6 +81,13 @@ struct BookingSheet: View {
         // The presenting profile already syncs types, but the fetch is idempotent — so a BookingSheet
         // reached by any other path still populates the picker rather than showing only the name cache.
         .task { await data.syncLessonTypes(for: instructor) }
+        // Load live occupancy whenever the time/type step is shown or the chosen day changes, so taken
+        // slots render Full instead of a stale slate that looks freely bookable.
+        .onChange(of: step) { _, newValue in if newValue == 2 { Task { await loadOccupancy() } } }
+        .onChange(of: day) { _, _ in if step == 2 { Task { await loadOccupancy() } } }
+        .alert(bookingAlertMessage, isPresented: $showBookingAlert) {
+            Button("OK", role: .cancel) {}
+        }
         .sheet(isPresented: $showReport) {
             ReportSheet(
                 reportedID: instructor.ownerID ?? "",
@@ -196,7 +216,7 @@ struct BookingSheet: View {
 
             FlowLayout(spacing: 6) {
                 ForEach(instructor.specialties, id: \.self) { s in
-                    Text(s)
+                    Text(localizedTag: s)
                         .font(FloweFont.mono(11))
                         .foregroundStyle(Color.flowePinkDeep)
                         .padding(.horizontal, 10)
@@ -209,7 +229,11 @@ struct BookingSheet: View {
             certificationBlock
             paymentBlock
 
-            GradientButton(title: "Book a Session · \(settings.money(instructor.price))") { step = 1 }
+            // Pre-type intro: the price hint is the "from" starting price (cheapest lesson type),
+            // dropped when no type is priced. Nested localization reuses "from %@" + "Book a Session · %@".
+            GradientButton(title: instructor.price > 0
+                ? "Book a Session · \(String(localized: "from \(settings.money(instructor.price))"))"
+                : "Book a Session") { step = 1 }
         }
     }
 
@@ -363,14 +387,36 @@ struct BookingSheet: View {
             }
             .padding(.bottom, 12)
 
-            Text("Available: \(instructor.available.joined(separator: ", "))")
+            Text("Available: \(instructor.available.map { String(localized: String.LocalizationValue($0)) }.joined(separator: ", "))")
                 .font(FloweFont.mono(11))
                 .foregroundStyle(Color.floweMuted)
                 .padding(.bottom, 12)
 
+            // Week paging around the day grid: chevrons auto-mirror in RTL; back stops at this week,
+            // forward at the horizon cap. Availability is weekly-recurring, so paged future weeks need
+            // no data change — a picked day persists across paging (its pickerValue carries month+day).
+            HStack {
+                IconButton(systemName: "chevron.left", action: { withAnimation { weekOffset -= 1 } }, size: 34)
+                    .disabled(weekOffset == 0)
+                    .opacity(weekOffset == 0 ? 0.4 : 1)
+                    .accessibilityLabel("Previous week")
+                Spacer()
+                Text(FloweWeek.rangeLabel(offset: weekOffset))
+                    .font(FloweFont.mono(12))
+                    .foregroundStyle(Color.floweInk)
+                Spacer()
+                IconButton(systemName: "chevron.right", action: { withAnimation { weekOffset += 1 } }, size: 34)
+                    .disabled(weekOffset == FloweWeek.maxWeekOffset)
+                    .opacity(weekOffset == FloweWeek.maxWeekOffset ? 0.4 : 1)
+                    .accessibilityLabel("Next week")
+            }
+            .padding(.bottom, 12)
+
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
-                ForEach(FloweWeek.current()) { d in
-                    let avail = instructor.isBookable(on: d.matchWeekday)
+                ForEach(FloweWeek.week(offset: weekOffset)) { d in
+                    // Date-aware, not weekday-only: a closed override (vacation) dims/disables the day,
+                    // and an OPEN override on a normally-closed weekday makes it tappable.
+                    let avail = instructor.isBookable(onDate: d.date)
                     let sel = day == d.pickerValue
                     Button {
                         guard avail else { return }
@@ -378,6 +424,10 @@ struct BookingSheet: View {
                         // 9am may not exist on Thursday.
                         if day != d.pickerValue { time = "" }
                         day = d.pickerValue
+                        dayDate = d.date
+                        // Keep an already-localized label for the day (pickerValue stays English —
+                        // it is the availability lookup key — so it can't be shown directly).
+                        dayLabel = (d.isToday ? String(localized: "Today") : d.displayWeekday) + " · " + d.displayShortDate
                     } label: {
                         VStack(spacing: 2) {
                             (d.isToday ? Text("Today") : Text(verbatim: d.displayWeekday))
@@ -386,6 +436,13 @@ struct BookingSheet: View {
                             Text(verbatim: d.displayShortDate)
                                 .font(FloweFont.sans(11))
                                 .foregroundStyle(sel ? .white : Color.floweInk)
+                            // A date the instructor closed off (vacation) reads Closed, so the student
+                            // doesn't tap into an empty day.
+                            if instructor.isClosedOverride(onDate: d.date) {
+                                Text("Closed")
+                                    .font(FloweFont.mono(8))
+                                    .foregroundStyle(sel ? .white.opacity(0.8) : Color.floweMuted)
+                            }
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
@@ -416,7 +473,10 @@ struct BookingSheet: View {
     /// The instructor's bookable hours on the chosen day — not the full house slate. An instructor
     /// who teaches Tuesday mornings only should not appear bookable at 6pm.
     private var availableTimes: [String] {
-        instructor.hours(on: String(day.prefix(3)))
+        // Keyed on the DATE, not the weekday: a vacation date returns [] ("No times left on this day")
+        // and a custom date shows its overridden slate.
+        guard let dayDate else { return [] }
+        return instructor.hours(onDate: dayDate)
     }
 
     private var stepTimeType: some View {
@@ -429,7 +489,7 @@ struct BookingSheet: View {
             }
             .padding(.bottom, 4)
 
-            Text(day)
+            Text(verbatim: dayLabel.isEmpty ? day : dayLabel)
                 .font(FloweFont.mono(11))
                 .foregroundStyle(Color.floweMuted)
                 .padding(.bottom, 12)
@@ -444,24 +504,62 @@ struct BookingSheet: View {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
                 ForEach(availableTimes, id: \.self) { t in
                     let sel = time == t
+                    // A slot on TODAY whose start time has already passed can never be booked.
+                    let past = isPast(t)
+                    let full = isFull(t)
+                    // A full 1-on-1 (cap < 2) is a dead end and stays disabled exactly as before. A full
+                    // GROUP/duet cell (cap >= 2) stays TAPPABLE — selecting it routes the CTA to "Join
+                    // waitlist" — so a full class is never a dead end. A PAST slot is never waitlistable.
+                    let waitlistable = full && !past && max(selectedTypeCapacity, 1) >= 2
+                    // Dead end = past, or a full cell that can't fall through to a waitlist. Dim + disable.
+                    let deadEnd = past || (full && !waitlistable)
                     Button { time = t } label: {
-                        Text(t)
-                            .font(FloweFont.mono(11))
-                            .foregroundStyle(sel ? .white : Color.floweInk)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 10)
-                            .background {
-                                if sel {
-                                    RoundedRectangle(cornerRadius: 12).fill(FlowGradients.gradDark)
-                                } else {
-                                    RoundedRectangle(cornerRadius: 12).fill(Color.floweCardBg)
-                                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.floweBorder, lineWidth: 1))
-                                }
+                        VStack(spacing: 2) {
+                            Text(verbatim: t.localizedTimeSlot)
+                                .font(FloweFont.mono(11))
+                                .foregroundStyle(sel ? .white : Color.floweInk)
+                            // A passed time reads "Passed"; else group/duet shows "N spots left" / "Full"
+                            // (full still tappable → waitlist); 1-on-1 keeps the binary Full/nothing.
+                            if past {
+                                Text("Passed")
+                                    .font(FloweFont.mono(8))
+                                    .foregroundStyle(sel ? .white.opacity(0.8) : Color.floweMuted)
+                            } else if full {
+                                Text("Full")
+                                    .font(FloweFont.mono(8))
+                                    .foregroundStyle(sel ? .white.opacity(0.8) : Color.floweMuted)
+                            } else if let spots = spotsLeftLabel(t) {
+                                spots
+                                    .font(FloweFont.mono(8))
+                                    .foregroundStyle(sel ? .white.opacity(0.85) : Color.flowePinkDeep)
                             }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background {
+                            if sel {
+                                RoundedRectangle(cornerRadius: 12).fill(FlowGradients.gradDark)
+                            } else {
+                                RoundedRectangle(cornerRadius: 12).fill(Color.floweCardBg)
+                                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.floweBorder, lineWidth: 1))
+                            }
+                        }
+                        .opacity(deadEnd ? 0.35 : 1)
                     }
+                    .disabled(deadEnd)
                 }
             }
             .padding(.bottom, 16)
+            // While the occupancy query is in flight, dim + spin over the grid so a stale slate is never
+            // presented as freely bookable (the count is best-effort, but the display shouldn't mislead).
+            .overlay {
+                if occupancyLoading {
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                }
+            }
+            .opacity(occupancyLoading ? 0.5 : 1)
 
             Text("SESSION TYPE")
                 .font(FloweFont.mono(11))
@@ -515,11 +613,96 @@ struct BookingSheet: View {
                 .padding(.bottom, 14)
             }
 
-            GradientButton(title: "Request · \(settings.money(instructor.price))", enabled: !time.isEmpty) {
-                confirmBooking()
-                step = 3
+            GradientButton(title: ctaTitle, enabled: !time.isEmpty) {
+                Task { await confirmBooking() }
             }
         }
+    }
+
+    /// The request CTA. A full group/duet time (still selectable) routes to the waitlist, so the button
+    /// says so; everything else keeps the priced "Request" label.
+    private var ctaTitle: LocalizedStringKey {
+        // A full group/duet time (still selectable) routes to the waitlist.
+        if !time.isEmpty && isFull(time) && max(selectedTypeCapacity, 1) >= 2 {
+            return "Join waitlist"
+        }
+        // A type is chosen at this step, so charge THAT type's price, not the listing's starting rate.
+        // An unpriced type shows just "Request" (no misleading "· 0"); Free shows "· Free".
+        if let priceText = selectedPriceText { return "Request · \(priceText)" }
+        return "Request"
+    }
+
+    /// Seats already taken at a time, from the live occupancy hint (0 when unknown / query failed).
+    private func seatsUsed(_ t: String) -> Int {
+        occupancy[Booking.timeToken(t) ?? ""] ?? 0
+    }
+
+    /// The seat capacity of the currently-selected session type (0 unstated → treated as 1, so an
+    /// unstated Private is never overbooked). Recomputed on every render, so switching type re-evaluates
+    /// which times read Full.
+    private var selectedTypeCapacity: Int {
+        data.lessonTypes(for: instructor).first { $0.name == type }?.capacity ?? 0
+    }
+
+    /// The price of the currently-selected lesson type — the SPECIFIC price the student pays, not the
+    /// listing's derived "starting from" rate. nil when no type is chosen yet or the type is unpriced;
+    /// callers render `?? 0` (an honest money(0)) rather than falling back to `instructor.price`, which
+    /// would reintroduce the bug where the receipt showed the general rate for any chosen type.
+    private var selectedTypePrice: Int? {
+        data.lessonTypes(for: instructor).first { $0.name == type }?.price
+    }
+
+    /// The display string for the selected type's price, keeping the tri-state honest (matches
+    /// `LessonTypeCard`): nil (not stated) → no price shown, an explicit 0 → "Free", n → money(n). The
+    /// old `money(selectedTypePrice ?? 0)` printed a real "0" for an unpriced type, reading as free.
+    private var selectedPriceText: String? {
+        guard let p = selectedTypePrice else { return nil }
+        return p == 0 ? String(localized: "Free") : settings.money(p)
+    }
+
+    /// Whether a time is fully booked for the selected type — reactive to both live occupancy and the
+    /// chosen type's capacity.
+    private func isFull(_ t: String) -> Bool {
+        seatsUsed(t) >= max(selectedTypeCapacity, 1)
+    }
+
+    /// Whether a slot's start time has already passed for the chosen day — so a session that's over (or
+    /// under way) is never bookable. Only bites on TODAY: a future day's slots are always ahead of `now`;
+    /// the picker never shows past days. Builds the slot's absolute instant from the chosen day's date and
+    /// the time's 24h "HHmm" token (POSIX-stable), independent of device locale.
+    private func isPast(_ t: String, now: Date = Date()) -> Bool {
+        guard let dayDate,
+              let token = Booking.timeToken(t), token.count == 4,
+              let hh = Int(token.prefix(2)), let mm = Int(token.suffix(2)),
+              let slot = Calendar.current.date(bySettingHour: hh, minute: mm, second: 0, of: dayDate)
+        else { return false }
+        return slot <= now   // at-or-after start counts as passed (a slot starting this exact minute is gone)
+    }
+
+    /// The "N spots left" sub-label for a GROUP/duet time (capacity >= 2), driven by the SAME PII-free
+    /// occupancy count as `isFull`. Nil for a 1-on-1 (capacity < 2 keeps today's binary Full/nothing —
+    /// the shipped 1-on-1 display never regresses) and nil at 0 spots (the cell shows "Full" instead).
+    /// A duet (cap 2) reads "2 spots left", a group (cap 8) "8 spots left", down to "1 spot left".
+    private func spotsLeftLabel(_ t: String) -> Text? {
+        guard selectedTypeCapacity >= 2 else { return nil }
+        let spots = max(selectedTypeCapacity - seatsUsed(t), 0)
+        guard spots > 0 else { return nil }
+        return Text("^[\(spots) spot](inflect: true) left")
+    }
+
+    /// Fetch live occupancy for the chosen day. Best-effort — on failure it returns empty and the grid
+    /// falls back to showing everything bookable; the atomic claim at confirm is the real guard. Clears a
+    /// selected time that has just become Full so the user can't submit a taken slot.
+    private func loadOccupancy() async {
+        guard !day.isEmpty else { return }
+        occupancyLoading = true
+        occupancy = await data.slotOccupancy(for: instructor, day: day)
+        occupancyLoading = false
+        // Clear a now-full selection only for a 1-on-1 (a dead end). A full GROUP/duet time stays
+        // selected so the student can proceed to Join the waitlist instead of being bounced off it.
+        if !time.isEmpty && isFull(time) && max(selectedTypeCapacity, 1) < 2 { time = "" }
+        // Clear a selection whose start time has since passed — never leave a bookable past slot chosen.
+        if !time.isEmpty && isPast(time) { time = "" }
     }
 
     /// The cancellation policy for the currently selected session type, shown before the student
@@ -532,11 +715,45 @@ struct BookingSheet: View {
         return "Free cancellation up to \(policy.windowHours)h before — after that, a \(fee) late-cancel / no-show fee applies."
     }
 
-    /// Persist the booking exactly once when the user confirms.
-    private func confirmBooking() {
-        guard !booked else { return }
-        data.addBooking(instructor: instructor, day: day, time: time, type: type)
-        booked = true
+    /// Persist the booking exactly once when the user confirms, gating the success screen on the atomic
+    /// seat claim: a lost race (`.slotTaken`) or a self-duplicate keeps the user on the picker with a
+    /// clear alert and refreshed availability instead of showing a false "Request sent!".
+    private func confirmBooking() async {
+        // `booked` only flips AFTER the await, so it can't stop a second tap fired in the same runloop turn
+        // from starting its own claim (a self-race that would wrongly report "just booked" for the user's
+        // own in-flight booking). `isConfirming` is set synchronously before the first await to block that.
+        guard !booked, !isConfirming else { return }
+        // Defensive backstop: a slot that was valid when selected may have passed while the sheet sat open.
+        // The picker already disables past cells, so this only catches that lingering-open case.
+        if isPast(time) {
+            bookingAlertMessage = String(localized: "That time has already passed. Pick another.")
+            showBookingAlert = true
+            time = ""
+            return
+        }
+        isConfirming = true
+        defer { isConfirming = false }
+        let result = await data.addBooking(instructor: instructor, day: day, time: time, type: type)
+        switch result {
+        case .booked, .failed:
+            // .failed never occurs for a booking today (a claim failure degrades to .booked, unlocked),
+            // but is handled the same way defensively — the row exists, advance to confirmation.
+            booked = true
+            step = 3
+        case .waitlisted:
+            // The group class was full; the booking was still created on an overflow (waitlist) seat.
+            booked = true
+            waitlisted = true
+            step = 3
+        case .slotTaken:
+            bookingAlertMessage = String(localized: "This slot was just booked. Pick another time.")
+            showBookingAlert = true
+            time = ""                    // the just-taken time is no longer a valid selection
+            await loadOccupancy()        // refresh so it flips to Full
+        case .selfDuplicate:
+            bookingAlertMessage = String(localized: "You already have this slot booked.")
+            showBookingAlert = true
+        }
     }
 
     /// A compact capacity · price subtitle for a picker cell, RTL-safe separate `Text` runs joined by a
@@ -560,7 +777,7 @@ struct BookingSheet: View {
 
     private var stepConfirm: some View {
         VStack(spacing: 0) {
-            Image(systemName: "checkmark")
+            Image(systemName: waitlisted ? "hourglass" : "checkmark")
                 .font(.system(size: 28, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: 64, height: 64)
@@ -568,22 +785,24 @@ struct BookingSheet: View {
                 .padding(.top, 16)
                 .padding(.bottom, 16)
 
-            Text("Request sent!")
+            Text(waitlisted ? "You're on the waitlist" : "Request sent!")
                 .font(FloweFont.serif(22))
                 .foregroundStyle(Color.floweInk)
                 .padding(.bottom, 4)
 
-            Text("\(instructor.name) · \(type)")
+            (Text(instructor.name) + Text(" · ") + Text(localizedTag: type))
                 .font(FloweFont.sans(14))
                 .foregroundStyle(Color.floweInk)
                 .padding(.bottom, 4)
 
-            Text("\(day) at \(time)")
+            Text("\(dayLabel.isEmpty ? day : dayLabel) at \(time.localizedTimeSlot)")
                 .font(FloweFont.mono(12))
                 .foregroundStyle(Color.floweMuted)
                 .padding(.bottom, 12)
 
-            Text("\(instructor.firstName) will confirm your session shortly. You'll see it update in Bookings.")
+            Text(waitlisted
+                 ? "You'll move up automatically as spots open up. We'll update your booking in Bookings."
+                 : "\(instructor.firstName) will confirm your session shortly. You'll see it update in Bookings.")
                 .font(FloweFont.sans(13))
                 .foregroundStyle(Color.floweMuted)
                 .multilineTextAlignment(.center)
@@ -593,7 +812,9 @@ struct BookingSheet: View {
             // Flowe takes no payment for sessions in this release — the student settles up with
             // the instructor directly, so no service fee or total is shown.
             VStack(spacing: 0) {
-                receiptRow("Session fee", settings.money(instructor.price), bold: true)
+                // The SELECTED type's price — fixes the latent bug where the receipt showed the
+                // general rate for any chosen type.
+                receiptRow("Session fee", selectedPriceText ?? "—", bold: true)
                     .padding(.top, 4)
                 Text("Paid directly to your instructor")
                     .font(FloweFont.mono(10))
@@ -651,11 +872,4 @@ struct BookingSheet: View {
                 .foregroundStyle(Color.floweInk)
         }
     }
-}
-
-#Preview {
-    BookingSheet(instructor: MockDataStore.preview.instructors[0], onClose: { _ in })
-        .environment(MockDataStore.preview)
-        .environment(AppSettings())
-        .environment(AppSession())
 }

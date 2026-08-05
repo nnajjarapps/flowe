@@ -1,12 +1,13 @@
 import SwiftUI
 
 enum QuickActionKind {
-    case availability, messages, earnings, editProfile, createEvent
+    case setupStudio, availability, messages, earnings, editProfile, createEvent
 
     /// Stable, non-localized token for the tile's accessibilityIdentifier (`dashboard.action.<id>`),
     /// so a UI test can tap a tile without matching translated text.
     var id: String {
         switch self {
+        case .setupStudio:  return "setupStudio"
         case .availability: return "availability"
         case .messages:     return "messages"
         case .earnings:     return "earnings"
@@ -25,6 +26,7 @@ struct QuickAction: Identifiable {
     let subtitle: String
 
     static let all: [QuickAction] = [
+        QuickAction(kind: .setupStudio, systemIcon: "wand.and.stars", title: "Set up your studio", subtitle: "Finish going bookable"),
         QuickAction(kind: .availability, systemIcon: "calendar.badge.plus", title: "Add availability", subtitle: "Open new slots"),
         QuickAction(kind: .messages, systemIcon: "bubble.left.and.bubble.right.fill", title: "Message students", subtitle: "Chat with students"),
         QuickAction(kind: .earnings, systemIcon: "chart.line.uptrend.xyaxis", title: "View earnings", subtitle: "This month"),
@@ -36,21 +38,29 @@ struct QuickAction: Identifiable {
 /// 2-column grid of tappable action tiles.
 struct QuickActionsGrid: View {
     var onTap: (QuickAction) -> Void = { _ in }
+    /// Whether to surface the "Set up your studio" tile — only meaningful while setup is incomplete.
+    /// A fully-set-up instructor shouldn't see a wizard shortcut that just shows 4/4 done.
+    var showSetupStudio: Bool = true
 
     private let columns = [
         GridItem(.flexible(), spacing: FlowSpacing.md),
         GridItem(.flexible(), spacing: FlowSpacing.md)
     ]
 
+    private var actions: [QuickAction] {
+        showSetupStudio ? QuickAction.all : QuickAction.all.filter { $0.kind != .setupStudio }
+    }
+
     var body: some View {
         LazyVGrid(columns: columns, spacing: FlowSpacing.md) {
-            ForEach(QuickAction.all) { action in
+            ForEach(actions) { action in
                 Button {
+                    Haptic.tap()
                     onTap(action)
                 } label: {
                     QuickActionTile(action: action)
                 }
-                .buttonStyle(.plain)
+                .flowePressable()
                 .accessibilityIdentifier("dashboard.action.\(action.kind.id)")
             }
         }
@@ -85,10 +95,4 @@ private struct QuickActionTile: View {
         .padding(FlowSpacing.lg)
         .floweCard()
     }
-}
-
-#Preview {
-    QuickActionsGrid()
-        .padding()
-        .background(Color.flowWhite)
 }

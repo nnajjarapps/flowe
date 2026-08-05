@@ -9,6 +9,13 @@ import SwiftData
 final class Message {
     /// recordName in the public database. Nil while the message is still queued for upload.
     var remoteID: String?
+    /// Stable client id, minted once when the message is composed. It derives a DETERMINISTIC
+    /// public recordName (`msg-<localID>`) so the upload is idempotent: a re-send (the explicit
+    /// upload racing `syncMessages`'s retry loop, or a retry after a crash) upserts the SAME record
+    /// instead of creating a duplicate, and `merge` can recognise the fetched-back copy as already
+    /// held before the upload even finishes. Legacy rows keep a fresh UUID on migration — harmless,
+    /// they already carry a `remoteID`. Same posture as `CommunityEvent.localID`.
+    var localID: UUID = UUID()
     /// Deterministic id for the pair of participants — see `Message.conversationID(_:_:)`.
     var conversationID: String = ""
     var senderID: String = ""
@@ -25,6 +32,7 @@ final class Message {
 
     init(
         remoteID: String? = nil,
+        localID: UUID = UUID(),
         conversationID: String = "",
         senderID: String = "",
         senderName: String = "",
@@ -36,6 +44,7 @@ final class Message {
         pendingUpload: Bool = false
     ) {
         self.remoteID = remoteID
+        self.localID = localID
         self.conversationID = conversationID
         self.senderID = senderID
         self.senderName = senderName
@@ -52,6 +61,12 @@ final class Message {
     static func conversationID(_ a: String, _ b: String) -> String {
         [a, b].sorted().joined(separator: "~")
     }
+
+    /// The message's deterministic public recordName. The `msg-` prefix keeps it clear of every
+    /// other record type (recordName is unique per zone ACROSS types), and deriving it from the
+    /// stable `localID` makes the upload idempotent — the whole point of the field.
+    static func recordName(localID: UUID) -> String { "msg-\(localID.uuidString)" }
+    var recordName: String { Message.recordName(localID: localID) }
 
     /// The other participant, from the perspective of `me`.
     func counterpart(for me: String) -> Counterpart {

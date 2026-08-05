@@ -3,7 +3,9 @@ import Foundation
 extension Date {
     var flowTimeString: String {
         let f = DateFormatter()
-        f.dateFormat = "h:mm a"
+        // Locale-templated so Hebrew/Arabic get their conventional 24h time instead of a forced
+        // English "h:mm a" — DateFormatter already defaults to the device locale.
+        f.setLocalizedDateFormatFromTemplate("jmm")
         return f.string(from: self)
     }
 
@@ -50,5 +52,21 @@ extension Date {
 
     var isSameDay: Bool {
         Calendar.current.isDateInToday(self)
+    }
+}
+
+extension String {
+    /// Reformat an English "h:mm a" time-slot string (e.g. "9:00 AM") for the current locale — 24h in
+    /// Hebrew/Arabic. Instructor availability hours are stored in the English preset form; this only
+    /// touches DISPLAY (the stored/lookup string is unchanged). Falls back to the raw string on a
+    /// parse miss so an unrecognised slot still renders.
+    var localizedTimeSlot: String {
+        let parser = DateFormatter()
+        parser.locale = Locale(identifier: "en_US_POSIX")
+        parser.dateFormat = "h:mm a"
+        guard let d = parser.date(from: self) else { return self }
+        let out = DateFormatter()
+        out.setLocalizedDateFormatFromTemplate("jmm")
+        return out.string(from: d)
     }
 }

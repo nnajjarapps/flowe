@@ -53,14 +53,3 @@ struct FloatingLabelField: View {
         )
     }
 }
-
-#Preview {
-    @Previewable @State var email = ""
-    @Previewable @State var password = ""
-    VStack(spacing: 16) {
-        FloatingLabelField(title: "Email Address", text: $email)
-        FloatingLabelField(title: "Password", text: $password, isSecure: true)
-    }
-    .padding()
-    .background(Color.floweCardBg)
-}

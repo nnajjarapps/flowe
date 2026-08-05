@@ -43,6 +43,7 @@ struct WelcomeView: View {
             HStack(spacing: 0) {
                 Spacer(minLength: 0)
                 logoPill
+                    .floweAppear(0)
                 Spacer(minLength: 0)
             }
             .padding(.top, 64)   // clear the status bar / Dynamic Island
@@ -71,6 +72,7 @@ struct WelcomeView: View {
                 .foregroundStyle(Color.floweInk)
                 .multilineTextAlignment(.center)
                 .padding(.bottom, 12)
+                .floweAppear(1)
 
             Text("Your premium Pilates community. Connect with world-class instructors, build your practice, and grow together.")
                 .font(FloweFont.sans(14))
@@ -79,14 +81,18 @@ struct WelcomeView: View {
                 .lineSpacing(3)
                 .padding(.horizontal, 4)
                 .padding(.bottom, 28)
+                .floweAppear(2)
 
             dots
                 .padding(.bottom, 28)
+                .floweAppear(3)
 
             GradientButton(title: "Get started") { onGetStarted() }
                 .padding(.bottom, 12)
+                .floweAppear(4)
 
             SecondaryButton(title: "I already have an account") { onSignIn() }
+                .floweAppear(5)
         }
         .padding(.horizontal, 24)
         .padding(.top, 4)
@@ -102,8 +108,4 @@ struct WelcomeView: View {
             Capsule().fill(Color.flowSoftBeige).frame(width: 8, height: 8)
         }
     }
-}
-
-#Preview {
-    WelcomeView(onGetStarted: {}, onSignIn: {})
 }

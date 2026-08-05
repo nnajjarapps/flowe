@@ -80,10 +80,16 @@ struct PostCommentsSheet: View {
 
     // MARK: - Pieces
 
+    /// The post author's CURRENT identity, resolved live (falls back to the post snapshot).
+    private var postAuthorName: Text {
+        let idty = data.displayIdentity(ownerID: post.ownerID, fallbackName: post.authorNameOrEmpty)
+        return idty.name.isEmpty ? Text("Someone") : Text(idty.name)
+    }
+
     /// The post being replied to, so the sheet has context without going back.
     private var original: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(post.displayName)
+            postAuthorName
                 .font(FloweFont.sans(13, .medium))
                 .foregroundStyle(Color.floweInk)
             Text(post.text)
@@ -100,10 +106,14 @@ struct PostCommentsSheet: View {
     }
 
     private func row(_ comment: PostComment) -> some View {
-        HStack(alignment: .top, spacing: 10) {
+        // Resolve the commenter's CURRENT name live — the core comment-staleness fix. Falls back to
+        // the comment's snapshot; keeps the localized "Someone" for a blank author.
+        let idty = data.displayIdentity(ownerID: comment.authorID, fallbackName: comment.authorName)
+        let commenterName = idty.name.isEmpty ? Text("Someone") : Text(idty.name)
+        return HStack(alignment: .top, spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 8) {
-                    Text(comment.displayName)
+                    commenterName
                         .font(FloweFont.sans(13, .medium))
                         .foregroundStyle(Color.floweInk)
                     // The stamp is a derived string, so it goes through Text(String) unlocalized;
@@ -200,10 +210,4 @@ struct PostCommentsSheet: View {
         data.addComment(to: post, text: draft)
         draft = ""
     }
-}
-
-#Preview {
-    let store = MockDataStore.preview
-    return PostCommentsSheet(post: store.posts[0])
-        .environment(store)
 }

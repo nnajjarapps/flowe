@@ -8,6 +8,8 @@ struct MessageBubble: View {
     let text: String
     let time: String
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         HStack {
             if isOutgoing { Spacer(minLength: 48) }
@@ -34,6 +36,20 @@ struct MessageBubble: View {
 
             if !isOutgoing { Spacer(minLength: 48) }
         }
+        // A newly-sent/received bubble eases in from its own side and fades;
+        // it leaves on a plain fade. Under Reduce Motion the slide is dropped
+        // (opacity only) so nothing travels across the screen.
+        .transition(bubbleTransition)
+    }
+
+    /// Asymmetric insertion: outgoing enters from the trailing edge, incoming
+    /// from the leading edge — mirroring where the bubble lives.
+    private var bubbleTransition: AnyTransition {
+        guard !reduceMotion else { return .opacity }
+        return .asymmetric(
+            insertion: .move(edge: isOutgoing ? .trailing : .leading).combined(with: .opacity),
+            removal: .opacity
+        )
     }
 
     @ViewBuilder
@@ -53,14 +69,4 @@ struct MessageBubble: View {
             topTrailingRadius: 18
         )
     }
-}
-
-#Preview {
-    VStack(spacing: 12) {
-        MessageBubble(isOutgoing: false, text: "Hi! Looking forward to our reformer session tomorrow. 🌸", time: "9:24 AM")
-        MessageBubble(isOutgoing: true, text: "Me too! Should I bring my grip socks?", time: "9:26 AM")
-        MessageBubble(isOutgoing: false, text: "Yes please — and some water. See you at 10.", time: "9:27 AM")
-    }
-    .padding(20)
-    .background(Color.flowWhite)
 }

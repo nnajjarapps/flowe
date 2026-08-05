@@ -15,6 +15,8 @@ struct ReviewSheet: View {
     @State private var text = ""
     @State private var loaded = false
     @State private var filterMessage: String?
+    /// ✨ Review-writing assist in flight (Flowe Intelligence).
+    @State private var drafting = false
 
     private var instructorName: String {
         data.instructor(id: booking.instructorId)?.firstName ?? "your instructor"
@@ -40,8 +42,33 @@ struct ReviewSheet: View {
                         .lineLimit(4...8)
                         .font(FloweFont.sans(14))
                         .accessibilityIdentifier("review.text")
+                    // ✨ On-device draft, grounded in the chosen rating. Needs a rating first (it anchors
+                    // the sentiment) and the model available; otherwise absent. Polishes rough words or
+                    // drafts from scratch — the student edits before posting.
+                    if FloweAI.isAvailable, rating > 0 {
+                        Button {
+                            draftReview()
+                        } label: {
+                            HStack(spacing: 6) {
+                                if drafting {
+                                    ProgressView().controlSize(.small)
+                                } else {
+                                    Image(systemName: "sparkles")
+                                }
+                                Text(drafting ? "Writing…"
+                                     : (text.trimmingCharacters(in: .whitespaces).isEmpty ? "Help me write this" : "Polish my words"))
+                            }
+                            .foregroundStyle(Color.flowePinkDeep)
+                        }
+                        .disabled(drafting)
+                        .accessibilityIdentifier("review.aiDraft")
+                    }
                 } header: {
-                    Text("Your review")
+                    HStack {
+                        Text("Your review")
+                        Spacer()
+                        if FloweAI.isAvailable { AIPrivacyBadge() }
+                    }
                 } footer: {
                     Text("Your first name and review are shown publicly on \(instructorName)'s profile.")
                 }
@@ -110,6 +137,22 @@ struct ReviewSheet: View {
             text = existing.text
         }
         loaded = true
+    }
+
+    /// Draft/polish the review on-device from the rating (+ any rough notes). Fills `text` to edit.
+    private func draftReview() {
+        guard !drafting, rating > 0 else { return }
+        drafting = true
+        Task {
+            defer { drafting = false }
+            if #available(iOS 26, *), FloweAI.isAvailable,
+               let draft = try? await FloweIntelligence.shared.draftReview(
+                    rating: rating, instructor: instructorName,
+                    sessionType: booking.type, notes: text) {
+                withAnimation { text = draft }
+                Haptic.selection()
+            }
+        }
     }
 
     private func submit() {

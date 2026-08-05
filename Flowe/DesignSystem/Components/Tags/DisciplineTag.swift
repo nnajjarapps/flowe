@@ -20,7 +20,7 @@ struct DisciplineTag: View {
     let discipline: Discipline
 
     var body: some View {
-        Text(discipline.rawValue)
+        Text(localizedTag: discipline.rawValue)
             .flowFont(.label)
             .foregroundStyle(Color.flowePinkDeep)
             .padding(.horizontal, FlowSpacing.sm)
@@ -28,11 +28,4 @@ struct DisciplineTag: View {
             .background(discipline.backgroundColor)
             .clipShape(Capsule())
     }
-}
-
-#Preview {
-    HStack {
-        ForEach(Discipline.allCases, id: \.self) { DisciplineTag(discipline: $0) }
-    }
-    .padding()
 }

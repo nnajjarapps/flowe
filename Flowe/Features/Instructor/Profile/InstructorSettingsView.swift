@@ -11,6 +11,7 @@ struct InstructorSettingsView: View {
 
     @State private var showEditProfile = false
     @State private var showAvailability = false
+    @State private var showShare = false
     @State private var showOutOfStudio = false
     @State private var showPaywall = false
     @State private var showNotifications = false
@@ -45,6 +46,9 @@ struct InstructorSettingsView: View {
                     // Gated on visibility for the same reason hosting an event is.
                     if subscription.isVisible {
                         button("Out of Studio", icon: "airplane") { showOutOfStudio = true }
+                        // A link to a hidden listing resolves to nothing (no catalog record exists
+                        // yet), so gate sharing on visibility like Out of Studio above.
+                        button("Share my profile", icon: "square.and.arrow.up") { showShare = true }
                     }
                 }
 
@@ -85,14 +89,6 @@ struct InstructorSettingsView: View {
                         }
                     } label: {
                         Label("Language", systemImage: "globe")
-                    }
-
-                    Picker(selection: $settings.currency) {
-                        ForEach(Currency.allCases) { currency in
-                            Text("\(currency.code) · \(currency.name)").tag(currency)
-                        }
-                    } label: {
-                        Label("Currency", systemImage: "coloncurrencysign.circle")
                     }
 
                     button("Notifications", icon: "bell") { showNotifications = true }
@@ -157,6 +153,7 @@ struct InstructorSettingsView: View {
             }
             .sheet(isPresented: $showEditProfile) { EditProfileView() }
             .sheet(isPresented: $showAvailability) { AvailabilityView() }
+            .sheet(isPresented: $showShare) { ShareProfileSheet() }
             .sheet(isPresented: $showOutOfStudio) { OutOfStudioView() }
             .sheet(isPresented: $showPaywall) { PaywallView() }
             .sheet(isPresented: $showNotifications) { NotificationSettingsView() }
@@ -186,12 +183,4 @@ struct InstructorSettingsView: View {
         }
         .tint(Color.floweInk)
     }
-}
-
-#Preview {
-    InstructorSettingsView()
-        .environment(AppSettings())
-        .environment(AppSession())
-        .environment(SubscriptionService())
-        .environment(MockDataStore.preview)
 }
