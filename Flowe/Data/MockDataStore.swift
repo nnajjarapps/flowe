@@ -1574,6 +1574,17 @@ final class MockDataStore {
         UserDefaults.standard.set(Array(ids), forKey: deletedMessagesKey)
     }
 
+    /// Tombstones for feed posts the user deleted — so a `syncCommunity` whose fetch still returns the
+    /// just-deleted post (CloudKit delete→query-index lag) can't re-insert it. Without this, a deleted
+    /// post reappears in the feed on the next refresh. Mirrors `deletedMessagesKey`.
+    private let deletedPostsKey = "flowe.deletedPosts"
+
+    private func markPostDeleted(_ id: String) {
+        var ids = Set(UserDefaults.standard.stringArray(forKey: deletedPostsKey) ?? [])
+        ids.insert(id)
+        UserDefaults.standard.set(Array(ids), forKey: deletedPostsKey)
+    }
+
     func deleteMessage(_ message: Message) {
         let mine = message.senderID == currentUserID
         let remoteID = message.remoteID
@@ -2214,6 +2225,7 @@ final class MockDataStore {
 
     private func deleteLocally(_ post: FeedPost) {
         if let remoteID = post.remoteID {
+            markPostDeleted(remoteID)   // so a lagging sync fetch can't re-insert it
             for comment in postComments where comment.postID == remoteID { context.delete(comment) }
         }
         context.delete(post)
@@ -2454,9 +2466,12 @@ final class MockDataStore {
     private func mergePosts(_ remote: [RemotePost]) {
         guard !remote.isEmpty else { return }
         let known = Set(posts.compactMap(\.remoteID))
+        // Never re-insert a post the user deleted: CloudKit's delete may not have propagated to the
+        // query index yet, so the fetch can still return the ghost — without this it reappears.
+        let tombstoned = Set(UserDefaults.standard.stringArray(forKey: deletedPostsKey) ?? [])
         var nextId = posts.map(\.legacyId).max() ?? 0
 
-        for entry in remote where !known.contains(entry.id) {
+        for entry in remote where !known.contains(entry.id) && !tombstoned.contains(entry.id) {
             nextId += 1
             context.insert(FeedPost(
                 legacyId: nextId,
