@@ -2594,8 +2594,13 @@ final class MockDataStore {
         guard let me = currentUserID, let remoteID = event.remoteID else {
             return event.joined ? .requested : .notRequested
         }
+        // A student who has LEFT (or never joined) has no live registration → `joined == false`, and is
+        // NOT going — even though the organizer's `accepted` EventDecision persists server-side (a student
+        // can't delete the organizer's record). Check this BEFORE the decision, or "Leave this event"
+        // leaves them still showing as accepted while their registration (and the spot) is already gone.
+        guard event.joined else { return .notRequested }
         if let accepted = eventDecisions[remoteID]?[me] { return accepted ? .accepted : .declined }
-        return event.joined ? .requested : .notRequested
+        return .requested
     }
 
     /// Pending join requests for an event I organize — registrations with no decision yet, oldest first.
