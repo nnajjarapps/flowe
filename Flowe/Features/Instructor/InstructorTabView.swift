@@ -16,7 +16,7 @@ struct InstructorTabView: View {
     /// `scrollToTopOnTabReselect(trigger:proxy:)` (see ScrollToTop in FloweCommon).
     @State private var reselectTick = 0
 
-    private let maxTab = 4   // tags 0…4 (Dashboard, Calendar, Messages, Profile, Students)
+    private let maxTab = 5   // tags 0…5 (Dashboard, Calendar, Messages, Profile, Students, Community)
 
     /// Defensive Instagram-style swipe between tabs — see `StudentTabView` for the
     /// rationale. Rides as a `.simultaneousGesture`, acts only on a decisive END.
@@ -60,6 +60,13 @@ struct InstructorTabView: View {
 
             StudentsListView().floweAdaptiveColumn()
                 .tabItem { Label("Students", systemImage: "person.2") }.tag(4)
+
+            // Instructors participate in the same community as students — the feed (post tips, like,
+            // comment) and events (browse + join). The peer-only surfaces (class-mates / circles) remain
+            // student-anchored. `CommunityView` is role-agnostic; `checkMilestones` no-ops for an
+            // instructor (no StudentProfile → not community-visible).
+            CommunityView().floweAdaptiveColumn()
+                .tabItem { Label("Community", systemImage: "person.3") }.tag(5)
         }
         .sidebarAdaptableIfAvailable()
         .tint(Color.flowePinkDeep)
@@ -83,7 +90,7 @@ struct InstructorTabView: View {
                 router.profileTab = .reviews
                 router.selectedTab = 3
             case .community:
-                break                          // no Community tab on the instructor side
+                router.selectedTab = 5         // the instructor Community tab
             case .coverage:
                 router.selectedTab = 0         // Dashboard — the coverage cards live there
             }

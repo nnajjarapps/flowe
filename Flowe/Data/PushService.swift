@@ -352,9 +352,9 @@ final class PushService {
             ))
         }
 
-        // The community feed is a student-tab feature; an instructor has no Community tab and so no
-        // posts to be replied to.
-        if !isInstructor && isEnabled(NotificationPreference.community) {
+        // Both roles now have a Community tab and can post to the feed, so both subscribe to replies
+        // addressed to them.
+        if isEnabled(NotificationPreference.community) {
             plans.append(Plan(
                 id: Self.subscriptionID(.community, "reply", ownerID),
                 recordType: CommunityService.commentRecordType,
