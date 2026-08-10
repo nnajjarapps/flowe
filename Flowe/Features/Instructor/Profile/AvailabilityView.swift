@@ -177,7 +177,7 @@ struct AvailabilityView: View {
                         .font(.system(size: 18))
                         .foregroundStyle(isOpen ? Color.flowePinkDeep : Color.floweBorder)
 
-                    Text(day)
+                    Text(LocalizedStringKey(day))
                         .font(FloweFont.sans(15, .medium))
                         .foregroundStyle(Color.floweInk)
 
@@ -463,7 +463,7 @@ struct AvailabilityView: View {
 
     private func weekdayPill(_ day: String, selected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text(day)
+            Text(LocalizedStringKey(day))
                 .font(FloweFont.sans(13, .medium))
                 .foregroundStyle(selected ? .white : Color.floweInk)
                 .padding(.horizontal, 14)

@@ -4324,7 +4324,11 @@ final class MockDataStore {
     /// community opt-in (auto-posting is a public act → only for those who joined the community). Cheap +
     /// idempotent; safe to call whenever bookings or the feed refresh.
     func checkMilestones() {
-        guard !isPreview, isCommunityVisible, let me = currentUserID else { return }
+        // Only post once the community feed has actually LOADED this session — otherwise, right after a
+        // reinstall (when `posts` is still empty and the local baseline reset to 0) the dedup check below
+        // can't see already-celebrated milestones and would re-post every past threshold to the author's
+        // own feed. Gating on `.loaded` means `posts` reflects the server, so the dedup holds.
+        guard !isPreview, isCommunityVisible, communityPhase == .loaded, let me = currentUserID else { return }
         let completed = completedSessionCount
         // Only celebrate thresholds crossed AFTER opting in — the baseline captured at opt-in suppresses
         // a first-run flood for students who join with existing history (deterministic recordName still
@@ -4624,13 +4628,27 @@ final class MockDataStore {
     /// session is handed off and the replacer is owed half, frozen now.
     func awardCoverage(bookingID: String, replacerID: String, replacerName: String, studentID: String) {
         guard let me = currentUserID else { return }
-        if let booking = bookings.first(where: { $0.remoteID == bookingID }) {
+        let booking = bookings.first(where: { $0.remoteID == bookingID })
+        // Snapshot the cover fields BEFORE the optimistic ledger write, so a failed award (offline / no
+        // iCloud) can be rolled back instead of leaving a phantom "owed" cover balance. Unlike bookings/
+        // messages/posts this path has no pending-upload flush, so it must self-correct here.
+        let prior = booking.map { (role: $0.coverRole, status: $0.coverStatus, amount: $0.coverAmount) }
+        if let booking {
             materializeCover(booking, role: .handedOff, instructorID: me, sessionType: booking.type)
         }
         save()
         guard !isPreview else { return }
         Task {
-            _ = await coverageService.award(bookingID: bookingID, replacerID: replacerID)
+            guard await coverageService.award(bookingID: bookingID, replacerID: replacerID) else {
+                // The swap never landed server-side — undo the optimistic ledger.
+                if let booking, let prior {
+                    booking.coverRole = prior.role
+                    booking.coverStatus = prior.status
+                    booking.coverAmount = prior.amount
+                    save()
+                }
+                return
+            }
             _ = await coverageService.publishCoverSession(
                 bookingID: bookingID, studentID: studentID,
                 coveringInstructorID: replacerID, coveringInstructorName: replacerName, requesterID: me
