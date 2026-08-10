@@ -81,7 +81,7 @@ struct EventDetailView: View {
             await data.syncAttendance(for: event)
             // Warm attendee profiles so the opt-in "Who's going" roster can resolve names, photos, and
             // each person's community-visibility. Targeted fetch by the accepted guests' ownerIDs.
-            await data.fetchAuthorProfiles(Set(data.acceptedGuests(for: event).map(\.studentID)))
+            await data.fetchAuthorProfiles(Set(data.acceptedGuests(for: event).map(\.studentID)), refreshVisibility: true)
             // Pull the discussion so the button's message count is fresh (only when the user can see it).
             if data.canDiscuss(event) { await data.syncEventComments(for: event) }
         }

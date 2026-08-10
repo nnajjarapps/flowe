@@ -2153,16 +2153,24 @@ final class MockDataStore {
     /// posts/comments (i.e. ids we already know), never a broad `StudentProfile` query — students stay
     /// undiscoverable. Instructors are skipped (they resolve from the catalog cache), as are self and
     /// blocked authors. Upserts into `studentProfiles`; the `@Observable` write re-renders open rows.
-    func fetchAuthorProfiles(_ ownerIDs: Set<String>) async {
+    /// Warm student profiles by ownerID. Set `refreshVisibility` on COMMUNITY-ROSTER surfaces (event
+    /// "who's going", class-mates, instructor circle): a roster filters by `communityVisible`, and a peer
+    /// cached BEFORE they opted in would keep reading `false` and be wrongly hidden — the reported
+    /// "participating people not visible for others" bug. It re-fetches a cached-but-not-visible peer
+    /// (they may have opted in since) while still skipping already-visible ones, so it stays cheap.
+    func fetchAuthorProfiles(_ ownerIDs: Set<String>, refreshVisibility: Bool = false) async {
         guard !isPreview else { return }
         let wanted = ownerIDs
             .subtracting([currentUserID].compactMap { $0 })
             .subtracting(blockedIDs)
             .filter { id in !instructors.contains(where: { $0.ownerID == id }) }
-            // Skip authors already cached — otherwise every feed re-sync re-downloads every author's
-            // full StudentProfile (photo CKAsset included) and forces an unconditional `refresh()`.
-            // A profile edit is picked up by the owner's own republish, not by re-fetching here.
-            .filter { id in !studentProfiles.contains(where: { $0.ownerID == id }) }
+            // Not cached → fetch. Cached → normally skip (the feed path — re-downloading every author's
+            // full StudentProfile + photo on each sync is wasteful; a profile edit rides the owner's own
+            // republish). For a roster, ALSO re-fetch a cached peer whose cached copy reads not-visible.
+            .filter { id in
+                guard let cached = studentProfiles.first(where: { $0.ownerID == id }) else { return true }
+                return refreshVisibility && !cached.communityVisible
+            }
         guard !wanted.isEmpty else { return }
         let listings = await studentDirectory.fetch(ownerIDs: Array(wanted))
         guard !listings.isEmpty else { return }
@@ -4326,7 +4334,7 @@ final class MockDataStore {
             $0.time == booking.time && $0.type == booking.type && !$0.cancelled
                 && $0.studentID != me && !isBlocked($0.studentID)
         }
-        await fetchAuthorProfiles(Set(peers.map(\.studentID)))
+        await fetchAuthorProfiles(Set(peers.map(\.studentID)), refreshVisibility: true)
         var seen = Set<String>()
         var out: [(id: String, name: String)] = []
         for p in peers where !seen.contains(p.studentID) {
@@ -4352,7 +4360,7 @@ final class MockDataStore {
         let unique = Set(bookings
             .filter { !$0.cancelled && $0.studentID != me && !isBlocked($0.studentID) }
             .map(\.studentID))
-        await fetchAuthorProfiles(unique)
+        await fetchAuthorProfiles(unique, refreshVisibility: true)
         var out: [(id: String, name: String)] = []
         for id in unique {
             guard let p = studentProfile(forOwnerID: id), p.communityVisible else { continue }
