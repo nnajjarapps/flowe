@@ -1186,6 +1186,17 @@ final class MockDataStore {
         save()
     }
 
+    /// Whether a standing series must NO LONGER be topped up (regrown) — because the student ended it on
+    /// THIS device (local `endedSeriesIDs` tombstone) or on ANY device (durable `seriesend-<id>` decision).
+    /// The single guard `topUpStandingSeries` applies, extracted `nonisolated static` so it's unit-testable
+    /// off the main actor: this is exactly what makes `endSeriesAsStudent` stick and a one-off cancel NOT
+    /// end the series. See [[flowe-recurring-series-cancel]].
+    nonisolated static func seriesIsEnded(_ seriesID: String,
+                                          endedLocally: Set<String>,
+                                          decisions: [String: RemoteDecision]) -> Bool {
+        endedLocally.contains(seriesID) || decisions["seriesend-\(seriesID)"] != nil
+    }
+
     /// Extend each active standing series (no local ended tombstone, no fetched `seriesend` decision)
     /// whose latest materialized week is short of the horizon, materializing and uploading the missing
     /// weeks. New weeks are born `.confirmed` when the series is already approved, else `.pending`.
@@ -1195,8 +1206,7 @@ final class MockDataStore {
         let mine = bookings.filter { $0.isRecurring && ($0.studentID == nil || $0.studentID == currentUserID) }
         let bySeries = Dictionary(grouping: mine, by: { $0.seriesID ?? "" })
         for (sid, occs) in bySeries where !sid.isEmpty {
-            if ended.contains(sid) { continue }
-            if decisions["seriesend-\(sid)"] != nil { continue }
+            if Self.seriesIsEnded(sid, endedLocally: ended, decisions: decisions) { continue }
             guard let earliest = occs.compactMap({ Self.occurrenceDate($0) }).min(),
                   let template = occs.max(by: { (Self.occurrenceDate($0) ?? .distantPast) < (Self.occurrenceDate($1) ?? .distantPast) }),
                   let instructor = instructors.first(where: { $0.ownerID == template.instructorOwnerID })
@@ -1470,7 +1480,7 @@ final class MockDataStore {
             }
             return ConversationSummary(
                 counterpart: counterpart,
-                lastMessage: latest.text,
+                lastMessage: latest.displayText,
                 lastSentAt: latest.sentAt,
                 unreadCount: thread.filter { $0.recipientID == me && !$0.isRead }.count
             )
@@ -1669,9 +1679,12 @@ final class MockDataStore {
         var decrypted: [(RemoteMessage, String)] = []
         for entry in remote where !deleted.contains(entry.id) {
             let counterpartID = entry.senderID == me ? entry.recipientID : entry.senderID
+            // Keep the SEALED wire value when the key isn't readable yet (propagation lag / a flaky read /
+            // the sender rotated keys) instead of freezing a lost placeholder — `retryStuckMessages`
+            // re-decrypts it once the key lands, and `Message.displayText` shows a placeholder meanwhile.
             let plaintext = await messageCrypto.decrypt(
                 entry.text, conversationID: entry.conversationID, counterpartID: counterpartID
-            )
+            ) ?? entry.text
             decrypted.append((entry, plaintext))
         }
 
@@ -1699,6 +1712,30 @@ final class MockDataStore {
             inserted = true
         }
         if inserted { save() }
+        // Self-heal any message still holding sealed ciphertext now that we may have the key (a fresh
+        // fetch this cycle, or the sender's key having propagated since it first synced). Runs after
+        // EVERY merge so a stuck message resolves on the next sync instead of being lost forever.
+        await retryStuckMessages(me: me)
+    }
+
+    /// Re-attempt decryption for any locally-cached message still holding sealed ciphertext. This is the
+    /// counterpart to keeping the wire value in `merge` (rather than a placeholder): the moment the
+    /// counterpart's key becomes readable, the frozen "🔒 Message unavailable" rows turn back into real
+    /// text. `decrypt` drops a stale cached key on failure, so a sender key-rotation also recovers here.
+    private func retryStuckMessages(me: String) async {
+        let stuck = messages.filter { MessageCrypto.isSealed($0.text) }
+        guard !stuck.isEmpty else { return }
+        var healed = false
+        for m in stuck {
+            let counterpartID = m.senderID == me ? m.recipientID : m.senderID
+            if let plain = await messageCrypto.decrypt(
+                m.text, conversationID: m.conversationID, counterpartID: counterpartID
+            ) {
+                m.text = plain
+                healed = true
+            }
+        }
+        if healed { save() }
     }
 
     /// People this user can start a conversation with. A student writes to instructors they can

@@ -56,6 +56,13 @@ final class Message {
         self.pendingUpload = pendingUpload
     }
 
+    /// Text to render. A row whose `text` is still sealed ciphertext (its key wasn't readable when it
+    /// synced) shows a neutral placeholder rather than the raw wire value — `MockDataStore.retryStuckMessages`
+    /// keeps re-decrypting it every sync, so this resolves to the real text as soon as the key lands.
+    var displayText: String {
+        MessageCrypto.isSealed(text) ? MessageCrypto.sealedPlaceholder : text
+    }
+
     /// Stable id for a pair of participants, independent of who is sending — sorting the two
     /// owner ids means both devices derive the same thread id without coordinating.
     static func conversationID(_ a: String, _ b: String) -> String {

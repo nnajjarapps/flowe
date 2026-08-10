@@ -13,6 +13,7 @@
 		FF0000000000000000000017 /* OpportunityBrowseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000016 /* OpportunityBrowseTests.swift */; };
 		FF0000000000000000000019 /* RecommendationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000018 /* RecommendationTests.swift */; };
 		FF000000000000000000001B /* IntelligenceLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000001A /* IntelligenceLogicTests.swift */; };
+		FF000000000000000000001D /* RecurringSeriesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000001C /* RecurringSeriesTests.swift */; };
 		0090B8F0D20E644F666A5511 /* DMSans-LightItalic.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D599E204E351EBA66AFCC9B7 /* DMSans-LightItalic.ttf */; };
 		04DF42D3F8F09485B0167B07 /* CalendarComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = D924C099B8699B291D7C43DA /* CalendarComponents.swift */; };
 		073E425562DDD8F043790E0E /* InstructorBarChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65268B66DE3AFF92DA3C484D /* InstructorBarChart.swift */; };
@@ -235,6 +236,7 @@
 		FF0000000000000000000016 /* OpportunityBrowseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpportunityBrowseTests.swift; sourceTree = "<group>"; };
 		FF0000000000000000000018 /* RecommendationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecommendationTests.swift; sourceTree = "<group>"; };
 		FF000000000000000000001A /* IntelligenceLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntelligenceLogicTests.swift; sourceTree = "<group>"; };
+		FF000000000000000000001C /* RecurringSeriesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecurringSeriesTests.swift; sourceTree = "<group>"; };
 		FF00000000000000000000A8 /* FloweUnitTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = FloweUnitTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		02CDF14067779CC6520621BC /* CreateAccountView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateAccountView.swift; sourceTree = "<group>"; };
 		0536329342321C3BB8A28D94 /* MessageBubble.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageBubble.swift; sourceTree = "<group>"; };
@@ -819,6 +821,7 @@
 				FF0000000000000000000016 /* OpportunityBrowseTests.swift */,
 				FF0000000000000000000018 /* RecommendationTests.swift */,
 				FF000000000000000000001A /* IntelligenceLogicTests.swift */,
+				FF000000000000000000001C /* RecurringSeriesTests.swift */,
 			);
 			path = FloweUnitTests;
 			sourceTree = "<group>";
@@ -1065,6 +1068,7 @@
 				FF0000000000000000000017 /* OpportunityBrowseTests.swift in Sources */,
 				FF0000000000000000000019 /* RecommendationTests.swift in Sources */,
 				FF000000000000000000001B /* IntelligenceLogicTests.swift in Sources */,
+				FF000000000000000000001D /* RecurringSeriesTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

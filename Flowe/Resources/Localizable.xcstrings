@@ -24451,6 +24451,40 @@
           }
         }
       }
+    },
+    "Cancel this weekly session?": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إلغاء هذه الجلسة الأسبوعية؟"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "לבטל את המפגש השבועי הזה?"
+          }
+        }
+      }
+    },
+    "Skip just this week and keep your weekly slot, or end the series to cancel all upcoming weeks. Past sessions stay.": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تخطَّ هذا الأسبوع فقط واحتفظ بموعدك الأسبوعي، أو أنهِ السلسلة لإلغاء كل الأسابيع القادمة. تبقى الجلسات السابقة."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "דלגו על השבוע הזה בלבד ושמרו על המשבצת השבועית, או סיימו את הסדרה כדי לבטל את כל השבועות הבאים. המפגשים שהתקיימו נשארים."
+          }
+        }
+      }
     }
   },
   "version": "1.1"

@@ -33,7 +33,7 @@ struct ConversationView: View {
                                 ForEach(group.messages) { message in
                                     MessageBubble(
                                         isOutgoing: message.senderID == data.currentUserID,
-                                        text: message.text,
+                                        text: message.displayText,
                                         time: message.pendingUpload
                                             ? "Sending…"
                                             : Self.timeLabel(message.sentAt)
@@ -142,7 +142,7 @@ struct ConversationView: View {
                 content: .message,
                 contentID: messages.last?.remoteID ?? "",
                 // Report the tail of the thread — a single message rarely carries the context.
-                snapshot: messages.suffix(10).map(\.text).joined(separator: "\n")
+                snapshot: messages.suffix(10).map(\.displayText).joined(separator: "\n")
             )
         }
         .sheet(isPresented: $showStudentProfile) {
@@ -292,7 +292,7 @@ struct ConversationView: View {
                 suggestions = []
                 return
             }
-            let recent = messages.suffix(8).map { (mine: $0.senderID == data.currentUserID, text: $0.text) }
+            let recent = messages.suffix(8).map { (mine: $0.senderID == data.currentUserID, text: $0.displayText) }
             suggestions = (try? await FloweIntelligence.shared.suggestReplies(recent: recent)) ?? []
         } else {
             suggestions = []

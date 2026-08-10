@@ -67,8 +67,15 @@ final class PublicKeyService {
 @MainActor
 final class MessageCrypto {
     private static let privateKeyKeychainKey = "flowe.dm.x25519.private.v1"
-    private static let tag = "enc.v1."
-    private static let placeholder = "🔒 Message unavailable"
+    /// Wire prefix marking a sealed value. `nonisolated` so the model/display layer can recognise a
+    /// not-yet-decrypted message without hopping to the main actor.
+    private nonisolated static let tag = "enc.v1."
+    /// Shown in place of a message whose ciphertext we currently can't open (the sealed value is kept in
+    /// storage and re-attempted every sync — see `retryStuckMessages` — so this is transient, not final).
+    nonisolated static let sealedPlaceholder = "🔒 Message unavailable"
+
+    /// Whether a stored value is still sealed ciphertext we haven't decrypted (vs plaintext for display).
+    nonisolated static func isSealed(_ stored: String) -> Bool { stored.hasPrefix(tag) }
 
     private let directory = PublicKeyService()
     private var privateKey: Curve25519.KeyAgreement.PrivateKey?
@@ -135,19 +142,23 @@ final class MessageCrypto {
         return Self.tag + sealed.combined.base64EncodedString()
     }
 
-    /// Decrypt a wire value into plaintext for local display. An untagged value (legacy or plaintext
-    /// fallback) passes through unchanged; a tagged value we can't open becomes a neutral placeholder
-    /// rather than garbage.
-    func decrypt(_ stored: String, conversationID: String, counterpartID: String) async -> String {
+    /// Decrypt a wire value into plaintext. An untagged value (legacy or plaintext fallback) passes
+    /// through unchanged. Returns `nil` ONLY for a sealed value we couldn't open *right now* — the caller
+    /// keeps the sealed wire value and retries later, so a transient miss (key-propagation lag, a flaky
+    /// read, or the sender rotating keys) never gets frozen as a lost placeholder. On such a miss we also
+    /// drop this counterpart's cached key so a rotated / late-published key is re-fetched next attempt.
+    func decrypt(_ stored: String, conversationID: String, counterpartID: String) async -> String? {
         guard stored.hasPrefix(Self.tag) else { return stored }
         let encoded = String(stored.dropFirst(Self.tag.count))
-        guard let combined = Data(base64Encoded: encoded),
-              let key = await symmetricKey(counterpartID: counterpartID, conversationID: conversationID),
-              let box = try? ChaChaPoly.SealedBox(combined: combined),
-              let opened = try? ChaChaPoly.open(box, using: key),
-              let text = String(data: opened, encoding: .utf8) else {
-            return Self.placeholder
+        if let combined = Data(base64Encoded: encoded),
+           let key = await symmetricKey(counterpartID: counterpartID, conversationID: conversationID),
+           let box = try? ChaChaPoly.SealedBox(combined: combined),
+           let opened = try? ChaChaPoly.open(box, using: key),
+           let text = String(data: opened, encoding: .utf8) {
+            return text
         }
-        return text
+        symmetricCache[counterpartID] = nil
+        publicKeyCache[counterpartID] = nil
+        return nil
     }
 }

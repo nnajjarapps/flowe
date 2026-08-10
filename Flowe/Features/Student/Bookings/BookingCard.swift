@@ -25,9 +25,18 @@ struct BookingCard: View {
     }
 
     /// The cancel confirmation is ONE dialog driven by this enum (a second `.confirmationDialog` shadows
-    /// the first, the same trap as `.sheet`). One-off → `.oneOff`; a standing week → `.skip` (this week
-    /// only) or `.endSeries` (all future weeks).
-    private enum CancelKind { case oneOff, skip, endSeries }
+    /// the first, the same trap as `.sheet`). A one-off booking → `.oneOff` (plain cancel); a standing
+    /// weekly series → `.recurring`, whose dialog offers BOTH "skip this week" and "end series" — without
+    /// this a student could only ever cancel single weeks, and the rolling top-up regrew the series.
+    private enum CancelKind { case oneOff, recurring }
+
+    /// Whether tapping cancel should present the standing-series dialog (skip-this-week vs end-series)
+    /// rather than a plain one-off cancel: true for a recurring booking that isn't a waitlisted overflow
+    /// week (a waitlisted week just leaves that week's waitlist). Pure + unit-tested — this is the wiring
+    /// that was missing (the button used to always pick `.oneOff`). See [[flowe-recurring-series-cancel]].
+    nonisolated static func offersSeriesCancel(isRecurring: Bool, isWaitlisted: Bool) -> Bool {
+        isRecurring && !isWaitlisted
+    }
     @State private var route: Route?
     @State private var cancelKind: CancelKind?
 
@@ -66,10 +75,8 @@ struct BookingCard: View {
         .confirmationDialog(cancelTitle,
                             isPresented: cancelDialogBinding, titleVisibility: .visible) {
             switch cancelKind {
-            case .skip:
+            case .recurring:
                 Button("Skip this week", role: .destructive) { data.cancel(booking) }
-                Button("Keep it", role: .cancel) { }
-            case .endSeries:
                 Button("End series", role: .destructive) { data.endSeriesAsStudent(booking) }
                 Button("Keep it", role: .cancel) { }
             default:
@@ -78,10 +85,8 @@ struct BookingCard: View {
             }
         } message: {
             switch cancelKind {
-            case .skip:
-                Text("This cancels only this week. Your weekly slot stays booked.")
-            case .endSeries:
-                Text("This cancels all upcoming weeks. Past sessions stay.")
+            case .recurring:
+                Text("Skip just this week and keep your weekly slot, or end the series to cancel all upcoming weeks. Past sessions stay.")
             default:
                 Text("Your instructor will be notified that you can no longer make it.")
             }
@@ -91,8 +96,7 @@ struct BookingCard: View {
     /// Title for the shared cancel dialog, chosen by the pending `cancelKind`.
     private var cancelTitle: String {
         switch cancelKind {
-        case .skip:      return String(localized: "Skip just this week?")
-        case .endSeries: return String(localized: "End this weekly series?")
+        case .recurring: return String(localized: "Cancel this weekly session?")
         default:         return String(localized: "Cancel this session?")
         }
     }
@@ -222,7 +226,9 @@ struct BookingCard: View {
                     // A waitlisted row leaves the waitlist (the same one-off cancel path — it releases
                     // the overflow hold via `releaseSeat`); everything else cancels the session.
                     Button {
-                        cancelKind = .oneOff
+                        cancelKind = Self.offersSeriesCancel(
+                            isRecurring: booking.isRecurring, isWaitlisted: data.isWaitlisted(booking)
+                        ) ? .recurring : .oneOff
                     } label: {
                         Text(data.isWaitlisted(booking) ? "Leave waitlist" : "Cancel")
                             .font(FloweFont.sans(11))

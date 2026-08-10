@@ -41,6 +41,12 @@ struct RemoteDecision {
     let confirmed: Bool
     let respondedAt: Date
 
+    init(bookingID: String, confirmed: Bool, respondedAt: Date = .distantPast) {
+        self.bookingID = bookingID
+        self.confirmed = confirmed
+        self.respondedAt = respondedAt
+    }
+
     init?(record: CKRecord) {
         guard let bookingID = record["bookingID"] as? String else { return nil }
         self.bookingID = bookingID
