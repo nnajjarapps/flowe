@@ -5,9 +5,13 @@ import CloudKit
 /// App Store Review Guideline 5.1.1(v) requires.
 ///
 /// Only `_creator`-owned records can go. The public database grants write to whoever created a
-/// record, so a user can remove their own listing, bookings, decisions and sent messages — but not
-/// the messages the other side wrote to them, which stay owned by their sender (see
-/// `BOOKING-SYSTEM.md`).
+/// record, so a user can remove EVERY record they authored — listing, student profile, public key,
+/// bookings, session decisions, reviews, posts/likes/comments, events, registrations, lesson types,
+/// Flowe Pro opportunities/applications/decisions, peer recommendations, follows, coverage
+/// requests/offers/claims/sessions, event decisions, messages and read receipts — but NOT records the
+/// other side created that merely reference them (a message sent to them, a review written about them,
+/// a like on their post), which stay owned by their author (see `BOOKING-SYSTEM.md`). Every user-owned
+/// record type must be swept here; adding a new one without updating this leaves it behind on deletion.
 ///
 /// Sign in with Apple token revocation is deliberately **not** attempted here: the REST revoke
 /// endpoint needs a client-secret JWT that cannot ship inside an app, and Flowe never retains the
@@ -106,6 +110,79 @@ final class AccountDeletionService {
             matching: NSPredicate(format: "ownerID == %@", ownerID)
         ) else { return false }
         ids += myLessonTypes
+
+        // Flowe Pro records I created: opportunities I posted, applications I sent, and the decisions I
+        // made as a poster. (An application carries the poster's id too, but the APPLICANT is its creator.)
+        guard let myOpportunities = await recordIDs(
+            ofType: OpportunityService.recordType,
+            matching: NSPredicate(format: "posterID == %@", ownerID)
+        ) else { return false }
+        ids += myOpportunities
+
+        guard let myApplications = await recordIDs(
+            ofType: OpportunityService.applicationRecordType,
+            matching: NSPredicate(format: "applicantID == %@", ownerID)
+        ) else { return false }
+        ids += myApplications
+
+        guard let myAppDecisions = await recordIDs(
+            ofType: OpportunityService.decisionRecordType,
+            matching: NSPredicate(format: "posterID == %@", ownerID)
+        ) else { return false }
+        ids += myAppDecisions
+
+        // Peer recommendations I WROTE. Ones written about me stay — they belong to their authors.
+        guard let myRecommendations = await recordIDs(
+            ofType: RecommendationService.recordType,
+            matching: NSPredicate(format: "fromID == %@", ownerID)
+        ) else { return false }
+        ids += myRecommendations
+
+        // Practice-friends I followed (the edge carries my id + the followee's name).
+        guard let myFollows = await recordIDs(
+            ofType: CommunityService.followRecordType,
+            matching: NSPredicate(format: "followerID == %@", ownerID)
+        ) else { return false }
+        ids += myFollows
+
+        // Out-of-Studio coverage I created: requests + the offers I fanned out (as requester), claims I
+        // filed (as replacer), and cover sessions I published (as requester).
+        guard let myCoverRequests = await recordIDs(
+            ofType: CoverageService.requestRecordType,
+            matching: NSPredicate(format: "requesterID == %@", ownerID)
+        ) else { return false }
+        ids += myCoverRequests
+
+        guard let myCoverOffers = await recordIDs(
+            ofType: CoverageService.offerRecordType,
+            matching: NSPredicate(format: "requesterID == %@", ownerID)
+        ) else { return false }
+        ids += myCoverOffers
+
+        guard let myCoverClaims = await recordIDs(
+            ofType: CoverageService.claimRecordType,
+            matching: NSPredicate(format: "replacerID == %@", ownerID)
+        ) else { return false }
+        ids += myCoverClaims
+
+        guard let myCoverSessions = await recordIDs(
+            ofType: CoverageService.sessionRecordType,
+            matching: NSPredicate(format: "requesterID == %@", ownerID)
+        ) else { return false }
+        ids += myCoverSessions
+
+        // Event accept/decline decisions I made as an organizer, and my conversation read markers.
+        guard let myEventDecisions = await recordIDs(
+            ofType: EventService.decisionRecordType,
+            matching: NSPredicate(format: "organizerID == %@", ownerID)
+        ) else { return false }
+        ids += myEventDecisions
+
+        guard let myReadReceipts = await recordIDs(
+            ofType: MessagingService.readReceiptRecordType,
+            matching: NSPredicate(format: "readerID == %@", ownerID)
+        ) else { return false }
+        ids += myReadReceipts
 
         // My instructor listing, whose recordName *is* the owner id. Absent for students.
         ids.append(CKRecord.ID(recordName: ownerID))
