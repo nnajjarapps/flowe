@@ -37,9 +37,22 @@ Thumbs.db
 Flowe */
 *.xcarchive
 
-# Stray root-level copy of the Figma export (the tracked one is Flowe/Pilates app/)
+# Stray root-level copies of the Figma export (the tracked one is Flowe/Pilates app/)
 /Pilates app/
+/Pilates app-2/
 
-# CloudKit deploy scratch (transient schema exports)
+# CloudKit deploy scratch (transient schema exports — the tracked source of truth is
+# CloudKit-dev-schema.ckdb; everything below is a throwaway dump/diff)
 dev-live.ckdb
 dev-verify.ckdb
+CloudKit-full-schema*.ckdb
+CloudKit-missing-schema.ckdb
+ck-wipe-dev.py
+
+# project.pbxproj backups from hand-editing (xcodegen not installed)
+*.pbxproj.bak-*
+
+# Local scratch artifacts (screenshots, API dumps) kept out of the repo
+PHOTO-*.jpg
+appstore-mockup*.png
+openapi.json
