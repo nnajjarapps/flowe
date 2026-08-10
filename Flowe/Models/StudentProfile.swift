@@ -35,6 +35,15 @@ final class StudentProfile {
     /// Profile edits that never reached the public store, retried on next launch/sync. Mirrors
     /// `Instructor.pendingPublish` — set BEFORE the network call so a crash mid-publish still retries.
     var pendingPublish: Bool = false
+    /// The student's ONE opt-in to Flowe Community: when true they appear to other students (event
+    /// attendee lists, class-mates, …) and can see them. Default false — privacy-first, opt-in to be seen.
+    /// Published on the world-readable listing so peers can honour it. See [[Flowe-Community]].
+    var communityVisible: Bool = false
+    /// Completed-session count captured the moment this student opted into the community. Only milestones
+    /// ABOVE this baseline are auto-celebrated — so a student who joins with existing history doesn't
+    /// flood the feed with every past threshold at once. Local-only (like `pendingPublish`); never
+    /// published to the world-readable listing. Re-captured on each opt-in. See [[Flowe-Community]].
+    var communityBaselineSessions: Int = 0
 
     init(
         legacyId: Int = 0,
@@ -44,7 +53,8 @@ final class StudentProfile {
         memberSince: Date = Date.distantPast,
         photo: Data? = nil,
         updatedAt: Date = Date.distantPast,
-        order: Int = 0
+        order: Int = 0,
+        communityVisible: Bool = false
     ) {
         self.legacyId = legacyId
         self.ownerID = ownerID
@@ -54,6 +64,7 @@ final class StudentProfile {
         self.photo = photo
         self.updatedAt = updatedAt
         self.order = order
+        self.communityVisible = communityVisible
     }
 
     var firstName: String { name.split(separator: " ").first.map(String.init) ?? name }

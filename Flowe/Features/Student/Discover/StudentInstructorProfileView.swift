@@ -62,6 +62,13 @@ struct StudentInstructorProfileView: View {
         instructor.ownerID.map { data.recommendations(for: $0) } ?? []
     }
 
+    /// The instructor's community circle (Flowe Community slice 4) — community-visible students who train
+    /// here. Loaded on-demand (a student doesn't cache others' bookings).
+    @State private var circle: [(id: String, name: String)] = []
+    @State private var circleLoaded = false
+    @State private var showCircleChat = false
+    @State private var selectedFriend: PeerRef?
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -76,6 +83,8 @@ struct StudentInstructorProfileView: View {
                     reviewsSection
                         .padding(.top, 24)
                     recommendationsSection
+                        .padding(.top, 24)
+                    communitySection
                         .padding(.top, 24)
                 }
                 .padding(.bottom, 24)
@@ -96,11 +105,31 @@ struct StudentInstructorProfileView: View {
                 await data.fetchAuthorProfiles(Set(data.reviews(for: id).compactMap { $0.studentID }))
                 // Peer recommendations shown on this profile (Flowe Pro social proof).
                 await data.syncRecommendations(forInstructor: id)
+                // The instructor's community circle (Flowe Community) — only when the viewer opted in.
+                if data.isCommunityVisible {
+                    await data.syncFollows()   // so circle chips show the right follow state
+                    circle = await data.fetchInstructorCircle(ownerID: id)
+                    // Circle chat count for members (train here + opted in).
+                    if data.canDiscussCircle(ownerID: id) { await data.syncCircleComments(for: id) }
+                }
+                circleLoaded = true
             }
             // Pull the instructor's rich lesson types so the OFFERS cards and the booking picker show
             // capacity/details/photos, not just the denormalised name cache. Same non-pruning pattern
             // as reviews: a student viewing this profile fetches all of one instructor's types.
             await data.syncLessonTypes(for: instructor)
+        }
+        .sheet(item: $selectedFriend) { PracticeFriendSheet(peer: $0) }
+        .sheet(isPresented: $showCircleChat) {
+            if let id = instructor.ownerID {
+                DiscussionSheet(
+                    title: "Circle chat",
+                    emptyHint: String(localized: "Say hi to the others who train with \(instructor.firstName)."),
+                    comments: { data.circleComments(for: id) },
+                    onSend: { data.addCircleComment(to: id, text: $0) },
+                    onSync: { await data.syncCircleComments(for: id) }
+                )
+            }
         }
         .sheet(isPresented: $showReport) {
             ReportSheet(
@@ -711,6 +740,116 @@ struct StudentInstructorProfileView: View {
             .padding(.horizontal, 20)
             .accessibilityIdentifier("instructor.recommendations")
         }
+    }
+
+    // MARK: - Community circle (Flowe Community)
+
+    /// The instructor's community circle — the students who train here (opt-in). Reciprocity, like the
+    /// event roster: opted-in viewers see the circle AND appear in it; others get the invite. This is the
+    /// instructor-anchored hub that makes each circle exist from day one. See [[Flowe-Community]].
+    @ViewBuilder
+    private var communitySection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionHeader(text: "COMMUNITY")
+            if data.isCommunityVisible {
+                if !circleLoaded {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                        Text("Loading the community…")
+                            .font(FloweFont.sans(12)).foregroundStyle(Color.floweMuted)
+                    }
+                } else if circle.isEmpty {
+                    Text("You're the first here from the Flowe community — others who train with \(instructor.firstName) will show up as they join.")
+                        .font(FloweFont.sans(13))
+                        .foregroundStyle(Color.floweMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    Text("^[\(circle.count) student](inflect: true) from the community train with \(instructor.firstName)")
+                        .font(FloweFont.mono(9))
+                        .foregroundStyle(Color.floweMuted)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 14) { ForEach(circle, id: \.id) { memberChip($0) } }
+                    }
+                }
+                // Members (train here + opted in) can chat with the circle.
+                if let id = instructor.ownerID, data.canDiscussCircle(ownerID: id) {
+                    circleChatButton(id)
+                }
+            } else {
+                Text("Join the Flowe community to meet the students who train with \(instructor.firstName).")
+                    .font(FloweFont.sans(13))
+                    .foregroundStyle(Color.floweInk)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button {
+                    data.setCommunityVisible(true)
+                    Task {
+                        if let id = instructor.ownerID {
+                            circle = await data.fetchInstructorCircle(ownerID: id)
+                            circleLoaded = true
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "person.2.fill").font(.system(size: 12))
+                        Text("Join the community")
+                    }
+                    .font(FloweFont.sans(13, .medium))
+                    .foregroundStyle(Color.flowePinkDeep)
+                    .padding(.horizontal, 14).padding(.vertical, 9)
+                    .background(Color.flowePink.opacity(0.10), in: Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 20)
+        .accessibilityIdentifier("instructor.community")
+    }
+
+    /// Entry into the instructor's circle chat — for members (train here + opted in).
+    private func circleChatButton(_ id: String) -> some View {
+        let n = data.circleComments(for: id).count
+        return Button { showCircleChat = true } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "bubble.left.and.bubble.right.fill")
+                    .font(.system(size: 14))
+                    .foregroundStyle(Color.flowePinkDeep)
+                Text(n == 0 ? String(localized: "Say hi to the circle")
+                            : String(localized: "Circle chat · \(n) messages"))
+                    .font(FloweFont.sans(13, .medium))
+                    .foregroundStyle(Color.flowePinkDeep)
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.floweMuted)
+            }
+            .padding(12)
+            .background(Color.flowePink.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.flowePink.opacity(0.15), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .padding(.top, 4)
+        .accessibilityIdentifier("circle.chat")
+    }
+
+    private func memberChip(_ m: (id: String, name: String)) -> some View {
+        let first = m.name.split(separator: " ").first.map(String.init) ?? m.name
+        // Tap a circle member to follow them (Flowe Community slice 6) — shared-context, never cold.
+        return Button { selectedFriend = PeerRef(id: m.id, name: m.name) } label: {
+            VStack(spacing: 6) {
+                if let photo = data.studentPhoto(forOwnerID: m.id) {
+                    AvatarView(id: "", photo: photo, size: 50)
+                } else {
+                    InitialAvatar(name: m.name, size: 50)
+                }
+                Text(first.isEmpty ? String(localized: "Someone") : first)
+                    .font(FloweFont.sans(11, .medium))
+                    .foregroundStyle(Color.floweInk)
+                    .lineLimit(1)
+                    .frame(maxWidth: 60)
+            }
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Action rail

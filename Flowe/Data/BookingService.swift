@@ -426,6 +426,12 @@ final class BookingService {
         await fetchBookings(matching: NSPredicate(format: "studentID == %@", ownerID))
     }
 
+    /// Every booking on an instructor's date — the raw slot roster (public, world-readable). The caller
+    /// narrows to the exact slot (time + type) and honours community opt-in. See [[Flowe-Community]].
+    func fetchSlotRoster(instructorID: String, date: String) async -> [RemoteBooking]? {
+        await fetchBookings(matching: NSPredicate(format: "instructorID == %@ AND date == %@", instructorID, date))
+    }
+
     private func fetchBookings(matching predicate: NSPredicate) async -> [RemoteBooking]? {
         #if CLOUDKIT_ENABLED
         let query = CKQuery(recordType: Self.bookingRecordType, predicate: predicate)

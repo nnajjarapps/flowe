@@ -718,6 +718,22 @@ DEFINE SCHEMA
         GRANT READ TO "_world"
     );
 
+    RECORD TYPE StudentFollow (
+        "___createTime" TIMESTAMP,
+        "___createdBy"  REFERENCE,
+        "___etag"       STRING,
+        "___modTime"    TIMESTAMP,
+        "___modifiedBy" REFERENCE,
+        "___recordID"   REFERENCE QUERYABLE,
+        createdAt       TIMESTAMP QUERYABLE SORTABLE,
+        followeeID      STRING QUERYABLE,
+        followeeName    STRING,
+        followerID      STRING QUERYABLE,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );
+
     RECORD TYPE StudentProfile (
         "___createTime" TIMESTAMP,
         "___createdBy"  REFERENCE,
@@ -726,6 +742,7 @@ DEFINE SCHEMA
         "___modifiedBy" REFERENCE,
         "___recordID"   REFERENCE QUERYABLE,
         bio             STRING,
+        communityVisible INT64,
         memberSince     TIMESTAMP,
         name            STRING,
         photo           ASSET,

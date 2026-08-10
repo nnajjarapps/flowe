@@ -104,11 +104,14 @@ struct CommunityView: View {
         .task {
             await data.syncCatalog()
             await data.syncCommunity()
+            // Post any newly-earned practice milestone so the feed opens with it (Flowe Community).
+            data.checkMilestones()
         }
         // Manual pull-to-refresh for the feed (posts + stories strip). Mirrors the .task syncs.
         .refreshable {
             await data.syncCatalog()
             await data.syncCommunity()
+            data.checkMilestones()
         }
         }
     }

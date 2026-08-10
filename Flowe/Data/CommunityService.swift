@@ -64,6 +64,30 @@ struct RemoteComment {
     }
 }
 
+/// One follow edge in the student practice-friends graph (Flowe Community slice 6). Directed:
+/// `followerID` follows `followeeID`. `followeeName` denormalised so a friends list renders without a
+/// second lookup. World-readable like the rest of the community.
+struct RemoteFollow {
+    let id: String
+    let followerID: String
+    let followeeID: String
+    let followeeName: String
+    let createdAt: Date
+
+    init(id: String, followerID: String, followeeID: String, followeeName: String, createdAt: Date) {
+        self.id = id; self.followerID = followerID; self.followeeID = followeeID
+        self.followeeName = followeeName; self.createdAt = createdAt
+    }
+
+    init?(record: CKRecord) {
+        guard let followerID = record["followerID"] as? String,
+              let followeeID = record["followeeID"] as? String else { return nil }
+        self.init(id: record.recordID.recordName, followerID: followerID, followeeID: followeeID,
+                  followeeName: record["followeeName"] as? String ?? "",
+                  createdAt: record["createdAt"] as? Date ?? .distantPast)
+    }
+}
+
 /// The community feed over CloudKit's **public** database, for the same reason bookings, messages
 /// and reviews live there: SwiftData can only mirror the *private* database, which is
 /// per-iCloud-account, so a post one user writes could never reach another. A feed in the private
@@ -157,6 +181,84 @@ final class CommunityService {
         } catch {
             return nil   // offline / not signed into iCloud / schema not deployed
         }
+        #else
+        return nil
+        #endif
+    }
+
+    /// Publish an AUTO milestone post under a DETERMINISTIC recordName (`milestone-<studentID>-<N>`) so a
+    /// milestone is celebrated exactly once — re-detecting the same threshold on any device / after a
+    /// reinstall upserts rather than duplicating. No image, no instructor. See [[Flowe-Community]].
+    @discardableResult
+    func publishMilestone(recordName: String, authorID: String, authorName: String,
+                          text: String, createdAt: Date) async -> String? {
+        #if CLOUDKIT_ENABLED
+        let id = CKRecord.ID(recordName: recordName)
+        let record = (try? await database.record(for: id)) ?? CKRecord(recordType: Self.postRecordType, recordID: id)
+        record["authorID"] = authorID
+        record["authorName"] = authorName
+        record["type"] = "milestone"
+        record["instructorName"] = ""
+        record["text"] = text
+        record["hasImage"] = 0
+        if record["createdAt"] == nil { record["createdAt"] = createdAt }
+        do {
+            let saved = try await database.save(record)
+            return saved.recordID.recordName
+        } catch {
+            return nil
+        }
+        #else
+        return nil
+        #endif
+    }
+
+    // MARK: - Practice-friends graph (Flowe Community slice 6)
+
+    static let followRecordType = "StudentFollow"
+    static func followRecordName(follower: String, followee: String) -> String { "follow-\(follower)-\(followee)" }
+
+    /// Follow a practice-friend — one edge per (follower, followee), upserted so following twice is a
+    /// no-op. `_creator`-write fits (you own your own follows). Returns whether it reached the server.
+    @discardableResult
+    func follow(followerID: String, followeeID: String, followeeName: String) async -> String? {
+        #if CLOUDKIT_ENABLED
+        let id = CKRecord.ID(recordName: Self.followRecordName(follower: followerID, followee: followeeID))
+        let record = (try? await database.record(for: id)) ?? CKRecord(recordType: Self.followRecordType, recordID: id)
+        record["followerID"] = followerID
+        record["followeeID"] = followeeID
+        record["followeeName"] = followeeName
+        if record["createdAt"] == nil { record["createdAt"] = Date() }
+        do { let saved = try await database.save(record); return saved.recordID.recordName }
+        catch { return nil }
+        #else
+        return nil
+        #endif
+    }
+
+    func unfollow(followerID: String, followeeID: String) async {
+        #if CLOUDKIT_ENABLED
+        _ = try? await database.deleteRecord(withID: CKRecord.ID(recordName: Self.followRecordName(follower: followerID, followee: followeeID)))
+        #endif
+    }
+
+    /// The edges the signed-in student authored — who they follow. Nil on query failure; empty when none.
+    /// Follows the query cursor so a student who follows more than one page of peers gets their WHOLE list,
+    /// not a silently-truncated first page (mirrors `fetchComments`).
+    func fetchFollows(followerID: String) async -> [RemoteFollow]? {
+        #if CLOUDKIT_ENABLED
+        let query = CKQuery(recordType: Self.followRecordType, predicate: NSPredicate(format: "followerID == %@", followerID))
+        query.sortDescriptors = [NSSortDescriptor(key: "createdAt", ascending: false)]
+        do {
+            var records: [CKRecord] = []
+            var page = try await database.records(matching: query, resultsLimit: Self.pageSize)
+            records += page.matchResults.compactMap { try? $0.1.get() }
+            while let cursor = page.queryCursor {
+                page = try await database.records(continuingMatchFrom: cursor, resultsLimit: Self.pageSize)
+                records += page.matchResults.compactMap { try? $0.1.get() }
+            }
+            return records.compactMap(RemoteFollow.init)
+        } catch { return nil }
         #else
         return nil
         #endif

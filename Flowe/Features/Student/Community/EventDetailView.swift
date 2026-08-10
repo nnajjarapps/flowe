@@ -32,6 +32,7 @@ struct EventDetailView: View {
     @State private var confirmCancel = false
     @State private var confirmDelete = false
     @State private var showHeroZoom = false
+    @State private var showDiscussion = false
 
     private var isMine: Bool { data.isMine(event) }
 
@@ -64,6 +65,10 @@ struct EventDetailView: View {
                     }
                     whoIsGoing
                         .padding(.top, 20)
+                    if data.canDiscuss(event) {
+                        discussionButton
+                            .padding(.top, 16)
+                    }
                 }
                 .padding(.bottom, 24)
             }
@@ -72,7 +77,23 @@ struct EventDetailView: View {
             .navigationBarHidden(true)
             .safeAreaInset(edge: .bottom) { actionRail }
         }
-        .task { await data.syncAttendance(for: event) }
+        .task {
+            await data.syncAttendance(for: event)
+            // Warm attendee profiles so the opt-in "Who's going" roster can resolve names, photos, and
+            // each person's community-visibility. Targeted fetch by the accepted guests' ownerIDs.
+            await data.fetchAuthorProfiles(Set(data.acceptedGuests(for: event).map(\.studentID)))
+            // Pull the discussion so the button's message count is fresh (only when the user can see it).
+            if data.canDiscuss(event) { await data.syncEventComments(for: event) }
+        }
+        .sheet(isPresented: $showDiscussion) {
+            DiscussionSheet(
+                title: "Discussion",
+                emptyHint: String(localized: "Say hi to the others going to \(event.title)."),
+                comments: { data.eventComments(for: event) },
+                onSend: { data.addEventComment(to: event, text: $0) },
+                onSync: { await data.syncEventComments(for: event) }
+            )
+        }
         .sheet(isPresented: $showReport) {
             ReportSheet(
                 reportedID: event.organizerID ?? "",
@@ -441,13 +462,117 @@ struct EventDetailView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 20)
             } else if attendees > 0 {
-                Text("^[\(attendees) person](inflect: true) going")
-                    .font(FloweFont.sans(13))
-                    .foregroundStyle(Color.floweMuted)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 20)
+                communityRoster(total: attendees)
             }
         }
+    }
+
+    /// The student-facing "Who's going" — an opt-in roster (Flowe Community). Only students who joined
+    /// the community appear, and only such students see the roster (privacy-first reciprocity). Everyone
+    /// else sees the count + an invite to opt in. See [[Flowe-Community]].
+    @ViewBuilder
+    private func communityRoster(total: Int) -> some View {
+        let guests = data.communityAttendees(for: event)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                SectionHeader(text: "WHO'S GOING")
+                Spacer()
+                Text("\(total) going")
+                    .font(FloweFont.mono(10))
+                    .foregroundStyle(Color.floweMuted)
+            }
+
+            if data.isCommunityVisible {
+                if guests.isEmpty {
+                    Text("You're going — no one else has shared their name yet. They'll appear here as they join the community.")
+                        .font(FloweFont.sans(13))
+                        .foregroundStyle(Color.floweMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 14) {
+                            ForEach(guests, id: \.studentID) { attendeeChip($0) }
+                        }
+                    }
+                }
+                Button("You're visible to classmates · Hide me") { data.setCommunityVisible(false) }
+                    .font(FloweFont.sans(12))
+                    .tint(Color.floweMuted)
+            } else {
+                Text("^[\(total) person](inflect: true) going. Join the Flowe community to see who else is coming — and let them see you.")
+                    .font(FloweFont.sans(13))
+                    .foregroundStyle(Color.floweInk)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button { data.setCommunityVisible(true) } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "person.2.fill").font(.system(size: 12))
+                        Text("Join the community")
+                    }
+                    .font(FloweFont.sans(13, .medium))
+                    .foregroundStyle(Color.flowePinkDeep)
+                    .padding(.horizontal, 14).padding(.vertical, 9)
+                    .background(Color.flowePink.opacity(0.10), in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("event.joinCommunity")
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 20)
+    }
+
+    private func attendeeChip(_ reg: RemoteRegistration) -> some View {
+        let isMe = reg.studentID == data.currentUserID
+        let name = reg.studentName.split(separator: " ").first.map(String.init) ?? reg.studentName
+        return VStack(spacing: 6) {
+            if let photo = data.studentPhoto(forOwnerID: reg.studentID) {
+                AvatarView(id: "", photo: photo, size: 52, ring: isMe)
+            } else {
+                InitialAvatar(name: reg.studentName, size: 52)
+            }
+            Text(isMe ? String(localized: "You") : (name.isEmpty ? String(localized: "Someone") : name))
+                .font(FloweFont.sans(11, .medium))
+                .foregroundStyle(Color.floweInk)
+                .lineLimit(1)
+                .frame(maxWidth: 60)
+        }
+    }
+
+    // MARK: - Discussion (Flowe Community)
+
+    /// Entry into the event discussion — shown only when the student can take part (opted into the
+    /// community + going/hosting). See [[Flowe-Community]].
+    private var discussionButton: some View {
+        let n = data.eventComments(for: event).count
+        return Button { showDiscussion = true } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "bubble.left.and.bubble.right.fill")
+                    .font(.system(size: 16))
+                    .foregroundStyle(Color.flowePinkDeep)
+                    .frame(width: 40, height: 40)
+                    .background(Color.flowePink.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Discussion")
+                        .font(FloweFont.sans(15, .medium))
+                        .foregroundStyle(Color.floweInk)
+                    Text(n == 0 ? String(localized: "Say hi to the people going")
+                               : String(localized: "\(n) messages"))
+                        .font(FloweFont.sans(12))
+                        .foregroundStyle(Color.floweMuted)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color.floweMuted)
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .floweCard(cornerRadius: 16)
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 20)
+        .accessibilityIdentifier("event.discussion")
     }
 
     // MARK: - Action rail

@@ -5,6 +5,9 @@ enum PostType: String, Codable, CaseIterable, Identifiable {
     case review
     case tip
     case checkin
+    /// Auto-generated practice milestone (Flowe Community slice 5) — never user-composed; created by
+    /// `MockDataStore.checkMilestones` when a community-opted-in student crosses a session threshold.
+    case milestone
 
     var id: String { rawValue }
 
@@ -12,15 +15,16 @@ enum PostType: String, Codable, CaseIterable, Identifiable {
     /// a Foundation type usable from the data layer, while still localizing inside `Text`.
     var composerLabel: LocalizedStringResource {
         switch self {
-        case .review:  return "Shout-out"
-        case .tip:     return "Tip"
-        case .checkin: return "Check-in"
+        case .review:    return "Shout-out"
+        case .tip:       return "Tip"
+        case .checkin:   return "Check-in"
+        case .milestone: return "Milestone"
         }
     }
 
-    /// Whether the post is about a specific instructor — a shout-out or a check-in names one, a
-    /// tip stands on its own.
-    var needsInstructor: Bool { self != .tip }
+    /// Whether the post is about a specific instructor — a shout-out or a check-in names one; a tip and
+    /// a milestone stand on their own.
+    var needsInstructor: Bool { self == .review || self == .checkin }
 }
 
 /// A community feed post — the local cache of a post that lives in the shared public database

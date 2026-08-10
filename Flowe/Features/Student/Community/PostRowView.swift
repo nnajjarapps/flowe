@@ -39,9 +39,10 @@ struct PostRowView: View {
     private var subtitle: String {
         let action: String
         switch post.type {
-        case .review:  action = "shouted out \(post.instructor ?? "")"
-        case .checkin: action = "checked in with \(post.instructor ?? "")"
-        case .tip:     action = "shared a tip"
+        case .review:    action = "shouted out \(post.instructor ?? "")"
+        case .checkin:   action = "checked in with \(post.instructor ?? "")"
+        case .tip:       action = "shared a tip"
+        case .milestone: action = "reached a milestone"
         }
         return action
     }

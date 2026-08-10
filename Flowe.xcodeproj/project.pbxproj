@@ -86,6 +86,8 @@
 		9D9B1348B900A774F88C4945 /* EventsListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3773BB1AF562846661FAD9C5 /* EventsListView.swift */; };
 		5FB2EC02BDD57F070285C155 /* EventCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEC6196717CD5E7E436334E4 /* EventCardView.swift */; };
 		A894E80974E9B024A18E4211 /* EventDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9D094FE777972560E0CC472 /* EventDetailView.swift */; };
+		FF04000000000000000EDS02 /* DiscussionSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF04000000000000000EDS01 /* DiscussionSheet.swift */; };
+		FF06000000000000000PFS02 /* PracticeFriendSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF06000000000000000PFS01 /* PracticeFriendSheet.swift */; };
 		B8CF19EAA961AFBE3E0B12D4 /* ComposeEventSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = D27D093768FBA1C5BED0A4E9 /* ComposeEventSheet.swift */; };
 		8CD6F7076188FCB80948E77E /* OnboardingUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23BC35F24816C68247C04B36 /* OnboardingUITests.swift */; };
 		8CD86B4F2A0C8A3F1544DCDE /* Message.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB36077D528099D817B27E2B /* Message.swift */; };
@@ -122,6 +124,7 @@
 		B3A1BE584763CB485C7943EF /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 1DA7831F38CF5EE21BF1DD69 /* Assets.xcassets */; };
 		B610CBC7C2D182DABB9D6E72 /* PostComment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3527B77F7FB3E5D2CD7D74EE /* PostComment.swift */; };
 		B856A8B42978FBFBE8435D06 /* BookingCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E73535B1CD21C5BF1DB3585 /* BookingCard.swift */; };
+		FF05000000000000000CLM02 /* ClassmatesSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF05000000000000000CLM01 /* ClassmatesSheet.swift */; };
 		B923A761680F9E8FA7B70708 /* ContentFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6032AC367E2365ADAFD2BF43 /* ContentFilter.swift */; };
 		B99AFAFB4749D0B2361C2BEE /* RemoteImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = B264A9BA6AB860A28BAC86B9 /* RemoteImage.swift */; };
 		B9E765D524BEBFAE495D618D /* 0AD9894E-764F-47AF-AC95-56485A70A3C4.PNG in Resources */ = {isa = PBXBuildFile; fileRef = ED2BC5AAEAE57BD8B4B05646 /* 0AD9894E-764F-47AF-AC95-56485A70A3C4.PNG */; };
@@ -297,6 +300,7 @@
 		FEEDFACE000000000000BD02 /* InstructorMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstructorMapView.swift; sourceTree = "<group>"; };
 		6E09779C0DB32FD617F7DAC2 /* DeleteAccountView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeleteAccountView.swift; sourceTree = "<group>"; };
 		6E73535B1CD21C5BF1DB3585 /* BookingCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookingCard.swift; sourceTree = "<group>"; };
+		FF05000000000000000CLM01 /* ClassmatesSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClassmatesSheet.swift; sourceTree = "<group>"; };
 		6EED8908487E5CCD626B5506 /* WeeklyBarChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeeklyBarChart.swift; sourceTree = "<group>"; };
 		72C3E59E33D98698F840ADCF /* FloweModelContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloweModelContainer.swift; sourceTree = "<group>"; };
 		72D6B8E3948B89E8B171AF07 /* PostRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostRowView.swift; sourceTree = "<group>"; };
@@ -327,6 +331,8 @@
 		3773BB1AF562846661FAD9C5 /* EventsListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventsListView.swift; sourceTree = "<group>"; };
 		BEC6196717CD5E7E436334E4 /* EventCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventCardView.swift; sourceTree = "<group>"; };
 		D9D094FE777972560E0CC472 /* EventDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventDetailView.swift; sourceTree = "<group>"; };
+		FF04000000000000000EDS01 /* DiscussionSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscussionSheet.swift; sourceTree = "<group>"; };
+		FF06000000000000000PFS01 /* PracticeFriendSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PracticeFriendSheet.swift; sourceTree = "<group>"; };
 		D27D093768FBA1C5BED0A4E9 /* ComposeEventSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposeEventSheet.swift; sourceTree = "<group>"; };
 		9AC3550079CA887E6CF28838 /* Fraunces-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Fraunces-Regular.ttf"; sourceTree = "<group>"; };
 		9D9DC7CE9663E57AFACB3D10 /* AccountDeletionUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountDeletionUITests.swift; sourceTree = "<group>"; };
@@ -623,6 +629,7 @@
 			isa = PBXGroup;
 			children = (
 				6E73535B1CD21C5BF1DB3585 /* BookingCard.swift */,
+				FF05000000000000000CLM01 /* ClassmatesSheet.swift */,
 				56D58FFAF9A1E7107CE20E21 /* BookingsView.swift */,
 				AAA5704A3D6399EDE5117C06 /* ReviewSheet.swift */,
 			);
@@ -752,6 +759,8 @@
 				3773BB1AF562846661FAD9C5 /* EventsListView.swift */,
 				BEC6196717CD5E7E436334E4 /* EventCardView.swift */,
 				D9D094FE777972560E0CC472 /* EventDetailView.swift */,
+				FF04000000000000000EDS01 /* DiscussionSheet.swift */,
+				FF06000000000000000PFS01 /* PracticeFriendSheet.swift */,
 			);
 			path = Community;
 			sourceTree = "<group>";
@@ -1095,6 +1104,7 @@
 				E0B72780BE1E58EF758DF9E5 /* BlockedUsersView.swift in Sources */,
 				73DF171F35C47E63F5526C7F /* Booking.swift in Sources */,
 				B856A8B42978FBFBE8435D06 /* BookingCard.swift in Sources */,
+				FF05000000000000000CLM02 /* ClassmatesSheet.swift in Sources */,
 				D25960D86785C7A62A7E889F /* BookingService.swift in Sources */,
 				C153033035FA8E7A3BB94A43 /* BookingSheet.swift in Sources */,
 				3FF8C57AFCC90DFF4A68A8D3 /* BookingStatus+Badge.swift in Sources */,
@@ -1116,6 +1126,8 @@
 				9D9B1348B900A774F88C4945 /* EventsListView.swift in Sources */,
 				5FB2EC02BDD57F070285C155 /* EventCardView.swift in Sources */,
 				A894E80974E9B024A18E4211 /* EventDetailView.swift in Sources */,
+				FF04000000000000000EDS02 /* DiscussionSheet.swift in Sources */,
+				FF06000000000000000PFS02 /* PracticeFriendSheet.swift in Sources */,
 				B8CF19EAA961AFBE3E0B12D4 /* ComposeEventSheet.swift in Sources */,
 				B923A761680F9E8FA7B70708 /* ContentFilter.swift in Sources */,
 				45DB3B4C623193D3DCE3E722 /* ConversationView.swift in Sources */,

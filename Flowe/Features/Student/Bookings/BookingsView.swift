@@ -55,12 +55,15 @@ struct BookingsView: View {
             await data.syncBookings(asInstructor: false)
             // Reviews come along so "Leave a review" flips to "Edit review" after a reinstall.
             await data.syncReviews(asInstructor: false)
+            // Auto-celebrate any newly-crossed practice milestone to the community (Flowe Community).
+            data.checkMilestones()
         }
         // Manual pull-to-refresh: an instructor's accept/decline lands server-side with no live
         // socket, so a swipe-down is the instant way to see Pending → Confirmed. Mirrors the .task.
         .refreshable {
             await data.syncBookings(asInstructor: false)
             await data.syncReviews(asInstructor: false)
+            data.checkMilestones()
         }
     }
 

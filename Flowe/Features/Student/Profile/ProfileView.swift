@@ -14,6 +14,8 @@ struct ProfileView: View {
     /// A tapped teacher in the "Your Teachers" rail → opens their profile to rebook (same destination
     /// as a booking card's "Book again"). `Instructor` is Identifiable, so `.sheet(item:)` drives it.
     @State private var rebookTeacher: Instructor?
+    /// A tapped practice-friend (Flowe Community) → their follow sheet.
+    @State private var selectedFriend: PeerRef?
 
     /// Per-icon accent tints matching the Figma mockup (deep → pink → soft).
     private let achievementTints: [Color] = [.flowePinkDeep, .flowePink, .flowePinkSoft]
@@ -164,6 +166,10 @@ struct ProfileView: View {
                     // booking (a browse-first student), so it lives outside the bookings branch.
                     savedSection
 
+                    // Practice friends (Flowe Community) — the students you followed, met via a shared
+                    // event / class / instructor circle. Self-hides when you follow no one.
+                    practiceFriendsSection
+
                     // The student-facing career surface (Flowe Pro): browse open apprentice/assistant/
                     // studio roles and track applications. Shown to every student — it's an on-ramp, not
                     // gated on any prior activity.
@@ -193,6 +199,46 @@ struct ProfileView: View {
         // picks the slot/time).
         .sheet(item: $rebookTeacher) { teacher in
             StudentInstructorProfileView(instructor: teacher) { rebookTeacher = nil }
+        }
+        .sheet(item: $selectedFriend) { PracticeFriendSheet(peer: $0) }
+        .task { await data.syncFollows() }
+    }
+
+    // MARK: - Practice friends (Flowe Community)
+
+    @ViewBuilder private var practiceFriendsSection: some View {
+        let friends = data.practiceFriends
+        if !friends.isEmpty {
+            SectionHeader(text: "PRACTICE FRIENDS")
+                .padding(.bottom, 10)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: 14) {
+                    ForEach(friends, id: \.id) { friend in
+                        Button {
+                            Haptic.tap()
+                            selectedFriend = PeerRef(id: friend.id, name: friend.name)
+                        } label: {
+                            VStack(spacing: 6) {
+                                if let photo = data.studentPhoto(forOwnerID: friend.id) {
+                                    AvatarView(id: "", photo: photo, size: 60, ring: true)
+                                } else {
+                                    InitialAvatar(name: friend.name, size: 60)
+                                }
+                                Text(friend.name.split(separator: " ").first.map(String.init) ?? friend.name)
+                                    .font(FloweFont.sans(11, .medium))
+                                    .foregroundStyle(Color.floweInk)
+                                    .lineLimit(1)
+                                    .frame(maxWidth: 68)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 1)
+                .padding(.top, 4)
+                .padding(.bottom, 2)
+            }
+            .padding(.bottom, 20)
         }
     }
 

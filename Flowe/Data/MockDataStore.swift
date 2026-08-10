@@ -4085,6 +4085,276 @@ final class MockDataStore {
         }
     }
 
+    // MARK: - Flowe Community opt-in (see + be seen by other students)
+
+    /// Whether the signed-in student has opted into Flowe Community.
+    var isCommunityVisible: Bool { currentStudentProfile?.communityVisible ?? false }
+
+    /// The student's single opt-in to Flowe Community. Ensures a profile exists (so peers can resolve a
+    /// name), flips the flag, and publishes it to the world-readable listing. Reciprocity: opting in is
+    /// what lets you both see other students AND appear to them. See [[Flowe-Community]].
+    func setCommunityVisible(_ on: Bool) {
+        let me = currentStudentProfile ?? ensureStudentProfile(
+            ownerID: currentUserID ?? FloweConstants.localOwnerID, name: currentUserName
+        )
+        me.communityVisible = on
+        // Capture where they stand NOW so joining with existing history doesn't retro-post every past
+        // milestone at once — only thresholds crossed AFTER opting in are celebrated. Re-baselined on
+        // each opt-in. See `checkMilestones` and [[Flowe-Community]].
+        if on { me.communityBaselineSessions = completedSessionCount }
+        me.updatedAt = Date()
+        publishMyStudentProfile()
+    }
+
+    /// Completed sessions for the signed-in student — the basis for both the community opt-in baseline
+    /// and milestone detection (kept in one place so the two never drift).
+    private var completedSessionCount: Int { myBookings.filter { $0.status == .completed }.count }
+
+    /// Accepted event guests who have opted into Flowe Community — the ONLY attendees shown to peers on
+    /// the "who's going" list. Their profiles must be warmed (`fetchAuthorProfiles`); any not yet cached
+    /// are omitted until they load. Newest-joined last (roster order).
+    func communityAttendees(for event: CommunityEvent) -> [RemoteRegistration] {
+        acceptedGuests(for: event).filter {
+            studentProfile(forOwnerID: $0.studentID)?.communityVisible == true
+        }
+    }
+
+    // MARK: - Event discussion (Flowe Community slice 2)
+    //
+    // Reuses the [[PostComment]] + [[CommunityService]] comment machinery keyed on the EVENT's recordName
+    // as the parent id — so an event thread needs NO new record type and NO Production deploy. Event ids
+    // (`event-<uuid>`) never collide with post ids, and `recountComments` no-ops when no FeedPost matches.
+
+    /// The event's discussion, oldest-first; blocked authors and not-yet-withdrawn deletes hidden.
+    func eventComments(for event: CommunityEvent) -> [PostComment] {
+        guard let id = event.remoteID else { return [] }
+        return postComments
+            .filter { $0.postID == id && !$0.pendingDelete && !isBlocked($0.authorID) }
+            .sorted { $0.createdAt < $1.createdAt }
+    }
+
+    /// Whether the signed-in student may take part in an event's discussion: opted into the community AND
+    /// either going (accepted) or hosting. Keeps the conversation to the people actually in the room.
+    func canDiscuss(_ event: CommunityEvent) -> Bool {
+        guard isCommunityVisible else { return false }
+        return requestState(for: event) == .accepted || event.organizerID == currentUserID
+    }
+
+    /// Post to an event's discussion. Gated by `canDiscuss`; the caller screens the text (ContentFilter).
+    func addEventComment(to event: CommunityEvent, text: String) {
+        guard let me = currentUserID, let id = event.remoteID, canDiscuss(event) else { return }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let comment = PostComment(postID: id, authorID: me, authorName: currentUserName,
+                                  text: trimmed, pendingUpload: true)
+        context.insert(comment)
+        save()
+        guard !isPreview else { return }
+        Task { await upload(comment) }
+    }
+
+    /// Pull an event's discussion + warm the commenters' current identities.
+    func syncEventComments(for event: CommunityEvent) async {
+        guard !isPreview, let id = event.remoteID else { return }
+        await flushPendingCommunityWrites()
+        guard let remote = await communityService.fetchComments(postIDs: [id]) else { return }
+        mergeComments(remote, for: [id])
+        await fetchAuthorProfiles(Set(eventComments(for: event).map(\.authorID)))
+    }
+
+    // MARK: - Class-mates presence (Flowe Community slice 3)
+
+    /// Whether a booking is a group class (capacity ≥ 2) — resolved from the live lesson type, falling
+    /// back to the frozen `bookedCapacity`. Drives the "who's in this class" affordance.
+    func isGroupBooking(_ booking: Booking) -> Bool {
+        (bookingCapacity(booking) ?? booking.bookedCapacity) >= 2
+    }
+
+    /// The signed-in student's community class-mates for a group booking: the OTHER community-visible
+    /// students in the SAME slot (instructor + date + time + type), active, not me, not blocked. Async —
+    /// a student doesn't cache others' bookings, so it fetches the public slot roster, warms each peer's
+    /// profile, and keeps only those opted into the community. Empty unless the viewer is opted in too.
+    func fetchClassmates(for booking: Booking) async -> [(id: String, name: String)] {
+        guard !isPreview, isCommunityVisible, isGroupBooking(booking),
+              let instructorID = booking.instructorOwnerID, let me = currentUserID,
+              let roster = await bookingService.fetchSlotRoster(instructorID: instructorID, date: booking.date)
+        else { return [] }
+        let peers = roster.filter {
+            $0.time == booking.time && $0.type == booking.type && !$0.cancelled
+                && $0.studentID != me && !isBlocked($0.studentID)
+        }
+        await fetchAuthorProfiles(Set(peers.map(\.studentID)))
+        var seen = Set<String>()
+        var out: [(id: String, name: String)] = []
+        for p in peers where !seen.contains(p.studentID) {
+            seen.insert(p.studentID)
+            guard studentProfile(forOwnerID: p.studentID)?.communityVisible == true else { continue }
+            let n = displayIdentity(ownerID: p.studentID, fallbackName: p.studentName).name
+            out.append((p.studentID, n.isEmpty ? p.studentName : n))
+        }
+        return out
+    }
+
+    // MARK: - Instructor community circle (Flowe Community slice 4)
+
+    /// The signed-in student's view of an instructor's community CIRCLE: the community-visible students who
+    /// train with `ownerID` (≥1 active booking with them), excluding me and blocked users. This is the
+    /// instructor-anchored hub that seeds each circle — every instructor arrives with existing students, so
+    /// there's an instant small community without any global density. Async — fetches the instructor's
+    /// public bookings, warms profiles, keeps only community opt-ins. Empty unless the viewer is opted in
+    /// too. See [[Flowe-Community]].
+    func fetchInstructorCircle(ownerID: String) async -> [(id: String, name: String)] {
+        guard !isPreview, isCommunityVisible, let me = currentUserID,
+              let bookings = await bookingService.fetchForInstructor(ownerID: ownerID) else { return [] }
+        let unique = Set(bookings
+            .filter { !$0.cancelled && $0.studentID != me && !isBlocked($0.studentID) }
+            .map(\.studentID))
+        await fetchAuthorProfiles(unique)
+        var out: [(id: String, name: String)] = []
+        for id in unique {
+            guard let p = studentProfile(forOwnerID: id), p.communityVisible else { continue }
+            let n = displayIdentity(ownerID: id, fallbackName: p.name).name
+            out.append((id, n.isEmpty ? p.name : n))
+        }
+        return out.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
+    // MARK: - Circle discussion (Flowe Community slice 4b)
+    //
+    // The instructor's students actually talk. Reuses the community-comment machinery keyed on a
+    // namespaced circle id (`circle-<ownerID>`, collision-proof vs post/event ids) — no new record type.
+
+    private static func circleThreadID(_ ownerID: String) -> String { "circle-\(ownerID)" }
+
+    /// The circle chat for an instructor, oldest-first; blocked authors + pending deletes hidden.
+    func circleComments(for ownerID: String) -> [PostComment] {
+        let id = Self.circleThreadID(ownerID)
+        return postComments
+            .filter { $0.postID == id && !$0.pendingDelete && !isBlocked($0.authorID) }
+            .sorted { $0.createdAt < $1.createdAt }
+    }
+
+    /// Whether the signed-in user may take part in an instructor's circle chat: opted into the community
+    /// AND either training with them (an active booking) or being the instructor themselves.
+    func canDiscussCircle(ownerID: String) -> Bool {
+        guard isCommunityVisible, let me = currentUserID else { return false }
+        return me == ownerID
+            || myBookings.contains { $0.instructorOwnerID == ownerID && $0.status != .cancelled }
+    }
+
+    /// Post to an instructor's circle chat. Gated by `canDiscussCircle`; caller screens the text.
+    func addCircleComment(to ownerID: String, text: String) {
+        guard let me = currentUserID, canDiscussCircle(ownerID: ownerID) else { return }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let comment = PostComment(postID: Self.circleThreadID(ownerID), authorID: me,
+                                  authorName: currentUserName, text: trimmed, pendingUpload: true)
+        context.insert(comment)
+        save()
+        guard !isPreview else { return }
+        Task { await upload(comment) }
+    }
+
+    /// Pull a circle chat + warm the participants' current identities.
+    func syncCircleComments(for ownerID: String) async {
+        guard !isPreview else { return }
+        let id = Self.circleThreadID(ownerID)
+        await flushPendingCommunityWrites()
+        guard let remote = await communityService.fetchComments(postIDs: [id]) else { return }
+        mergeComments(remote, for: [id])
+        await fetchAuthorProfiles(Set(circleComments(for: ownerID).map(\.authorID)))
+    }
+
+    // MARK: - Practice milestones (Flowe Community slice 5)
+    //
+    // When a community-opted-in student crosses a session-count threshold, auto-post a celebratory
+    // milestone to the feed so peers can cheer (a like on a milestone = a cheer). Idempotent via a
+    // deterministic recordName `milestone-<studentID>-<N>` (one celebration per threshold, ever). Only
+    // notable counts — never the noisy first session. No schema change (`type` is a free string field).
+
+    /// The session counts worth celebrating publicly (skips 1/5 — too noisy for the shared feed).
+    private static let sessionMilestones = [10, 25, 50, 100]
+
+    /// Detect and post any newly-crossed practice milestones for the signed-in student. Gated on the
+    /// community opt-in (auto-posting is a public act → only for those who joined the community). Cheap +
+    /// idempotent; safe to call whenever bookings or the feed refresh.
+    func checkMilestones() {
+        guard !isPreview, isCommunityVisible, let me = currentUserID else { return }
+        let completed = completedSessionCount
+        // Only celebrate thresholds crossed AFTER opting in — the baseline captured at opt-in suppresses
+        // a first-run flood for students who join with existing history (deterministic recordName still
+        // dedupes everything else). See `setCommunityVisible`.
+        let baseline = currentStudentProfile?.communityBaselineSessions ?? 0
+        for n in Self.sessionMilestones where n > baseline && completed >= n {
+            let recordName = "milestone-\(me)-\(n)"
+            if let existing = posts.first(where: { $0.remoteID == recordName }) {
+                // Already celebrated — but retry an upload that never landed (offline first time).
+                if existing.pendingUpload { Task { await uploadMilestone(existing, recordName: recordName) } }
+                continue
+            }
+            let post = FeedPost(
+                legacyId: (posts.map(\.legacyId).max() ?? 0) + 1,
+                type: .milestone,
+                user: currentUserName,
+                text: String(localized: "Completed \(n) Pilates sessions."),
+                ownerID: me,
+                remoteID: recordName,   // deterministic up front — dedupes local + server
+                pendingUpload: true
+            )
+            context.insert(post)
+            save()
+            Task { await uploadMilestone(post, recordName: recordName) }
+        }
+    }
+
+    private func uploadMilestone(_ post: FeedPost, recordName: String) async {
+        guard let authorID = post.ownerID else { return }
+        let saved = await communityService.publishMilestone(
+            recordName: recordName, authorID: authorID, authorName: post.user,
+            text: post.text, createdAt: post.createdAt)
+        if let saved { post.remoteID = saved }
+        post.pendingUpload = (saved == nil)
+        save()
+    }
+
+    // MARK: - Practice friends (Flowe Community slice 6)
+
+    /// The follow edges the signed-in student authored — who they follow. In-memory (re-fetched); a
+    /// social graph is cheap to refresh and doesn't need offline persistence.
+    private(set) var follows: [RemoteFollow] = []
+
+    /// Whether the signed-in student follows `studentID`.
+    func isFollowing(_ studentID: String) -> Bool { follows.contains { $0.followeeID == studentID } }
+
+    /// The signed-in student's practice friends (who they follow), newest first.
+    var practiceFriends: [(id: String, name: String)] {
+        follows.sorted { $0.createdAt > $1.createdAt }.map { ($0.followeeID, $0.followeeName) }
+    }
+
+    /// Follow a practice-friend (someone met via a shared context). Optimistic + published.
+    func follow(_ studentID: String, name: String) {
+        guard let me = currentUserID, me != studentID, !isFollowing(studentID) else { return }
+        follows.append(RemoteFollow(
+            id: CommunityService.followRecordName(follower: me, followee: studentID),
+            followerID: me, followeeID: studentID, followeeName: name, createdAt: Date()))
+        guard !isPreview else { return }
+        Task { await communityService.follow(followerID: me, followeeID: studentID, followeeName: name) }
+    }
+
+    /// Unfollow — optimistic local removal + server delete.
+    func unfollow(_ studentID: String) {
+        guard let me = currentUserID else { return }
+        follows.removeAll { $0.followeeID == studentID }
+        guard !isPreview else { return }
+        Task { await communityService.unfollow(followerID: me, followeeID: studentID) }
+    }
+
+    /// Pull the signed-in student's follow list. Nil fetch keeps the cache (mirrors the other syncs).
+    func syncFollows() async {
+        guard !isPreview, let me = currentUserID else { return }
+        if let fetched = await communityService.fetchFollows(followerID: me) { follows = fetched }
+    }
+
     /// Re-publish a student profile whose last save never landed (mirror of `flushPendingListing`).
     func flushPendingStudentProfile() async {
         guard !isPreview, let me = currentStudentProfile, me.pendingPublish else { return }
@@ -4155,6 +4425,7 @@ final class MockDataStore {
         p.bio = l.bio
         p.memberSince = l.memberSince
         p.updatedAt = l.updatedAt
+        p.communityVisible = l.communityVisible
         // Only overwrite a cached image when the server actually has one — protects the owner's own
         // not-yet-uploaded photo, exactly like the Instructor rule.
         if let photo = l.photo {

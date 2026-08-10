@@ -10,6 +10,7 @@ struct StudentListing {
     let memberSince: Date
     let updatedAt: Date
     let photo: Data?
+    let communityVisible: Bool
 
     init?(record: CKRecord) {
         guard let name = record["name"] as? String else { return nil }   // name is required, else nil
@@ -23,6 +24,7 @@ struct StudentListing {
         updatedAt = record["updatedAt"] as? Date ?? .distantPast
         // CloudKit stages an asset as a local file; read it now, before the temp copy is reclaimed.
         photo = (record["photo"] as? CKAsset)?.fileURL.flatMap { try? Data(contentsOf: $0) }
+        communityVisible = (record["communityVisible"] as? Int ?? 0) == 1
     }
 }
 
@@ -64,6 +66,7 @@ final class StudentDirectoryService {
         record["bio"] = profile.bio
         record["memberSince"] = profile.memberSince
         record["updatedAt"] = Date()
+        record["communityVisible"] = profile.communityVisible ? 1 : 0
 
         // A CKAsset is uploaded from a file, so the image has to be staged on disk for the save.
         let staged = profile.photo.flatMap { Self.stageAsset($0, name: "student-photo") }
@@ -82,6 +85,7 @@ final class StudentDirectoryService {
                 server["bio"] = profile.bio
                 server["memberSince"] = profile.memberSince
                 server["updatedAt"] = Date()
+                server["communityVisible"] = profile.communityVisible ? 1 : 0
                 // The staged file outlives this block (`defer` fires on return), so the retry can
                 // reuse it — re-applied including a nil, so a photo removal survives the conflict.
                 server["photo"] = staged.map { CKAsset(fileURL: $0) }

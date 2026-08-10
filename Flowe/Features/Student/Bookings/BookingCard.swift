@@ -14,10 +14,12 @@ struct BookingCard: View {
     private enum Route: Identifiable {
         case bookAgain(Instructor)
         case review
+        case classmates
         var id: String {
             switch self {
             case .bookAgain(let ins): return "book-\(ins.legacyId)"
             case .review:             return "review"
+            case .classmates:         return "classmates"
             }
         }
     }
@@ -57,6 +59,8 @@ struct BookingCard: View {
                 StudentInstructorProfileView(instructor: ins) { self.route = nil }
             case .review:
                 ReviewSheet(booking: booking)
+            case .classmates:
+                ClassmatesSheet(booking: booking)
             }
         }
         .confirmationDialog(cancelTitle,
@@ -182,8 +186,19 @@ struct BookingCard: View {
 
             Spacer(minLength: 8)
 
-            if booking.status == .completed {
-                HStack(spacing: 14) {
+            HStack(spacing: 14) {
+                // ✦ Class-mates (Flowe Community) — see familiar faces in a group class; opt-in handled
+                // inside the sheet. Shown for group bookings that aren't cancelled. See [[Flowe-Community]].
+                if data.isGroupBooking(booking), booking.status != .cancelled {
+                    Button { route = .classmates } label: {
+                        Text("Class-mates")
+                            .font(FloweFont.sans(11))
+                            .foregroundStyle(Color.flowePinkDeep)
+                    }
+                    .accessibilityIdentifier("booking.classmates")
+                }
+
+                if booking.status == .completed {
                     if data.canReview(booking) {
                         Button {
                             route = .review
@@ -203,18 +218,18 @@ struct BookingCard: View {
                             .foregroundStyle(Color.floweMuted)
                     }
                     .accessibilityIdentifier("booking.bookAgain")
+                } else if booking.status != .cancelled {
+                    // A waitlisted row leaves the waitlist (the same one-off cancel path — it releases
+                    // the overflow hold via `releaseSeat`); everything else cancels the session.
+                    Button {
+                        cancelKind = .oneOff
+                    } label: {
+                        Text(data.isWaitlisted(booking) ? "Leave waitlist" : "Cancel")
+                            .font(FloweFont.sans(11))
+                            .foregroundStyle(Color.floweMuted)
+                    }
+                    .accessibilityIdentifier("booking.cancel")
                 }
-            } else if booking.status != .cancelled {
-                // A waitlisted row leaves the waitlist (the same one-off cancel path — it releases
-                // the overflow hold via `releaseSeat`); everything else cancels the session.
-                Button {
-                    cancelKind = .oneOff
-                } label: {
-                    Text(data.isWaitlisted(booking) ? "Leave waitlist" : "Cancel")
-                        .font(FloweFont.sans(11))
-                        .foregroundStyle(Color.floweMuted)
-                }
-                .accessibilityIdentifier("booking.cancel")
             }
         }
         .padding(.horizontal, 16)
