@@ -61,6 +61,7 @@ final class AppSession {
         applyDebugIdentityInjection(defaults)
         #endif
         refreshStudentPreferences()
+        refreshTermsAcceptance()   // so a returning, already-accepted account isn't re-gated on launch
     }
 
     #if DEBUG
@@ -83,6 +84,9 @@ final class AppSession {
             id: UUID(), fullName: name, email: "", role: role, memberSince: Date()
         )
         authState = role == .instructor ? .instructor : .student
+        // The harness bypasses Sign-in-with-Apple, so also bypass the router's terms gate — otherwise a
+        // debug/UI-test launch lands on the acceptance screen instead of the app.
+        recordTermsAcceptance()
 
         // `-flowe.debugOpenInstructor <ownerID>` deep-links a student straight to that instructor's
         // profile by DIRECT recordID fetch (`loadInstructor` → `CatalogService.fetch(ownerIDs:)`),
@@ -209,23 +213,30 @@ final class AppSession {
 
     // MARK: - Terms & Community Guidelines acceptance (App Store Guideline 1.2 — UGC)
 
-    /// Bump when the Terms of Use / Community Guidelines change materially — existing users are then
-    /// re-prompted to accept the new version before continuing.
+    /// Bump when the Terms of Use / Community Guidelines change materially — every account is then
+    /// re-prompted (the router gate re-appears) before continuing.
     static let termsVersion = 1
-    private var termsAcceptedKey: String { "flowe.termsAcceptedVersion" }
+    /// PER-ACCOUNT key (by `ownerID`) — device-global storage let a second Apple ID on a shared device
+    /// slip in without agreeing, and couldn't distinguish who accepted which version.
+    private func termsKey(for ownerID: String) -> String { "flowe.termsAcceptedVersion.\(ownerID)" }
 
-    /// Whether this device has accepted the CURRENT Terms + Community Guidelines. Guideline 1.2 requires
-    /// a user of a UGC app to affirmatively agree (with zero-tolerance language) before participating —
-    /// so a returning user who already accepted is never re-prompted, while a brand-new user must.
-    var hasAcceptedTerms: Bool {
-        UserDefaults.standard.integer(forKey: termsAcceptedKey) >= Self.termsVersion
+    /// Whether the CURRENT account has accepted the CURRENT Terms + Community Guidelines. Observable
+    /// (`private(set) var`, not a UserDefaults read) so [[AppRouter]]'s gate re-renders the instant it
+    /// flips. Refreshed on session start / launch-restore; `false` when signed out or after a version bump.
+    private(set) var hasAcceptedTerms = false
+
+    /// Load the signed-in account's acceptance into the observable flag. Called from `init` (launch
+    /// restore) and `startSession` (fresh sign-in), once `ownerID` is known.
+    private func refreshTermsAcceptance() {
+        hasAcceptedTerms = UserDefaults.standard.integer(forKey: termsKey(for: ownerID)) >= Self.termsVersion
     }
 
-    /// Record acceptance of the current Terms + Community Guidelines. Called from the sign-up gate the
-    /// instant the user agrees, so the agreement is durable even before the account session begins.
+    /// Record acceptance for the current account (App Store Guideline 1.2). Idempotent; flips the
+    /// observable flag so the router gate dismisses immediately.
     func recordTermsAcceptance() {
-        UserDefaults.standard.set(Self.termsVersion, forKey: termsAcceptedKey)
-        UserDefaults.standard.set(Date(), forKey: termsAcceptedKey + ".date")
+        UserDefaults.standard.set(Self.termsVersion, forKey: termsKey(for: ownerID))
+        UserDefaults.standard.set(Date(), forKey: termsKey(for: ownerID) + ".date")
+        hasAcceptedTerms = true
     }
 
     /// Start a session for an Apple-authenticated user.
@@ -267,6 +278,7 @@ final class AppSession {
         studentPreferences = prefs
         needsOnboardingQuiz = (role == .student) && (prefs == nil)
         persist(role: role)
+        refreshTermsAcceptance()   // load THIS account's acceptance; router gates if it hasn't accepted
     }
 
     /// Best-effort display name from an email local-part (no backend to look up the real name yet).

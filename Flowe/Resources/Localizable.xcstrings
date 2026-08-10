@@ -24485,6 +24485,40 @@
           }
         }
       }
+    },
+    "One quick agreement": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "موافقة سريعة"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "אישור קצר"
+          }
+        }
+      }
+    },
+    "Please review and accept to keep using Flowe.": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يرجى المراجعة والموافقة لمواصلة استخدام Flowe."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "יש לעיין ולאשר כדי להמשיך להשתמש ב-Flowe."
+          }
+        }
+      }
     }
   },
   "version": "1.1"

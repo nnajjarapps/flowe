@@ -1088,13 +1088,13 @@ final class MockDataStore {
     /// rows; a student cached them via `syncLessonTypes` when booking). Nil when no matching type is
     /// cached, so callers degrade rather than guess.
     func bookingCapacity(_ booking: Booking) -> Int? {
+        // Prefer the capacity FROZEN on the booking at claim time. That is what a seat's admitted/waitlist
+        // status was decided against, so an instructor later EDITING the lesson type's capacity must not
+        // retroactively reclassify existing bookings (dropping an admitted student onto the waitlist, or
+        // vice-versa). Fall back to the live cached type only when no frozen value exists (legacy rows).
+        if booking.bookedCapacity > 0 { return booking.bookedCapacity }
         guard let owner = booking.instructorOwnerID else { return nil }
-        if let live = lessonTypes.first(where: { $0.ownerID == owner && $0.name == booking.type })?.capacity {
-            return live
-        }
-        // Cache miss (cold / 2nd device / renamed type): fall back to the capacity frozen on the booking
-        // at claim time, so waitlist promotion doesn't stall on an uncached lesson type.
-        return booking.bookedCapacity > 0 ? booking.bookedCapacity : nil
+        return lessonTypes.first(where: { $0.ownerID == owner && $0.name == booking.type })?.capacity
     }
 
     /// True when a booking occupies an OVERFLOW seat — i.e. it is on the waitlist, not admitted. Derived
@@ -2596,6 +2596,14 @@ final class MockDataStore {
     func respondToEventRequest(_ registration: RemoteRegistration, accepted: Bool) {
         guard let me = currentUserID,
               let event = events.first(where: { $0.remoteID == registration.eventID }) else { return }
+        // Don't oversubscribe: an accept that would push accepted attendees past a set capacity is refused
+        // (the student-side join pre-checks capacity, but the organizer's accept path had no ceiling).
+        if accepted, event.capacity > 0 {
+            let current = eventDecisions[registration.eventID] ?? [:]
+            let acceptedCount = current.values.filter { $0 }.count
+            let alreadyAcceptedThis = current[registration.studentID] == true
+            if !alreadyAcceptedThis, acceptedCount >= event.capacity { return }
+        }
         eventDecisions[registration.eventID, default: [:]][registration.studentID] = accepted   // optimistic
         save()
         guard !isPreview else { return }

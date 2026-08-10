@@ -85,12 +85,12 @@ struct CreateAccountView: View {
                 errorMessage = "Apple Sign-In didn't return an account. Please try again."
                 return
             }
-            // The user agreed on this screen (the button is disabled otherwise); record it durably
-            // before the session begins so the acceptance survives even if session setup is interrupted.
-            session.recordTermsAcceptance()
-            // The Apple id must be recorded before the session starts — it is the owner id every
-            // booking, message and review is filed under.
+            // The Apple id must be recorded before the session starts — it is the owner id every booking,
+            // message and review is filed under, AND the key the per-account terms acceptance is stored under.
             session.setAppleUserID(cred.user)
+            // The user agreed on this screen (the button is disabled otherwise) — record it for THIS
+            // account so the router's terms gate doesn't re-prompt them.
+            session.recordTermsAcceptance()
             // Apple returns name and email only on the *first* authorization, so both are optional
             // on every later sign-in.
             let name = [cred.fullName?.givenName, cred.fullName?.familyName]

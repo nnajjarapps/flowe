@@ -94,7 +94,7 @@ struct BookingSheet: View {
                 reportedName: instructor.name,
                 content: .instructorListing,
                 contentID: instructor.ownerID ?? "",
-                snapshot: [instructor.name, instructor.city, instructor.cert, instructor.bio ?? ""]
+                snapshot: [instructor.name, instructor.address, instructor.cert, instructor.bio ?? ""]
                     .filter { !$0.isEmpty }
                     .joined(separator: " · ")
             )
@@ -161,7 +161,7 @@ struct BookingSheet: View {
                             .foregroundStyle(.white)
                         HStack(spacing: 4) {
                             Image(systemName: "mappin").font(.system(size: 10))
-                            Text(instructor.city).font(FloweFont.mono(11))
+                            Text(instructor.address).font(FloweFont.mono(11))
                         }
                         .foregroundStyle(.white.opacity(0.75))
                     }

@@ -166,12 +166,24 @@ final class FloweIntelligence {
         return isCurrentLanguageSupported
     }
 
-    /// English-only reach today: gate on the model actually supporting the user's current language,
-    /// so a Hebrew/Arabic user never sees an AI affordance that would fail. Never hardcode the list —
-    /// query `supportedLanguages`, which grows as Apple adds languages.
+    /// English-only reach today: gate on the model actually supporting the language the UI is ACTUALLY
+    /// showing, so a Hebrew/Arabic user never sees an AI affordance that would fail (and an English user
+    /// on a Hebrew *device* isn't wrongly denied). Never hardcode the list — query `supportedLanguages`,
+    /// which grows as Apple adds languages.
     private var isCurrentLanguageSupported: Bool {
-        guard let code = Locale.current.language.languageCode?.identifier else { return false }
+        guard let code = Self.effectiveLanguageCode else { return false }
         return model.supportedLanguages.contains { $0.languageCode?.identifier == code }
+    }
+
+    /// The language Flowe is displaying: an explicit in-app override (`AppSettings.language`, persisted
+    /// under `flowe.language`) wins over the device locale — mirroring how `AppSettings.locale` drives the
+    /// UI — because that, not the device setting, is the language any AI output would be produced in.
+    private static var effectiveLanguageCode: String? {
+        if let raw = UserDefaults.standard.string(forKey: "flowe.language"),
+           raw != "system", !raw.isEmpty {
+            return Locale(identifier: raw).language.languageCode?.identifier ?? raw
+        }
+        return Locale.current.language.languageCode?.identifier
     }
 
     // MARK: - Brand story (Flowe Pro Pillar B)
