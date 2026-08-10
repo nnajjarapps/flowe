@@ -130,6 +130,7 @@ final class MockDataStore {
         blocked     = (try? context.fetch(
             FetchDescriptor<BlockedUser>(sortBy: [SortDescriptor(\.createdAt, order: .reverse)])
         )) ?? []
+        mirrorBlockedToAppGroup()   // hand the block list to the Notification Service Extension on load
         clientNotes = (try? context.fetch(
             FetchDescriptor<ClientNote>(sortBy: [SortDescriptor(\.updatedAt, order: .reverse)])
         )) ?? []
@@ -1697,6 +1698,14 @@ final class MockDataStore {
         var inserted = false
         for (entry, plaintext) in decrypted where !known.contains(entry.id) {
             known.insert(entry.id)   // also dedup an id that appears twice within this one batch
+            // A message from someone this user has BLOCKED must never be STORED — otherwise it sits hidden
+            // and reappears the moment they unblock (the reported "after unblock I saw what was sent while
+            // blocked" bug). Tombstone it so it can't land now or on any later sync. Messages received
+            // BEFORE the block were already delivered and are unaffected.
+            if isBlocked(entry.senderID) {
+                markMessageDeleted(entry.id)
+                continue
+            }
             context.insert(Message(
                 remoteID: entry.id,
                 conversationID: entry.conversationID,
@@ -1939,11 +1948,19 @@ final class MockDataStore {
         guard !id.isEmpty, !blockedIDs.contains(id) else { return }
         context.insert(BlockedUser(blockedID: id, blockedName: name))
         save()
+        mirrorBlockedToAppGroup()
     }
 
     func unblock(_ ownerID: String) {
         for entry in blocked where entry.blockedID == ownerID { context.delete(entry) }
         save()
+        mirrorBlockedToAppGroup()
+    }
+
+    /// Share the current block list with the Notification Service Extension (App Group) so a blocked
+    /// user's DM push never reveals its content. Call whenever `blocked` changes or is loaded.
+    func mirrorBlockedToAppGroup() {
+        AvatarCache.writeBlocked(Array(blockedIDs))
     }
 
     /// File a report. Returns whether it reached the server so the UI doesn't thank the user for a
@@ -2770,6 +2787,7 @@ final class MockDataStore {
         app.note = note.trimmingCharacters(in: .whitespacesAndNewlines)
         app.withdrawn = false
         app.remoteID = app.recordName
+        app.pendingUpload = true
         save()
         guard !isPreview else { return }
         Task { await uploadApplication(app) }
@@ -2780,6 +2798,7 @@ final class MockDataStore {
     func withdrawApplication(for opportunity: Opportunity) {
         guard let app = myApplication(for: opportunity) else { return }
         app.withdrawn = true
+        app.pendingUpload = true
         save()
         guard !isPreview else { return }
         Task { await uploadApplication(app) }
@@ -2792,6 +2811,7 @@ final class MockDataStore {
             applicantRole: app.applicantRoleRaw, note: app.note, withdrawn: app.withdrawn,
             createdAt: app.createdAt)
         app.remoteID = saved ?? app.recordName
+        app.pendingUpload = false   // upload confirmed — sync may adopt server truth again
         save()
     }
 
@@ -2878,7 +2898,9 @@ final class MockDataStore {
         let remoteApps = ((await inbox) ?? []) + ((await mineApps) ?? [])
         for r in remoteApps {
             if let existing = opportunityApplications.first(where: { $0.recordName == r.id || $0.remoteID == r.id }) {
-                if existing.note != r.note || existing.withdrawn != r.withdrawn {
+                // Don't clobber a local edit still uploading — a query-index lag returns the pre-edit copy
+                // and would revert a just-made withdrawal. Adopt server truth only once the upload confirms.
+                if !existing.pendingUpload, existing.note != r.note || existing.withdrawn != r.withdrawn {
                     existing.note = r.note; existing.withdrawn = r.withdrawn; changed = true
                 }
             } else {
@@ -3420,10 +3442,18 @@ final class MockDataStore {
             let mineRows = regsByEvent[remoteID] ?? []
             eventRegistrationRows[remoteID] = mineRows                 // keep rows for the organizer's queue
             if let decByEvent {
-                eventDecisions[remoteID] = Dictionary(
+                var fresh = Dictionary(
                     (decByEvent[remoteID] ?? []).map { ($0.studentID, $0.accepted) },
                     uniquingKeysWith: { _, newest in newest }
                 )
+                // Preserve an OPTIMISTIC decision the server query hasn't indexed yet (CloudKit write→query
+                // lag). Dropping it makes a just-accepted request reappear in the organizer's queue, so they
+                // tap Accept a second time — the reported "accept twice" bug. Server truth still wins for
+                // any student it DID return.
+                for (studentID, accepted) in eventDecisions[remoteID] ?? [:] where fresh[studentID] == nil {
+                    fresh[studentID] = accepted
+                }
+                eventDecisions[remoteID] = fresh
             }
             let decided = eventDecisions[remoteID] ?? [:]
 

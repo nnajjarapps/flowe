@@ -166,6 +166,10 @@ final class OpportunityApplication {
     var withdrawn: Bool = false
     var createdAt: Date = Date.distantPast
     var remoteID: String?
+    /// A local note/withdraw edit hasn't been confirmed uploaded yet. LOCAL-ONLY (not published). While
+    /// true, a background `syncOpportunities` must NOT overwrite `note`/`withdrawn` from the server — a
+    /// query-index lag would otherwise revert a just-made withdrawal (the "withdraw not working" bug).
+    var pendingUpload: Bool = false
 
     init(opportunityID: String = "", posterID: String = "",
          applicantID: String = "", applicantName: String = "",

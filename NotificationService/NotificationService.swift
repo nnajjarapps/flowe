@@ -60,6 +60,15 @@ final class NotificationService: UNNotificationServiceExtension {
         let avatar = AvatarCache.image(senderID: senderID) ?? AvatarCache.monogram(name: senderName)
 
         // Thread grouping: conversationID is identical on both devices (sorted owner-id pair),
+        // A message from someone the recipient has BLOCKED must not reveal its content. The subscription
+        // is CloudKit's (no server-side filter) and an NSE can't fully cancel a push — so ship a
+        // contentless banner: no sender, no message, no sound. (The app also stops STORING blocked
+        // messages, so nothing lands in the thread either.)
+        if AvatarCache.isBlockedSender(senderID) {
+            nseLog.info("NSE gate: blocked sender — suppressing content.")
+            return contentHandler(UNMutableNotificationContent())
+        }
+
         // so the notification thread lines up with the in-app conversation.
         mutable.threadIdentifier = conversationID
 

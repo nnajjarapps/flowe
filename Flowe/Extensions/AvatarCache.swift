@@ -46,6 +46,25 @@ enum AvatarCache {
         try? square.jpegData(compressionQuality: 0.7)?.write(to: url, options: .atomic)
     }
 
+    // MARK: - Blocked senders (app writes, the extension reads)
+    //
+    // A CKQuerySubscription push is CloudKit's and can't be filtered server-side, so a blocked user's DM
+    // still pushes to the blocker. The extension is the only interception point — it reads this shared
+    // list so it never reveals a blocked sender's message.
+
+    private static let blockedKey = "flowe.blockedSenderIDs"
+    private static var sharedDefaults: UserDefaults? { UserDefaults(suiteName: appGroup) }
+
+    /// App side: mirror the current block list into the App Group whenever it changes.
+    static func writeBlocked(_ ids: [String]) {
+        sharedDefaults?.set(ids, forKey: blockedKey)
+    }
+
+    /// Extension side: has the recipient blocked this sender? Then hide their notification's content.
+    static func isBlockedSender(_ senderID: String) -> Bool {
+        sharedDefaults?.stringArray(forKey: blockedKey)?.contains(senderID) ?? false
+    }
+
     // MARK: - Extension side (read)
 
     static func image(senderID: String) -> INImage? {
