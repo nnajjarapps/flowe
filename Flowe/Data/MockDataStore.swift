@@ -1585,6 +1585,30 @@ final class MockDataStore {
         UserDefaults.standard.set(Array(ids), forKey: deletedPostsKey)
     }
 
+    /// Closed block windows per sender: `[senderID: [[startEpoch, endEpoch]]]`. A message from a sender
+    /// sent inside one of their windows was sent WHILE this user had them blocked, so it must stay hidden
+    /// even after unblock — the merge-time `isBlocked` check alone misses messages that only sync IN after
+    /// the unblock (the sender was no longer blocked by then). JSON so the nested arrays round-trip cleanly.
+    private let blockWindowsKey = "flowe.blockWindows"
+
+    private func loadBlockWindows() -> [String: [[Double]]] {
+        guard let data = UserDefaults.standard.data(forKey: blockWindowsKey),
+              let dict = try? JSONDecoder().decode([String: [[Double]]].self, from: data) else { return [:] }
+        return dict
+    }
+
+    private func recordBlockWindow(sender: String, from: Date, to: Date) {
+        var all = loadBlockWindows()
+        all[sender, default: []].append([from.timeIntervalSince1970, to.timeIntervalSince1970])
+        if let data = try? JSONEncoder().encode(all) { UserDefaults.standard.set(data, forKey: blockWindowsKey) }
+    }
+
+    /// Whether a message from `sender` sent at `at` falls inside a past block window (sent while blocked).
+    private func wasBlockedWhenSent(_ sender: String, at: Date) -> Bool {
+        let t = at.timeIntervalSince1970
+        return (loadBlockWindows()[sender] ?? []).contains { $0.count == 2 && t >= $0[0] && t <= $0[1] }
+    }
+
     func deleteMessage(_ message: Message) {
         let mine = message.senderID == currentUserID
         let remoteID = message.remoteID
@@ -1722,11 +1746,11 @@ final class MockDataStore {
         var inserted = false
         for (entry, plaintext) in decrypted where !known.contains(entry.id) {
             known.insert(entry.id)   // also dedup an id that appears twice within this one batch
-            // A message from someone this user has BLOCKED must never be STORED — otherwise it sits hidden
-            // and reappears the moment they unblock (the reported "after unblock I saw what was sent while
-            // blocked" bug). Tombstone it so it can't land now or on any later sync. Messages received
-            // BEFORE the block were already delivered and are unaffected.
-            if isBlocked(entry.senderID) {
+            // A message from someone this user has BLOCKED — or sent DURING a past block window, even if
+            // it only syncs in now that they're unblocked — must never be STORED, or it surfaces the
+            // moment it lands. Tombstone it. Messages sent BEFORE the block (outside every window) were
+            // legitimately delivered and are unaffected.
+            if isBlocked(entry.senderID) || wasBlockedWhenSent(entry.senderID, at: entry.sentAt) {
                 markMessageDeleted(entry.id)
                 continue
             }
@@ -1976,7 +2000,18 @@ final class MockDataStore {
     }
 
     func unblock(_ ownerID: String) {
-        for entry in blocked where entry.blockedID == ownerID { context.delete(entry) }
+        let now = Date()
+        for entry in blocked where entry.blockedID == ownerID {
+            // Remember exactly when they were blocked, so their messages sent during the block stay hidden
+            // even if they only sync in AFTER this unblock.
+            recordBlockWindow(sender: ownerID, from: entry.createdAt, to: now)
+            context.delete(entry)
+        }
+        // Purge (and tombstone) any of their during-block messages that already landed locally.
+        for m in messages where m.senderID == ownerID && wasBlockedWhenSent(ownerID, at: m.sentAt) {
+            if let id = m.remoteID { markMessageDeleted(id) }
+            context.delete(m)
+        }
         save()
         mirrorBlockedToAppGroup()
     }
