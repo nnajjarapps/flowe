@@ -67,7 +67,7 @@ struct ProfileView: View {
             let minutes = practiced.reduce(0) { total, booking in
                 guard let end = booking.sessionEnd(now: now), end <= now,
                       calendar.isDate(end, inSameDayAs: dayDate) else { return total }
-                return total + (Int(booking.duration.filter(\.isNumber)) ?? 0)
+                return total + data.bookingDurationMinutes(booking)
             }
             return WeeklyBar(day: letters[index], minutes: minutes)
         }

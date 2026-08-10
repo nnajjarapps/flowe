@@ -39,7 +39,9 @@ struct ComposeLessonTypeSheet: View {
         self.editing = editing
         _name = State(initialValue: editing?.name ?? "")
         _details = State(initialValue: editing?.details ?? "")
-        _durationMinutes = State(initialValue: editing?.durationMinutes ?? 0)
+        // A fresh type defaults to a REAL duration in the picker (55, a valid option) — never 0, which
+        // isn't a selectable row and, if saved, made bookings fall back to a fabricated "50 min".
+        _durationMinutes = State(initialValue: editing?.durationMinutes ?? 55)
         // A fresh type defaults to a small group; editing keeps the stored size (never below 1, since
         // the stepper can't state 0 — a stored 0 only comes from a migrated legacy name).
         // Preserve a "not stated" (0) capacity when editing — `max(1, …)` used to force it to 1, so

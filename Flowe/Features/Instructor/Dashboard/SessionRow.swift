@@ -51,7 +51,7 @@ struct SessionRow: View {
                 Text(booking.localizedTime(locale))
                     .font(FloweFont.mono(13))
                     .foregroundStyle(Color.flowePinkDeep)
-                Text("\(booking.durationMinutes) min")
+                Text("\(data.bookingDurationMinutes(booking)) min")
                     .textCase(.uppercase)
                     .font(FloweFont.mono(9))
                     .foregroundStyle(Color.floweMuted)

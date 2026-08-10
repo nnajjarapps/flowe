@@ -132,7 +132,7 @@ struct BookingCard: View {
                     Text(instructor?.name ?? "")
                         .font(FloweFont.serif(14, .medium))
                         .foregroundStyle(.white)
-                    (Text(localizedTag: booking.type) + Text(" · ") + Text("\(booking.durationMinutes) min"))
+                    (Text(localizedTag: booking.type) + Text(" · ") + Text("\(data.bookingDurationMinutes(booking)) min"))
                         .font(FloweFont.mono(11))
                         .foregroundStyle(.white.opacity(0.8))
                 }

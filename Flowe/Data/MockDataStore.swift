@@ -1088,6 +1088,19 @@ final class MockDataStore {
     /// types by the booking's instructor owner + type name (works on BOTH sides: the instructor owns the
     /// rows; a student cached them via `syncLessonTypes` when booking). Nil when no matching type is
     /// cached, so callers degrade rather than guess.
+    /// Minutes to DISPLAY for a booking: prefer the CURRENT lesson type's stated duration, so a booking
+    /// whose `duration` string was frozen with the old "50 min"/"55 min" guess (created before the type
+    /// resolved) shows the real value. Falls back to the number parsed from the frozen string when the
+    /// type isn't cached. Fixes "the type is 30 min but the session shows 50".
+    func bookingDurationMinutes(_ booking: Booking) -> Int {
+        if let owner = booking.instructorOwnerID,
+           let mins = lessonTypes.first(where: { $0.ownerID == owner && $0.name == booking.type })?.durationMinutes,
+           mins > 0 {
+            return mins
+        }
+        return booking.durationMinutes
+    }
+
     func bookingCapacity(_ booking: Booking) -> Int? {
         // Prefer the capacity FROZEN on the booking at claim time. That is what a seat's admitted/waitlist
         // status was decided against, so an instructor later EDITING the lesson type's capacity must not
