@@ -116,6 +116,11 @@ struct InstructorSettingsView: View {
                     }
                     .tint(Color.floweInk)
                     .accessibilityIdentifier("settings.privacy")
+                    Button { legalDoc = .guidelines } label: {
+                        Label("Community Guidelines", systemImage: "person.2")
+                    }
+                    .tint(Color.floweInk)
+                    .accessibilityIdentifier("settings.guidelines")
                     Link(destination: URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!) {
                         Label("Terms of Use", systemImage: "doc.text")
                     }

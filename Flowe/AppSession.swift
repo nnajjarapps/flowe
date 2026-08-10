@@ -207,6 +207,27 @@ final class AppSession {
         }
     }
 
+    // MARK: - Terms & Community Guidelines acceptance (App Store Guideline 1.2 — UGC)
+
+    /// Bump when the Terms of Use / Community Guidelines change materially — existing users are then
+    /// re-prompted to accept the new version before continuing.
+    static let termsVersion = 1
+    private var termsAcceptedKey: String { "flowe.termsAcceptedVersion" }
+
+    /// Whether this device has accepted the CURRENT Terms + Community Guidelines. Guideline 1.2 requires
+    /// a user of a UGC app to affirmatively agree (with zero-tolerance language) before participating —
+    /// so a returning user who already accepted is never re-prompted, while a brand-new user must.
+    var hasAcceptedTerms: Bool {
+        UserDefaults.standard.integer(forKey: termsAcceptedKey) >= Self.termsVersion
+    }
+
+    /// Record acceptance of the current Terms + Community Guidelines. Called from the sign-up gate the
+    /// instant the user agrees, so the agreement is durable even before the account session begins.
+    func recordTermsAcceptance() {
+        UserDefaults.standard.set(Self.termsVersion, forKey: termsAcceptedKey)
+        UserDefaults.standard.set(Date(), forKey: termsAcceptedKey + ".date")
+    }
+
     /// Start a session for an Apple-authenticated user.
     ///
     /// `User.id` is a fresh UUID and is **display-only** — never use it as an owner id. Ownership

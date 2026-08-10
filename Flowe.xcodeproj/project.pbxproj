@@ -171,6 +171,7 @@
 		FEEDFACE000000000000AB01 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = FEEDFACE000000000000AB02 /* PrivacyInfo.xcprivacy */; };
 		FEEDFACE000000000000CC01 /* HelpSupport.html in Resources */ = {isa = PBXBuildFile; fileRef = FEEDFACE000000000000CC02 /* HelpSupport.html */; };
 		FEEDFACE000000000000BB01 /* PrivacyPolicy.html in Resources */ = {isa = PBXBuildFile; fileRef = FEEDFACE000000000000BB02 /* PrivacyPolicy.html */; };
+		FEEDFACE000000000000CD01 /* CommunityGuidelines.html in Resources */ = {isa = PBXBuildFile; fileRef = FEEDFACE000000000000CD02 /* CommunityGuidelines.html */; };
 		FC5D98EC9D318EFBDA4996B2 /* InstructorCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = B12BC58F995114991F32175F /* InstructorCard.swift */; };
 		A1B2C3D4E5F6708192A3B4C5 /* StudentInstructorProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5B4A3928170F6E5D4C3B2A1 /* StudentInstructorProfileView.swift */; };
 		A1B2C3D4E5F6708192A31C01 /* LessonTypeCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5B4A3928170F6E5D4C31C02 /* LessonTypeCard.swift */; };
@@ -244,6 +245,7 @@
 		FEEDFACE000000000000AB02 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		FEEDFACE000000000000CC02 /* HelpSupport.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = HelpSupport.html; sourceTree = "<group>"; };
 		FEEDFACE000000000000BB02 /* PrivacyPolicy.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = PrivacyPolicy.html; sourceTree = "<group>"; };
+		FEEDFACE000000000000CD02 /* CommunityGuidelines.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = CommunityGuidelines.html; sourceTree = "<group>"; };
 		0AEA61C0D5A07FA6156A5B5F /* MessagingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessagingService.swift; sourceTree = "<group>"; };
 		FEEDFACE000000000000AE02 /* CoverageService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverageService.swift; sourceTree = "<group>"; };
 		0FF0A11700000000000F0003 /* OpportunityService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpportunityService.swift; sourceTree = "<group>"; };
@@ -721,6 +723,7 @@
 				08B690A006F7E8352F3A828D /* Localizable.xcstrings */,
 				FEEDFACE000000000000CC02 /* HelpSupport.html */,
 				FEEDFACE000000000000BB02 /* PrivacyPolicy.html */,
+				FEEDFACE000000000000CD02 /* CommunityGuidelines.html */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -1037,6 +1040,7 @@
 				FEEDFACE000000000000AB01 /* PrivacyInfo.xcprivacy in Resources */,
 				FEEDFACE000000000000CC01 /* HelpSupport.html in Resources */,
 				FEEDFACE000000000000BB01 /* PrivacyPolicy.html in Resources */,
+				FEEDFACE000000000000CD01 /* CommunityGuidelines.html in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

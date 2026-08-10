@@ -70,6 +70,11 @@ struct SettingsView: View {
                     }
                     .tint(Color.floweInk)
                     .accessibilityIdentifier("settings.privacy")
+                    Button { legalDoc = .guidelines } label: {
+                        Label("Community Guidelines", systemImage: "person.2")
+                    }
+                    .tint(Color.floweInk)
+                    .accessibilityIdentifier("settings.guidelines")
                 }
 
                 Section {

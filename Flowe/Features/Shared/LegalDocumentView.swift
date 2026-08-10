@@ -4,10 +4,22 @@ import WebKit
 /// The in-app documents. Drives an item-based sheet so a screen presents both from ONE `.sheet`
 /// (two `.sheet` modifiers on one view shadow each other in SwiftUI).
 enum LegalDoc: String, Identifiable {
-    case privacy, support
+    case privacy, support, guidelines
     var id: String { rawValue }
-    var resource: String { self == .privacy ? "PrivacyPolicy" : "HelpSupport" }
-    var title: LocalizedStringKey { self == .privacy ? "Privacy Policy" : "Help & Support" }
+    var resource: String {
+        switch self {
+        case .privacy:    return "PrivacyPolicy"
+        case .support:    return "HelpSupport"
+        case .guidelines: return "CommunityGuidelines"
+        }
+    }
+    var title: LocalizedStringKey {
+        switch self {
+        case .privacy:    return "Privacy Policy"
+        case .support:    return "Help & Support"
+        case .guidelines: return "Community Guidelines"
+        }
+    }
 }
 
 /// Renders a bundled HTML document — the Privacy Policy, Help & Support — INSIDE the app instead of

@@ -8,6 +8,9 @@ struct CreateAccountView: View {
     @Environment(AppSession.self) private var session
 
     @State private var errorMessage: String?
+    /// App Store Guideline 1.2: a UGC-app user must affirmatively accept the Terms + Community
+    /// Guidelines before an account is created. Sign in with Apple stays disabled until this is true.
+    @State private var agreedToTerms = false
 
     var body: some View {
         ScrollView {
@@ -29,6 +32,8 @@ struct CreateAccountView: View {
                         .foregroundStyle(Color.red)
                 }
 
+                TermsAcceptanceView(isAgreed: $agreedToTerms)
+
                 SignInWithAppleButton(.signUp) { request in
                     request.requestedScopes = [.fullName, .email]
                 } onCompletion: { result in
@@ -37,7 +42,15 @@ struct CreateAccountView: View {
                 .signInWithAppleButtonStyle(.black)
                 .frame(maxWidth: .infinity, minHeight: 56)
                 .clipShape(RoundedRectangle(cornerRadius: 14))
+                .disabled(!agreedToTerms)
+                .opacity(agreedToTerms ? 1 : 0.45)
                 .accessibilityIdentifier("createAccount.apple")
+
+                if !agreedToTerms {
+                    Text("Please agree to the Terms and Community Guidelines to continue.")
+                        .flowFont(.caption)
+                        .foregroundStyle(Color.floweMuted)
+                }
 
                 Text("Flowe uses your Apple account so your sessions, messages and reviews stay "
                      + "with you across devices. You can hide your email, and we never see a password.")
@@ -72,6 +85,9 @@ struct CreateAccountView: View {
                 errorMessage = "Apple Sign-In didn't return an account. Please try again."
                 return
             }
+            // The user agreed on this screen (the button is disabled otherwise); record it durably
+            // before the session begins so the acceptance survives even if session setup is interrupted.
+            session.recordTermsAcceptance()
             // The Apple id must be recorded before the session starts — it is the owner id every
             // booking, message and review is filed under.
             session.setAppleUserID(cred.user)
@@ -89,5 +105,52 @@ struct CreateAccountView: View {
             if (error as NSError).code == ASAuthorizationError.canceled.rawValue { return }
             errorMessage = "Apple Sign-In failed: \(error.localizedDescription)"
         }
+    }
+}
+
+/// The App Store Guideline 1.2 acceptance gate for Flowe's user-generated content (community
+/// discussions, messages, reviews, posts): the user must affirmatively agree to the Terms of Use,
+/// Privacy Policy and Community Guidelines — the last carrying the zero-tolerance-for-objectionable-
+/// content-and-abusive-users clause — before an account is created. Reused by the sign-up and (for a
+/// not-yet-accepted user) the log-in screens. Sign in with Apple stays disabled until `isAgreed`.
+struct TermsAcceptanceView: View {
+    @Binding var isAgreed: Bool
+    @State private var doc: LegalDoc?
+
+    /// Flowe's Terms of Use = Apple's standard EULA (the same link used in Settings and the paywall).
+    private let eula = URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 10) {
+                Button { isAgreed.toggle() } label: {
+                    Image(systemName: isAgreed ? "checkmark.square.fill" : "square")
+                        .font(.system(size: 20))
+                        .foregroundStyle(isAgreed ? Color.flowePinkDeep : Color.floweMuted)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("I agree to the Terms, Privacy Policy and Community Guidelines")
+                .accessibilityValue(isAgreed ? "checked" : "unchecked")
+                .accessibilityIdentifier("terms.checkbox")
+
+                Text("I agree to Flowe's Terms of Use, Privacy Policy, and Community Guidelines — including zero tolerance for objectionable content and abusive behaviour.")
+                    .flowFont(.caption)
+                    .foregroundStyle(Color.floweMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .contentShape(Rectangle())
+                    .onTapGesture { isAgreed.toggle() }
+            }
+            HStack(spacing: 16) {
+                Link("Terms of Use", destination: eula)
+                Button("Privacy Policy") { doc = .privacy }
+                Button("Community Guidelines") { doc = .guidelines }
+            }
+            .flowFont(.caption)
+            .tint(Color.flowePinkDeep)
+            .foregroundStyle(Color.flowePinkDeep)
+            .padding(.leading, 30)
+        }
+        .sheet(item: $doc) { LegalDocumentView(resource: $0.resource, title: $0.title) }
+        .accessibilityIdentifier("terms.gate")
     }
 }

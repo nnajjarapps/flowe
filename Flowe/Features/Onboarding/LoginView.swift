@@ -13,6 +13,11 @@ struct LoginView: View {
     @Environment(AppSession.self) private var session
 
     @State private var errorMessage: String?
+    /// Only a user who has NOT yet accepted the current Terms + Community Guidelines is gated here
+    /// (closes the "Log in" bypass for a brand-new user); a returning user who already accepted sees
+    /// no extra friction. App Store Guideline 1.2.
+    @State private var agreedToTerms = false
+    private var canProceed: Bool { session.hasAcceptedTerms || agreedToTerms }
 
     var body: some View {
         ScrollView {
@@ -33,6 +38,10 @@ struct LoginView: View {
                         .foregroundStyle(Color.red)
                 }
 
+                if !session.hasAcceptedTerms {
+                    TermsAcceptanceView(isAgreed: $agreedToTerms)
+                }
+
                 SignInWithAppleButton(.signIn) { request in
                     request.requestedScopes = [.fullName, .email]
                 } onCompletion: { result in
@@ -41,6 +50,8 @@ struct LoginView: View {
                 .signInWithAppleButtonStyle(.black)
                 .frame(maxWidth: .infinity, minHeight: 56)
                 .clipShape(RoundedRectangle(cornerRadius: 14))
+                .disabled(!canProceed)
+                .opacity(canProceed ? 1 : 0.45)
                 .accessibilityIdentifier("login.apple")
 
                 Text("Flowe uses your Apple account so your sessions, messages and reviews stay "
@@ -76,6 +87,8 @@ struct LoginView: View {
                 errorMessage = "Apple Sign-In didn't return an account. Please try again."
                 return
             }
+            // A first-time user reaching account creation via this screen agreed here; persist it.
+            if !session.hasAcceptedTerms { session.recordTermsAcceptance() }
             // Record the Apple id *before* starting the session: it is the owner id every booking,
             // message and review is filed under, and a session without it would own nothing.
             session.setAppleUserID(cred.user)
