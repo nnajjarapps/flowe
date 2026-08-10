@@ -278,6 +278,16 @@ struct CoveragePickerView: View {
             .background(Color.flowWhite)
             .navigationTitle("Pick your cover")
             .navigationBarTitleDisplayMode(.inline)
+            .task {
+                // Warm each claimant's listing so `claimRow` can show their real name + photo (a claim
+                // only carries an id + a frozen name; the catalog cache holds the current identity).
+                let replacerIDs = Set(requests.flatMap { req in
+                    data.myClaims.filter { $0.bookingID == req.bookingID }.map(\.replacerID)
+                })
+                for id in replacerIDs where data.instructor(ownerID: id) == nil {
+                    _ = await data.loadInstructor(ownerID: id)
+                }
+            }
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
@@ -308,10 +318,15 @@ struct CoveragePickerView: View {
 
     private func claimRow(_ claim: RemoteCoverageClaim, in request: RemoteCoverageRequest) -> some View {
         let awarded = request.filledByID == claim.replacerID
+        // Resolve the replacer's CURRENT listing — name, photo and avatar — instead of a blank avatar and
+        // the frozen/empty claim name (which rendered as "Instructor" with no picture). Warmed in the
+        // view's `.task` via `loadInstructor`.
+        let who = data.displayIdentity(ownerID: claim.replacerID, fallbackName: claim.replacerName)
+        let name = who.name.isEmpty ? String(localized: "Instructor") : who.name
         return HStack(spacing: 12) {
-            AvatarView(id: "", photo: nil, size: 40)
+            AvatarView(id: who.img, photo: who.photo, size: 40)
             VStack(alignment: .leading, spacing: 2) {
-                Text(claim.replacerName.isEmpty ? "Instructor" : claim.replacerName)
+                Text(name)
                     .font(FloweFont.serif(15))
                     .foregroundStyle(Color.floweInk)
                 Text(awarded ? "Awarded" : "Available to cover")
@@ -322,7 +337,7 @@ struct CoveragePickerView: View {
             Button {
                 data.awardCoverage(bookingID: claim.bookingID,
                                    replacerID: claim.replacerID,
-                                   replacerName: claim.replacerName,
+                                   replacerName: who.name.isEmpty ? claim.replacerName : who.name,
                                    studentID: studentID(for: request))
             } label: {
                 Text(awarded ? "Winner" : "Award")
