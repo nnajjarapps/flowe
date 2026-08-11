@@ -495,7 +495,7 @@ struct EventDetailView: View {
                         }
                     }
                 }
-                Button("You're visible to classmates · Hide me") { data.setCommunityVisible(false) }
+                Button("You're visible to the community · Hide me") { data.setCommunityVisible(false) }
                     .font(FloweFont.sans(12))
                     .tint(Color.floweMuted)
             } else {
