@@ -837,7 +837,7 @@ struct StudentInstructorProfileView: View {
         // Tap a circle member to follow them (Flowe Community slice 6) — shared-context, never cold.
         return Button { selectedFriend = PeerRef(id: m.id, name: m.name) } label: {
             VStack(spacing: 6) {
-                if let photo = data.studentPhoto(forOwnerID: m.id) {
+                if let photo = data.peerPhoto(forOwnerID: m.id) {
                     AvatarView(id: "", photo: photo, size: 50)
                 } else {
                     InitialAvatar(name: m.name, size: 50)

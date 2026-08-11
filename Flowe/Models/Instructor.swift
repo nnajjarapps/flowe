@@ -95,6 +95,12 @@ final class Instructor {
     var ownerID: String?           // the signed-in instructor who owns/edits this listing
     var visibilityRaw: Int = 0     // InstructorVisibility — driven by the owner's subscription
     var visibilityVerifiedAt: Date? // last time the owner's device confirmed the subscription
+    /// The instructor's opt-in to the Flowe Community PEER layer — the mirror of
+    /// `StudentProfile.communityVisible`, so instructors participate symmetrically: when true they appear
+    /// to, and can see, other community members (event rosters, circles, follows). Default false
+    /// (privacy-first). Published on the world-readable listing so peers honour it. Distinct from
+    /// `visibility` (subscription-driven Discover presence). See [[Flowe-Community]].
+    var communityVisible: Bool = false
     /// Listing edits that never reached the public catalog, retried on the next sync.
     ///
     /// Matters most for a *removal*: clearing a teaching area or a certificate locally while the

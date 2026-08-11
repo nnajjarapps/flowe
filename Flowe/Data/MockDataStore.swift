@@ -4068,6 +4068,8 @@ final class MockDataStore {
         ins.headline = l.headline; ins.story = l.story; ins.experienceTokens = l.experience
         ins.brandColor = l.brandColor
         ins.visibilityRaw = l.visibility
+        ins.communityVisible = l.communityVisible   // Flowe Community peer opt-in
+
         // Assigned unconditionally, nil included: an instructor who removed their studio location must
         // stop being placed on the map on everyone else's device. Stored EXACTLY (no snapping) — the
         // studio point is a published business location — alongside the studio `address`.
@@ -4236,15 +4238,38 @@ final class MockDataStore {
         }
     }
 
-    // MARK: - Flowe Community opt-in (see + be seen by other students)
+    // MARK: - Flowe Community opt-in (see + be seen — symmetric for students AND instructors)
 
-    /// Whether the signed-in student has opted into Flowe Community.
-    var isCommunityVisible: Bool { currentStudentProfile?.communityVisible ?? false }
+    /// Whether the SIGNED-IN user has opted into the Flowe Community peer layer — resolved from whichever
+    /// public record they own (an instructor opts in on their listing, a student on their profile), so
+    /// both roles participate symmetrically.
+    var isCommunityVisible: Bool {
+        (currentInstructor?.communityVisible ?? false) || (currentStudentProfile?.communityVisible ?? false)
+    }
 
-    /// The student's single opt-in to Flowe Community. Ensures a profile exists (so peers can resolve a
-    /// name), flips the flag, and publishes it to the world-readable listing. Reciprocity: opting in is
-    /// what lets you both see other students AND appear to them. See [[Flowe-Community]].
+    /// Whether a PEER (by ownerID) has opted in — checks whichever public record they own (instructor
+    /// listing OR student profile). Every roster filters through this so instructors and students appear
+    /// to each other symmetrically.
+    func peerCommunityVisible(_ ownerID: String) -> Bool {
+        instructor(ownerID: ownerID)?.communityVisible == true
+            || studentProfile(forOwnerID: ownerID)?.communityVisible == true
+    }
+
+    /// A community peer's avatar photo — resolves an INSTRUCTOR's or a STUDENT's uploaded photo (via the
+    /// shared `displayIdentity` resolver), so a roster chip shows the right face for either role.
+    func peerPhoto(forOwnerID ownerID: String) -> Data? {
+        displayIdentity(ownerID: ownerID, fallbackName: "").photo
+    }
+
+    /// The single community opt-in. Role-aware: an instructor flips it on their LISTING (published via
+    /// `publishMyListing`), a student on their PROFILE. Reciprocity: opting in is what lets you both see
+    /// other members AND appear to them. See [[Flowe-Community]].
     func setCommunityVisible(_ on: Bool) {
+        if let ins = currentInstructor {
+            ins.communityVisible = on
+            publishMyListing()   // marks pendingPublish + publishes the listing with the new flag
+            return
+        }
         let me = currentStudentProfile ?? ensureStudentProfile(
             ownerID: currentUserID ?? FloweConstants.localOwnerID, name: currentUserName
         )
@@ -4261,13 +4286,21 @@ final class MockDataStore {
     /// and milestone detection (kept in one place so the two never drift).
     private var completedSessionCount: Int { myBookings.filter { $0.status == .completed }.count }
 
-    /// Accepted event guests who have opted into Flowe Community — the ONLY attendees shown to peers on
-    /// the "who's going" list. Their profiles must be warmed (`fetchAuthorProfiles`); any not yet cached
-    /// are omitted until they load. Newest-joined last (roster order).
-    func communityAttendees(for event: CommunityEvent) -> [RemoteRegistration] {
-        acceptedGuests(for: event).filter {
-            studentProfile(forOwnerID: $0.studentID)?.communityVisible == true
+    /// Warm a roster's peers — BOTH student profiles and instructor listings — so their identity and
+    /// current community opt-in resolve. Re-fetches a peer whose cached copy reads not-visible (they may
+    /// have opted in since); skips already-visible ones, so it stays cheap. Bounded by roster size.
+    func warmRosterPeers(_ ownerIDs: Set<String>) async {
+        await fetchAuthorProfiles(ownerIDs, refreshVisibility: true)   // students
+        for id in ownerIDs where !peerCommunityVisible(id) {
+            _ = await loadInstructor(ownerID: id)                     // no-ops for a non-instructor id
         }
+    }
+
+    /// Accepted event guests who have opted into Flowe Community — the ONLY attendees shown to peers on
+    /// the "who's going" list. Warmed via `warmRosterPeers`; any not yet cached are omitted until they
+    /// load. Resolves BOTH students and instructors. Newest-joined last (roster order).
+    func communityAttendees(for event: CommunityEvent) -> [RemoteRegistration] {
+        acceptedGuests(for: event).filter { peerCommunityVisible($0.studentID) }
     }
 
     // MARK: - Event discussion (Flowe Community slice 2)
@@ -4334,12 +4367,12 @@ final class MockDataStore {
             $0.time == booking.time && $0.type == booking.type && !$0.cancelled
                 && $0.studentID != me && !isBlocked($0.studentID)
         }
-        await fetchAuthorProfiles(Set(peers.map(\.studentID)), refreshVisibility: true)
+        await warmRosterPeers(Set(peers.map(\.studentID)))
         var seen = Set<String>()
         var out: [(id: String, name: String)] = []
         for p in peers where !seen.contains(p.studentID) {
             seen.insert(p.studentID)
-            guard studentProfile(forOwnerID: p.studentID)?.communityVisible == true else { continue }
+            guard peerCommunityVisible(p.studentID) else { continue }
             let n = displayIdentity(ownerID: p.studentID, fallbackName: p.studentName).name
             out.append((p.studentID, n.isEmpty ? p.studentName : n))
         }
@@ -4360,12 +4393,12 @@ final class MockDataStore {
         let unique = Set(bookings
             .filter { !$0.cancelled && $0.studentID != me && !isBlocked($0.studentID) }
             .map(\.studentID))
-        await fetchAuthorProfiles(unique, refreshVisibility: true)
+        await warmRosterPeers(unique)
         var out: [(id: String, name: String)] = []
         for id in unique {
-            guard let p = studentProfile(forOwnerID: id), p.communityVisible else { continue }
-            let n = displayIdentity(ownerID: id, fallbackName: p.name).name
-            out.append((id, n.isEmpty ? p.name : n))
+            guard peerCommunityVisible(id) else { continue }
+            let n = displayIdentity(ownerID: id, fallbackName: "").name   // resolves student OR instructor
+            out.append((id, n))
         }
         return out.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }

@@ -73,7 +73,7 @@ struct ClassmatesSheet: View {
                 ForEach(classmates, id: \.id) { m in
                     Button { selectedFriend = PeerRef(id: m.id, name: m.name) } label: {
                         HStack(spacing: 12) {
-                            if let photo = data.studentPhoto(forOwnerID: m.id) {
+                            if let photo = data.peerPhoto(forOwnerID: m.id) {
                                 AvatarView(id: "", photo: photo, size: 44)
                             } else {
                                 InitialAvatar(name: m.name, size: 44)

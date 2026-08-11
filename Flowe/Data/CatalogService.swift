@@ -24,6 +24,8 @@ struct CatalogListing {
     let img: String
     let cert: String
     let visibility: Int
+    /// The instructor's Flowe Community peer opt-in (mirror of `StudentProfile.communityVisible`).
+    let communityVisible: Bool
     let updatedAt: Date
     /// Uploaded profile photo, if the instructor set one.
     let photo: Data?
@@ -74,6 +76,7 @@ struct CatalogListing {
         experience = record["experience"] as? [String] ?? []
         brandColor = record["brandColor"] as? String ?? ""
         visibility = record["visibility"] as? Int ?? 0
+        communityVisible = (record["communityVisible"] as? Int ?? 0) == 1
         updatedAt = record["updatedAt"] as? Date ?? .distantPast
         modifiedAt = record.modificationDate
         latitude = record["latitude"] as? Double
@@ -129,6 +132,7 @@ final class CatalogService {
         record["experience"] = instructor.experienceTokens
         record["brandColor"] = instructor.brandColor
         record["visibility"] = instructor.visibilityRaw
+        record["communityVisible"] = instructor.communityVisible ? 1 : 0
         record["updatedAt"] = Date()
         // The EXACT studio point (no longer snapped) — students navigate here to book the studio.
         // Assigning nil removes the key, which is how "remove my studio location" actually reaches

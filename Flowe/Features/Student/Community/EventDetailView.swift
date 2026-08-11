@@ -81,7 +81,7 @@ struct EventDetailView: View {
             await data.syncAttendance(for: event)
             // Warm attendee profiles so the opt-in "Who's going" roster can resolve names, photos, and
             // each person's community-visibility. Targeted fetch by the accepted guests' ownerIDs.
-            await data.fetchAuthorProfiles(Set(data.acceptedGuests(for: event).map(\.studentID)), refreshVisibility: true)
+            await data.warmRosterPeers(Set(data.acceptedGuests(for: event).map(\.studentID)))
             // Pull the discussion so the button's message count is fresh (only when the user can see it).
             if data.canDiscuss(event) { await data.syncEventComments(for: event) }
         }
@@ -525,7 +525,7 @@ struct EventDetailView: View {
         let isMe = reg.studentID == data.currentUserID
         let name = reg.studentName.split(separator: " ").first.map(String.init) ?? reg.studentName
         return VStack(spacing: 6) {
-            if let photo = data.studentPhoto(forOwnerID: reg.studentID) {
+            if let photo = data.peerPhoto(forOwnerID: reg.studentID) {
                 AvatarView(id: "", photo: photo, size: 52, ring: isMe)
             } else {
                 InitialAvatar(name: reg.studentName, size: 52)
