@@ -13,6 +13,8 @@ struct LoginView: View {
     @Environment(AppSession.self) private var session
 
     @State private var errorMessage: String?
+    /// The cross-device role check is a CloudKit round-trip — block re-taps while it's in flight.
+    @State private var isSigningIn = false
 
     var body: some View {
         ScrollView {
@@ -41,6 +43,9 @@ struct LoginView: View {
                 .signInWithAppleButtonStyle(.black)
                 .frame(maxWidth: .infinity, minHeight: 56)
                 .clipShape(RoundedRectangle(cornerRadius: 14))
+                .disabled(isSigningIn)
+                .opacity(isSigningIn ? 0.45 : 1)
+                .overlay { if isSigningIn { ProgressView().tint(.white) } }
                 .accessibilityIdentifier("login.apple")
 
                 Text("Flowe uses your Apple account so your sessions, messages and reviews stay "
@@ -76,11 +81,23 @@ struct LoginView: View {
                 errorMessage = "Apple Sign-In didn't return an account. Please try again."
                 return
             }
-            // Record the Apple id *before* starting the session: it is the owner id every booking,
-            // message and review is filed under, and a session without it would own nothing. A user who
-            // has never accepted the terms is caught by the router's gate right after sign-in.
-            session.setAppleUserID(cred.user)
-            session.login(email: cred.email ?? "member@flowe.app", role: role)
+            // Sign-in first reconciles the account's role across devices: if this Apple ID already acts
+            // as the OTHER role, the session is blocked instead of creating a split-brain that shares
+            // (and corrupts) the same private database. A user who has never accepted the terms is caught
+            // by the router's gate right after sign-in.
+            isSigningIn = true
+            Task {
+                let outcome = await session.startSignIn(
+                    appleUserID: cred.user,
+                    name: AppSession.displayName(fromEmail: cred.email ?? "member@flowe.app"),
+                    email: cred.email ?? "member@flowe.app",
+                    desiredRole: role
+                )
+                isSigningIn = false
+                if case .roleMismatch(let existing) = outcome {
+                    errorMessage = AppSession.roleMismatchMessage(existing: existing)
+                }
+            }
         case .failure(let error):
             if (error as NSError).code == ASAuthorizationError.canceled.rawValue { return }
             errorMessage = "Apple Sign-In failed: \(error.localizedDescription)"

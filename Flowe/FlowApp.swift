@@ -194,6 +194,9 @@ struct FlowApp: App {
                 .onChange(of: scenePhase) { _, phase in
                     guard phase == .active, session.authState != .unauthenticated else { return }
                     Task {
+                        // Follow an account-wide role switch made on another device (same Apple ID) BEFORE
+                        // the rest of this refresh, so everything below runs against the correct role.
+                        await session.reconcileRole()
                         await PushService.shared.activate()
                         await PushService.shared.scheduleSessionReminders()
                         // Re-read the Apple-ID entitlement on every foreground. A subscription is tied to

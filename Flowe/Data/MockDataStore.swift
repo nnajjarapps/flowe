@@ -2,6 +2,7 @@ import SwiftUI
 import SwiftData
 import Observation
 import CoreLocation
+import CloudKit
 
 /// The identity to render for an authored record, resolved LIVE at display time from the author's
 /// current public profile rather than the denormalised snapshot frozen onto the record at creation.
@@ -110,6 +111,14 @@ final class MockDataStore {
         try? context.delete(model: Review.self)
         try? context.delete(model: CommunityEvent.self)
         try? context.delete(model: LessonType.self)
+        // Reference-config, local-only @Models (cloudKitDatabase: .none) — still keyed by ownerID
+        // (posterID/applicantID/fromID), so on a same-Apple-ID re-signup the stale rows would resurface
+        // as the user's own opportunities/applications/recommendations. Same omission class as the
+        // AccountDeletionService public-sweep gap, on the local store.
+        try? context.delete(model: Opportunity.self)
+        try? context.delete(model: OpportunityApplication.self)
+        try? context.delete(model: ApplicationDecision.self)
+        try? context.delete(model: InstructorRecommendation.self)
         try? context.save()
     }
 
@@ -2056,11 +2065,95 @@ final class MockDataStore {
         if !isPreview, let me = currentUserID {
             guard await deletionService.deleteAllRecords(ownerID: me) else { return false }
         }
+        // Release the user's public seat mutexes BEFORE the local Bookings are wiped: a booking's
+        // `holdRecordName` is the ONLY handle to its `SlotHold`, and only the hold's creator may delete
+        // it. Skip this and every active hold is orphaned in the public DB, freezing a cap-1 private
+        // slot as "Full" forever. Must run while the local Bookings still exist.
+        await releaseMyHolds()
+        // Series-decision stopgap: `decision-series-<id>` / `decision-seriesend-<id>` records live in a
+        // synthetic bookingID namespace the public sweep can't reach (it derives decision names from real
+        // SessionBookings). Collect the user's own series IDs from local bookings and delete those decision
+        // records directly. Best-effort; only the creating instructor's own records actually delete.
+        let seriesIDs = Array(Set(bookings.compactMap(\.seriesID)))
+        if !seriesIDs.isEmpty { await bookingService.deleteSeriesDecisions(seriesIDs: seriesIDs) }
+        // Erase the local SwiftData store (both configs). For the private-mirrored types this alone is
+        // NOT enough — SwiftData's batch delete may not tombstone to CloudKit — so the private mirror is
+        // wiped server-side next.
         Self.deleteAll(context)
+        // Wipe the PRIVATE CloudKit mirror zone so nothing re-syncs DOWN on a same-Apple-ID re-signin
+        // (the real "delete everything" guarantee for private data — bookings, lesson types, and the
+        // private-only ClientNotes that have no public backstop). Gate deletion success on it: a real
+        // failure (network drop, rate-limit) must NOT be reported as a completed deletion, or the user's
+        // own private data comes back. The account stays signed in so they can retry; the flow is
+        // idempotent (public+local are already empty, the zone delete simply re-runs).
+        guard await deletePrivateMirrorZone() else {
+            refresh()
+            return false
+        }
+        // DM identity: drop the iCloud-Keychain private key + derived caches so a re-created account
+        // regenerates a FRESH keypair instead of resurrecting the old cryptographic identity.
+        messageCrypto.wipeIdentity()
+        // Device-global (NOT owner-scoped) local state that would otherwise leak to the next account
+        // on this device — a saved-instructor wishlist, block-time windows, and delete/end tombstones.
+        let d = UserDefaults.standard
+        d.removeObject(forKey: Self.savedInstructorsKey)
+        d.removeObject(forKey: blockWindowsKey)
+        d.removeObject(forKey: deletedMessagesKey)
+        d.removeObject(forKey: deletedPostsKey)
+        d.removeObject(forKey: endedSeriesKey)
+        savedInstructorIDs = []
         currentUserID = nil
         currentUserName = ""
         refresh()
+        // App-Group residue the record sweep never touches: cached counterpart avatars + block mirror.
+        // Runs AFTER refresh — refresh re-mirrors an (empty) block list to the App Group, so purging
+        // first would just be overwritten; purging last leaves the key truly absent.
+        AvatarCache.purgeAll()
         return true
+    }
+
+    /// Delete every `SlotHold` this user created, via the local Bookings that hold the only reference.
+    private func releaseMyHolds() async {
+        for booking in bookings {
+            guard let hold = booking.holdRecordName else { continue }
+            _ = await bookingService.releaseSeat(recordName: hold)
+        }
+    }
+
+    /// Remove the NSPersistentCloudKitContainer private mirror zone, deleting ALL mirrored private
+    /// records server-side in one op. Necessary because SwiftData's `delete(model:)` is batch-backed and
+    /// may not propagate tombstones to CloudKit — without this the private DB re-hydrates the local store
+    /// on the next sign-in with the same Apple ID. (Local store is already emptied by `deleteAll`, so
+    /// nothing re-pushes to recreate the zone.)
+    ///
+    /// Returns whether the private mirror is now known-gone. A missing zone (never synced / already
+    /// deleted) is SUCCESS — there was nothing to erase. A real failure (network, rate-limit, auth) is
+    /// NOT success: the caller must not report a completed deletion, or the private data survives.
+    private func deletePrivateMirrorZone() async -> Bool {
+        #if CLOUDKIT_ENABLED
+        guard !isPreview else { return true }
+        let db = CKContainer(identifier: FloweModelContainer.cloudKitContainerID).privateCloudDatabase
+        let zoneID = CKRecordZone.ID(zoneName: "com.apple.coredata.cloudkit.zone")
+        do {
+            _ = try await db.deleteRecordZone(withID: zoneID)
+            return true
+        } catch let ck as CKError {
+            // The zone never existed (brand-new account that never synced private data) or is already
+            // gone — nothing to wipe, so the private mirror IS empty. Everything else (network drop,
+            // requestRateLimited, serverRejectedRequest, notAuthenticated, …) is a genuine failure.
+            if ck.code == .zoneNotFound { return true }
+            if ck.code == .partialFailure,
+               let byZone = ck.partialErrorsByItemID as? [CKRecordZone.ID: Error],
+               byZone.values.allSatisfy({ ($0 as? CKError)?.code == .zoneNotFound }) {
+                return true
+            }
+            return false
+        } catch {
+            return false
+        }
+        #else
+        return true
+        #endif
     }
 
     // MARK: - Community feed
@@ -2542,7 +2635,14 @@ final class MockDataStore {
     private func prunePosts(against remote: [RemotePost]) {
         guard let oldest = remote.map(\.createdAt).min() else { return }
         let live = Set(remote.map(\.id))
-        let settled = Date(timeIntervalSinceNow: -300)
+        // A post cached locally but missing from the fetch is either DELETED or just NOT-YET-INDEXED
+        // (CloudKit's query index lags a fresh write by seconds). We hold a short settle window so a
+        // brand-new post that hasn't hit the index yet — most often the author's own, just-uploaded —
+        // isn't mistaken for a deletion and pruned right after posting. 60s comfortably covers real
+        // index lag while letting a peer's delete disappear on the next refresh, not 5 minutes later.
+        // (The reliable, refresh-fast fix is a soft-delete tombstone — a deletion that travels as DATA,
+        // not as absence — which removes this guesswork entirely. Tracked as a follow-up.)
+        let settled = Date(timeIntervalSinceNow: -60)
         for post in posts {
             guard let remoteID = post.remoteID, !live.contains(remoteID),
                   post.createdAt >= oldest, post.createdAt < settled else { continue }

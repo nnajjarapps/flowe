@@ -36,6 +36,7 @@
 		2E323E24A128AF50FA6C98D0 /* FlowSpacing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7577F6212A80C9C837232B63 /* FlowSpacing.swift */; };
 		3385A6C63E0E653F076E9ECE /* CatalogService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10A50AB15C47E4490CEB456C /* CatalogService.swift */; };
 		FEEDFACE000000000000FF11 /* StudentDirectoryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEEDFACE000000000000FF12 /* StudentDirectoryService.swift */; };
+		FEEDFACE000000000000FF13 /* AccountRoleService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEEDFACE000000000000FF14 /* AccountRoleService.swift */; };
 		34260702FC71C0FE6545333B /* WeeklyBarChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EED8908487E5CCD626B5506 /* WeeklyBarChart.swift */; };
 		3463BAC1A6EF2B14D0622CDD /* FlowApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8834262674B21339DCB9CC33 /* FlowApp.swift */; };
 		3569E85932969520E8E9FC32 /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FA653CE87EE4098EAB086D5 /* ProfileView.swift */; };
@@ -262,6 +263,7 @@
 		0F28297BD9C654202E87114A /* DMSans-Light.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "DMSans-Light.ttf"; sourceTree = "<group>"; };
 		10A50AB15C47E4490CEB456C /* CatalogService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatalogService.swift; sourceTree = "<group>"; };
 		FEEDFACE000000000000FF12 /* StudentDirectoryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudentDirectoryService.swift; sourceTree = "<group>"; };
+		FEEDFACE000000000000FF14 /* AccountRoleService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountRoleService.swift; sourceTree = "<group>"; };
 		143E9E63DDABC0E3547106A5 /* Fraunces-LightItalic.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Fraunces-LightItalic.ttf"; sourceTree = "<group>"; };
 		15B1DE12827C5A88561BD697 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		185D1CBA0B81BE9EA96AC524 /* RoleSelectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoleSelectionView.swift; sourceTree = "<group>"; };
@@ -492,6 +494,7 @@
 				76B4EA7D7447F4834D4A1344 /* BookingService.swift */,
 				10A50AB15C47E4490CEB456C /* CatalogService.swift */,
 				FEEDFACE000000000000FF12 /* StudentDirectoryService.swift */,
+				FEEDFACE000000000000FF14 /* AccountRoleService.swift */,
 				CE5BBB50D708E0C0822A948A /* CommunityService.swift */,
 				6032AC367E2365ADAFD2BF43 /* ContentFilter.swift */,
 				A6D520220F189277F969F983 /* EventService.swift */,
@@ -1121,6 +1124,7 @@
 				8B7232D19B5F6A1CE1E7F245 /* CalendarModels.swift in Sources */,
 				3385A6C63E0E653F076E9ECE /* CatalogService.swift in Sources */,
 				FEEDFACE000000000000FF11 /* StudentDirectoryService.swift in Sources */,
+				FEEDFACE000000000000FF13 /* AccountRoleService.swift in Sources */,
 				F360CCFF8BACA3777ED050BB /* Color+Flowe.swift in Sources */,
 				AADC13572C1C1817ACD45F11 /* CommunityService.swift in Sources */,
 				DD1DB1934510C148B3A2E4C1 /* CommunityEvent.swift in Sources */,

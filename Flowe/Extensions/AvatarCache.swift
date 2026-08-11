@@ -60,6 +60,18 @@ enum AvatarCache {
         sharedDefaults?.set(ids, forKey: blockedKey)
     }
 
+    // MARK: - Account deletion
+
+    /// Erase all App-Group residue on account deletion: every cached counterpart face photo AND the
+    /// mirrored block list. The deletion path otherwise leaves other people's avatars on disk and the
+    /// block list in shared defaults — surviving "delete everything" and leaking to the next account
+    /// on a shared device (avatars are keyed by the OTHER party's ownerID, so a new session never
+    /// overwrites them).
+    static func purgeAll() {
+        if let dir = directory { try? FileManager.default.removeItem(at: dir) }
+        sharedDefaults?.removeObject(forKey: blockedKey)
+    }
+
     /// Extension side: has the recipient blocked this sender? Then hide their notification's content.
     static func isBlockedSender(_ senderID: String) -> Bool {
         sharedDefaults?.stringArray(forKey: blockedKey)?.contains(senderID) ?? false

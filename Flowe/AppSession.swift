@@ -35,6 +35,10 @@ final class AppSession {
     private let appleUserKey = "flowe.appleUserID"
     private let userKey = "flowe.user"
 
+    /// Shared source of truth for which role this Apple ID currently acts as — the cross-device guard
+    /// that keeps one account from being an instructor on one device and a student on another.
+    private let accountRoleService = AccountRoleService()
+
     /// Stable id for the signed-in user — used to own their bookings, messages and reviews.
     ///
     /// This is the Apple credential's user id, which Apple guarantees is stable for this app across
@@ -281,8 +285,101 @@ final class AppSession {
         refreshTermsAcceptance()   // load THIS account's acceptance; router gates if it hasn't accepted
     }
 
+    // MARK: - Cross-device role guard
+    //
+    // One Apple ID = one ACTIVE role at a time. The role is switchable (`switchRole`) but must never
+    // DIVERGE across a user's devices: an iPad-instructor + iPhone-student on ONE iCloud account share a
+    // private CloudKit DB and cross-contaminate, and every student↔instructor flow becomes self-
+    // referential. `AccountRoleService` is the shared, per-ownerID source of truth.
+
+    /// Outcome of an Apple sign-in that first reconciles against the account's established role.
+    enum SignInOutcome: Equatable {
+        case started(UserRole)                 // a session began as this role
+        case roleMismatch(existing: UserRole)  // blocked — this Apple ID already acts as the other role
+    }
+
+    /// Pure decision: given the desired role and what CloudKit says is established, do we proceed (and
+    /// should we write/refresh the claim), or block? Extracted so it's unit-testable without CloudKit.
+    /// NEVER claims on `.unavailable` — a transient read failure must not let a stale choice overwrite a
+    /// real claim (foreground `reconcileRole` repairs the fail-open case once connectivity returns).
+    nonisolated static func roleGate(desired: UserRole,
+                                     established: EstablishedRole) -> (proceed: Bool, claim: Bool, existing: UserRole?) {
+        switch established {
+        case .claimed(let r): return r == desired ? (true, false, nil) : (false, false, r)
+        case .none:           return (true, true, nil)
+        case .unavailable:    return (true, false, nil)
+        }
+    }
+
+    /// Begin a session for an Apple credential, but first check the account's established role so a
+    /// second device can't sign in as a different role. On a mismatch the session is NOT started and the
+    /// pending identity is cleared — the caller shows the "already set up as …" message.
+    @MainActor
+    func startSignIn(appleUserID: String, name: String, email: String,
+                     desiredRole: UserRole, acceptTerms: Bool = false) async -> SignInOutcome {
+        setAppleUserID(appleUserID)
+        let established = await accountRoleService.lookup(for: appleUserID)
+        let gate = Self.roleGate(desired: desiredRole, established: established)
+        guard gate.proceed else {
+            clearPendingIdentity()
+            return .roleMismatch(existing: gate.existing ?? desiredRole)
+        }
+        // Record acceptance BEFORE the session starts so the router's terms gate never flashes.
+        if acceptTerms { recordTermsAcceptance() }
+        startSession(defaultName: name, email: email, role: desiredRole)
+        if gate.claim { await accountRoleService.setRole(desiredRole, for: appleUserID) }
+        return .started(desiredRole)
+    }
+
+    /// Deliberately switch this account between student and instructor (Settings action). Updates the
+    /// shared claim so every device converges, and flips the local shell immediately. Returns the role
+    /// now in force (may differ from the target if another device raced a switch).
+    @MainActor
+    @discardableResult
+    func switchRole() async -> UserRole? {
+        guard let owner = appleUserID else { return nil }
+        let current: UserRole = authState == .instructor ? .instructor : .student
+        let target: UserRole = current == .instructor ? .student : .instructor
+        let inForce = await accountRoleService.setRole(target, for: owner) ?? target
+        applyRole(inForce)
+        return inForce
+    }
+
+    /// On foreground, follow the account's current role if another device switched it — preserving the
+    /// invariant that one Apple ID acts as ONE role at a time. No-op when the claim matches or can't be read.
+    @MainActor
+    func reconcileRole() async {
+        guard authState != .unauthenticated, let owner = appleUserID else { return }
+        guard case .claimed(let claimed) = await accountRoleService.lookup(for: owner) else { return }
+        let current: UserRole = authState == .instructor ? .instructor : .student
+        if claimed != current { applyRole(claimed) }
+    }
+
+    /// Apply a role locally: update the durable profile + auth state (which re-renders the correct shell).
+    private func applyRole(_ role: UserRole) {
+        if var u = currentUser { u.role = role; currentUser = u }
+        persist(role: role)
+        let prefs = loadStudentPreferences()
+        needsOnboardingQuiz = (role == .student) && (prefs == nil)
+    }
+
+    /// User-facing copy for a blocked sign-in — shared by the sign-up and log-in screens. Names the role
+    /// the Apple ID already holds and points at the in-app switch (the block isn't a lock).
+    nonisolated static func roleMismatchMessage(existing: UserRole) -> String {
+        existing == .instructor
+            ? String(localized: "This Apple ID is already set up as an instructor. Go back and continue as an instructor — you can switch to a student account anytime in Settings.")
+            : String(localized: "This Apple ID is already set up as a student. Go back and continue as a student — you can switch to an instructor account anytime in Settings.")
+    }
+
+    /// Undo a half-started sign-in: forget the Apple id we set before discovering a role mismatch, so no
+    /// authenticated state lingers. Auth state stays `.unauthenticated`.
+    func clearPendingIdentity() {
+        appleUserID = nil
+        KeychainStore.set(nil, for: appleUserKey)
+    }
+
     /// Best-effort display name from an email local-part (no backend to look up the real name yet).
-    private static func displayName(fromEmail email: String) -> String {
+    static func displayName(fromEmail email: String) -> String {
         let local = email.split(separator: "@").first.map(String.init) ?? email
         return local
             .split(whereSeparator: { $0 == "." || $0 == "_" || $0 == "-" })
@@ -304,12 +401,24 @@ final class AppSession {
         KeychainStore.set(nil, for: appleUserKey)
     }
 
-    /// Forget the credential after the account's data has been erased (see `DeleteAccountView`).
+    /// Forget the credential AND wipe the durable per-account state after the account's data has been
+    /// erased (see `DeleteAccountView`).
     ///
-    /// Identical to `logout()` today because logout already discards the stored identity. It stays a
-    /// separate entry point so deletion can never quietly degrade into a plain sign-out should
-    /// `logout()` ever gain session-preserving behaviour.
+    /// This is where deletion diverges from a plain sign-out. `logout()` deliberately PRESERVES the
+    /// durable per-account records (profile, quiz answers, terms acceptance, instructor-wizard state) so
+    /// an ordinary sign-out → sign-in restores your edits. A DELETION must destroy them, or a re-signup
+    /// with the SAME Apple ID silently inherits the old profile and skips every onboarding gate — blank
+    /// profile, the student quiz, and the Guideline-1.2 terms gate would all be defeated. The keys are
+    /// scoped by `ownerID` (== `appleUserID`), so they MUST be removed BEFORE `logout()` nils
+    /// `appleUserID` — after that `ownerID` falls back to the local placeholder and the removals miss.
     func deleteAccount() {
+        let owner = ownerID
+        let d = UserDefaults.standard
+        d.removeObject(forKey: durableProfileKey(for: owner))
+        d.removeObject(forKey: studentPrefsKey(for: owner))
+        d.removeObject(forKey: termsKey(for: owner))
+        d.removeObject(forKey: termsKey(for: owner) + ".date")
+        d.removeObject(forKey: "flowe.studioWizardDismissed.\(owner)")
         logout()
     }
 

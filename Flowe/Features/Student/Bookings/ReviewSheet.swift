@@ -161,7 +161,14 @@ struct ReviewSheet: View {
             filterMessage = rejection.message
             return
         }
-        data.submitReview(for: booking, rating: rating, text: text)
+        // `submitReview` returns nil when the booking can't actually be reviewed — it hasn't synced to
+        // the cloud yet (no `remoteID`), or it isn't this signed-in student's own completed session.
+        // Surface that instead of dismissing on a silent no-op that reads as success but saves nothing.
+        guard data.submitReview(for: booking, rating: rating, text: text) != nil else {
+            filterMessage = String(localized: "This session can't be reviewed yet. Give it a moment to sync, then try again.")
+            return
+        }
+        Haptic.selection()
         dismiss()
     }
 }

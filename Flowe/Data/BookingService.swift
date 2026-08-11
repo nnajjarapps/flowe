@@ -354,6 +354,23 @@ final class BookingService {
         #endif
     }
 
+    /// Delete the standing-series decision records this instructor created for `seriesIDs`, on account
+    /// deletion. A series decision uses a SYNTHETIC bookingID namespace — `decision-series-<id>` (approve)
+    /// and `decision-seriesend-<id>` (end) — with no backing `SessionBooking`, so the
+    /// `AccountDeletionService` sweep (which derives `decision-<bookingRecordName>` from real bookings)
+    /// never reaches them. This is the stopgap until `SessionDecision` carries an `instructorID` a
+    /// predicate sweep can use. Best-effort; only the creator (this instructor) can delete, and a missing
+    /// record is a no-op.
+    func deleteSeriesDecisions(seriesIDs: [String]) async {
+        #if CLOUDKIT_ENABLED
+        for seriesID in seriesIDs {
+            for bookingID in ["series-\(seriesID)", "seriesend-\(seriesID)"] {
+                _ = try? await database.deleteRecord(withID: CKRecord.ID(recordName: "decision-\(bookingID)"))
+            }
+        }
+        #endif
+    }
+
     /// Live occupancy of an instructor's slots on a day, as `[HHmm token: seats taken]`. One query on
     /// the two QUERYABLE fields (`instructorID`, `date`), bucketed client-side by the hold's `time`. Nil
     /// when the query itself failed (offline / schema not deployed) — distinct from an empty dictionary,

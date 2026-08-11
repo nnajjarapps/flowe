@@ -11,6 +11,8 @@ struct CreateAccountView: View {
     /// App Store Guideline 1.2: a UGC-app user must affirmatively accept the Terms + Community
     /// Guidelines before an account is created. Sign in with Apple stays disabled until this is true.
     @State private var agreedToTerms = false
+    /// The cross-device role check is a CloudKit round-trip — block re-taps while it's in flight.
+    @State private var isSigningIn = false
 
     var body: some View {
         ScrollView {
@@ -42,8 +44,9 @@ struct CreateAccountView: View {
                 .signInWithAppleButtonStyle(.black)
                 .frame(maxWidth: .infinity, minHeight: 56)
                 .clipShape(RoundedRectangle(cornerRadius: 14))
-                .disabled(!agreedToTerms)
-                .opacity(agreedToTerms ? 1 : 0.45)
+                .disabled(!agreedToTerms || isSigningIn)
+                .opacity(agreedToTerms && !isSigningIn ? 1 : 0.45)
+                .overlay { if isSigningIn { ProgressView().tint(.white) } }
                 .accessibilityIdentifier("createAccount.apple")
 
                 if !agreedToTerms {
@@ -85,22 +88,29 @@ struct CreateAccountView: View {
                 errorMessage = "Apple Sign-In didn't return an account. Please try again."
                 return
             }
-            // The Apple id must be recorded before the session starts — it is the owner id every booking,
-            // message and review is filed under, AND the key the per-account terms acceptance is stored under.
-            session.setAppleUserID(cred.user)
-            // The user agreed on this screen (the button is disabled otherwise) — record it for THIS
-            // account so the router's terms gate doesn't re-prompt them.
-            session.recordTermsAcceptance()
             // Apple returns name and email only on the *first* authorization, so both are optional
             // on every later sign-in.
             let name = [cred.fullName?.givenName, cred.fullName?.familyName]
                 .compactMap { $0 }
                 .joined(separator: " ")
-            session.signUp(
-                name: name.isEmpty ? "Member" : name,
-                email: cred.email ?? "",
-                role: role
-            )
+            // Sign-in first reconciles the account's role across devices: if this Apple ID already acts
+            // as the OTHER role (e.g. it's an instructor on another device), the session is blocked
+            // rather than creating a split-brain that shares — and corrupts — the same private database.
+            // The user agreed on this screen (the button is disabled otherwise), so pass `acceptTerms`.
+            isSigningIn = true
+            Task {
+                let outcome = await session.startSignIn(
+                    appleUserID: cred.user,
+                    name: name.isEmpty ? "Member" : name,
+                    email: cred.email ?? "",
+                    desiredRole: role,
+                    acceptTerms: true
+                )
+                isSigningIn = false
+                if case .roleMismatch(let existing) = outcome {
+                    errorMessage = AppSession.roleMismatchMessage(existing: existing)
+                }
+            }
         case .failure(let error):
             if (error as NSError).code == ASAuthorizationError.canceled.rawValue { return }
             errorMessage = "Apple Sign-In failed: \(error.localizedDescription)"

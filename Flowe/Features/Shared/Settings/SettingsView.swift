@@ -10,7 +10,11 @@ struct SettingsView: View {
     @State private var showNotifications = false
     @State private var showDeleteAccount = false
     @State private var showBlocked = false
+    @State private var showSwitchRole = false
+    @State private var switching = false
     @State private var legalDoc: LegalDoc?
+
+    private var isInstructor: Bool { session.authState == .instructor }
 
     var body: some View {
         @Bindable var settings = settings
@@ -77,6 +81,26 @@ struct SettingsView: View {
                     .accessibilityIdentifier("settings.guidelines")
                 }
 
+                // One Apple ID acts as ONE role at a time, but the account can deliberately switch. The
+                // change is account-wide (updates the shared claim), so every signed-in device follows —
+                // this is the sanctioned alternative to signing a second device in as the other role,
+                // which would corrupt the shared private database. See AccountRoleService.
+                Section("Account type") {
+                    Button {
+                        showSwitchRole = true
+                    } label: {
+                        HStack {
+                            Label(isInstructor ? "Switch to student account" : "Switch to instructor account",
+                                  systemImage: "arrow.2.squarepath")
+                            Spacer()
+                            if switching { ProgressView() }
+                        }
+                    }
+                    .tint(Color.floweInk)
+                    .disabled(switching)
+                    .accessibilityIdentifier("settings.switchRole")
+                }
+
                 Section {
                     Button(role: .destructive) {
                         session.logout()
@@ -106,6 +130,20 @@ struct SettingsView: View {
             .sheet(isPresented: $showDeleteAccount) { DeleteAccountView() }
             .sheet(isPresented: $showBlocked) { BlockedUsersView() }
             .sheet(item: $legalDoc) { LegalDocumentView(resource: $0.resource, title: $0.title) }
+            .confirmationDialog("Switch account type?",
+                                isPresented: $showSwitchRole, titleVisibility: .visible) {
+                Button(isInstructor ? "Become a student" : "Become an instructor") {
+                    switching = true
+                    Task {
+                        await session.switchRole()
+                        switching = false
+                        dismiss()
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Your Flowe account acts as one role at a time. Switching changes it on all your devices — your data is kept and comes back if you switch again.")
+            }
         }
     }
 }

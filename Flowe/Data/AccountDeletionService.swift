@@ -13,6 +13,14 @@ import CloudKit
 /// a like on their post), which stay owned by their author (see `BOOKING-SYSTEM.md`). Every user-owned
 /// record type must be swept here; adding a new one without updating this leaves it behind on deletion.
 ///
+/// INTENTIONAL EXCEPTION — `ContentReport`: reports a user FILED are `_creator`-owned by them and so
+/// *could* be swept, but they are **deliberately retained** on account deletion. They are moderation
+/// records the operator triages, and a departing reporter must not be able to erase the abuse trail
+/// they raised (a serial abuser could otherwise self-delete to wipe every report against others). This
+/// is a product decision, not an oversight — do NOT "fix" it by adding a `reporterID` sweep. (Reports
+/// filed ABOUT a user are authored by others and already stay for the same reason.) If a stricter
+/// erasure posture is ever needed, anonymise `reporterID` rather than delete the report.
+///
 /// Sign in with Apple token revocation is deliberately **not** attempted here: the REST revoke
 /// endpoint needs a client-secret JWT that cannot ship inside an app, and Flowe never retains the
 /// `authorizationCode` required to obtain a refresh token. Apple's TN3194 covers exactly this case —
@@ -192,6 +200,9 @@ final class AccountDeletionService {
         // no-op on delete.
         ids.append(CKRecord.ID(recordName: StudentDirectoryService.recordName(for: ownerID)))
         ids.append(CKRecord.ID(recordName: PublicKeyService.recordName(for: ownerID)))
+        // My cross-device role claim (also namespaced off the owner id). Without this a deleted account
+        // that re-signs-up would inherit its OLD role and the guard could block the fresh choice.
+        ids.append(CKRecord.ID(recordName: AccountRoleService.recordName(for: ownerID)))
 
         guard await delete(dedupe(ids)) else { return false }
 
@@ -237,20 +248,23 @@ final class AccountDeletionService {
                 ids += page.matchResults.map(\.0)
             }
             return ids
-        } catch let ck as CKError where ck.code == .unknownItem || ck.code == .invalidArguments {
-            // Two permanent-for-this-deployment conditions, both of which mean "we cannot enumerate
-            // these records here", not "the operation failed and might succeed on retry":
-            //   .unknownItem      — the record type doesn't exist in this environment (nothing was
-            //                       ever saved), so the user has zero of them.
-            //   .invalidArguments — the field we query by isn't marked QUERYABLE in the deployed
-            //                       schema. Retrying can't fix that, and the predicates here are
-            //                       static and correct, so this only ever means a missing index.
-            // Skipping and continuing is what keeps account deletion from being *permanently blocked*
-            // (App Store Guideline 5.1.1(v)) by one un-deployed index — the schema-deploy checklist
-            // covers the residual records. A genuinely transient error (offline, rate-limited) is a
-            // different case and still aborts below, so we never claim a deletion that didn't happen.
+        } catch let ck as CKError where ck.code == .unknownItem {
+            // The record TYPE doesn't exist in this environment — nothing was ever saved, so the user
+            // genuinely has ZERO of them. Skipping is correct.
+            return []
+        } catch let ck as CKError where ck.code == .invalidArguments {
+            // The field we query by isn't marked QUERYABLE in the DEPLOYED schema. This is NOT a user
+            // condition — the predicates here are static and correct — it's a Dev→Prod deploy bug, and it
+            // means we CANNOT enumerate these records, so any that exist SURVIVE deletion. We still return
+            // [] rather than nil so one un-deployed index can't PERMANENTLY block account deletion
+            // (Guideline 5.1.1(v)) — but this must never be a SILENT data-survival reported as a clean
+            // deletion. In DEBUG we trap so it's caught in dev/CI; a schema-coverage unit test locks the
+            // ckdb so a missing QUERYABLE fails CI before it can ship. Keep the Dev→Prod deploy checklist.
+            assertionFailure("Account-deletion sweep got .invalidArguments for \(type) — a queried field is not QUERYABLE in the deployed CloudKit schema; records of this type SURVIVE deletion. Fix the schema + deploy to Production.")
             return []
         } catch {
+            // Genuinely transient (offline, rate-limited): abort so we never claim a deletion that didn't
+            // happen — the caller keeps the account intact for a retry.
             return nil
         }
     }

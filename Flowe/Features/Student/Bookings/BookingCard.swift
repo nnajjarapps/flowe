@@ -15,11 +15,13 @@ struct BookingCard: View {
         case bookAgain(Instructor)
         case review
         case classmates
+        case detail
         var id: String {
             switch self {
             case .bookAgain(let ins): return "book-\(ins.legacyId)"
             case .review:             return "review"
             case .classmates:         return "classmates"
+            case .detail:             return "detail"
             }
         }
     }
@@ -60,6 +62,14 @@ struct BookingCard: View {
             bodyRow
         }
         .floweCard()
+        // The whole card opens a full detail sheet — a bigger, calmer surface where the review action
+        // is an unmistakable full-width button (the inline link below is small and easy to miss). The
+        // inner action buttons keep their own taps; SwiftUI gives a Button priority within its frame,
+        // so this fires only for taps on the card's empty areas (header, date/time). contentShape makes
+        // those empty areas hit-testable.
+        .contentShape(Rectangle())
+        .onTapGesture { route = .detail }
+        .accessibilityIdentifier("booking.open")
         // "Book again" reopens the instructor's full profile, not the booking sheet directly. No
         // distance here — there is no location fix in the bookings tab — so the profile omits it.
         .sheet(item: $route) { route in
@@ -70,6 +80,8 @@ struct BookingCard: View {
                 ReviewSheet(booking: booking)
             case .classmates:
                 ClassmatesSheet(booking: booking)
+            case .detail:
+                BookingDetailView(booking: booking)
             }
         }
         .confirmationDialog(cancelTitle,
@@ -255,5 +267,171 @@ struct BookingCard: View {
                 .font(FloweFont.sans(12))
                 .foregroundStyle(Color.floweInk)
         }
+    }
+}
+
+// MARK: - Booking detail sheet
+
+/// The full-height detail for one booking, opened by tapping its card. The card's inline "Leave a
+/// review" link is small and sits in a crowded action row that's easy to miss or fat-finger; here the
+/// review is a full-width primary button on a calm surface. Also offers "Book again" and, for a group
+/// class, "Class-mates". Cancellation stays on the card — its recurring-vs-one-off dialog lives there,
+/// and a destructive action doesn't belong behind an extra tap.
+private struct BookingDetailView: View {
+    @Environment(MockDataStore.self) private var data
+    @Environment(\.locale) private var locale
+    @Environment(\.dismiss) private var dismiss
+
+    let booking: Booking
+
+    /// One item-driven sheet, one route — the same single-presentation discipline the card uses.
+    private enum Route: Identifiable {
+        case review
+        case bookAgain(Instructor)
+        case classmates
+        var id: String {
+            switch self {
+            case .review:             return "review"
+            case .bookAgain(let ins): return "book-\(ins.legacyId)"
+            case .classmates:         return "classmates"
+            }
+        }
+    }
+    @State private var route: Route?
+
+    private var instructor: Instructor? { data.instructor(id: booking.instructorId) }
+
+    private var coverSession: RemoteCoverageSession? {
+        guard let id = booking.remoteID,
+              let session = data.coverSession(forBookingID: id),
+              session.status == 0 else { return nil }
+        return session
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    instructorHeader
+                    infoCard
+                    if let coverSession {
+                        infoRow(icon: "airplane",
+                                text: String(localized: "Covered by \(coverSession.coveringInstructorName)"))
+                    }
+                    actions
+                    Spacer(minLength: 0)
+                }
+                .padding(20)
+            }
+            .background(Color.flowWarmCream.ignoresSafeArea())
+            .navigationTitle("Booking details")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }.tint(Color.flowePinkDeep)
+                }
+            }
+            .sheet(item: $route) { r in
+                switch r {
+                case .review:
+                    ReviewSheet(booking: booking)
+                case .bookAgain(let ins):
+                    StudentInstructorProfileView(instructor: ins) { self.route = nil }
+                case .classmates:
+                    ClassmatesSheet(booking: booking)
+                }
+            }
+        }
+    }
+
+    // MARK: Sections
+
+    private var instructorHeader: some View {
+        HStack(spacing: 14) {
+            if let instructor {
+                AvatarView(id: instructor.img, photo: instructor.photo, size: 56)
+                    .overlay(Circle().stroke(Color.flowePinkSoft, lineWidth: 2))
+            }
+            VStack(alignment: .leading, spacing: 3) {
+                Text(instructor?.name ?? "")
+                    .font(FloweFont.serif(20, .medium))
+                    .foregroundStyle(Color.floweInk)
+                (Text(localizedTag: booking.type) + Text(" · ") + Text("\(data.bookingDurationMinutes(booking)) min"))
+                    .font(FloweFont.mono(12))
+                    .foregroundStyle(Color.floweMuted)
+            }
+            Spacer(minLength: 8)
+            if data.isWaitlisted(booking) {
+                WaitlistBadge(rank: data.waitlistRank(for: booking))
+            } else {
+                StatusBadge(status: booking.status)
+            }
+        }
+    }
+
+    private var infoCard: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if booking.pendingUpload {
+                infoRow(icon: "arrow.clockwise", text: String(localized: "Not sent yet"))
+            } else {
+                infoRow(icon: "calendar", text: booking.localizedDate(locale))
+                Divider().padding(.vertical, 12)
+                infoRow(icon: "clock", text: booking.localizedTime(locale))
+            }
+            if booking.isRecurring {
+                Divider().padding(.vertical, 12)
+                infoRow(icon: "repeat", text: String(localized: "Repeats weekly"))
+            }
+        }
+        .padding(16)
+        .floweCard()
+    }
+
+    private func infoRow(icon: String, text: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 15))
+                .foregroundStyle(Color.flowePinkDeep)
+                .frame(width: 22)
+            Text(text)
+                .font(FloweFont.sans(15))
+                .foregroundStyle(Color.floweInk)
+            Spacer(minLength: 0)
+        }
+    }
+
+    @ViewBuilder private var actions: some View {
+        VStack(spacing: 12) {
+            if booking.status == .completed {
+                if data.canReview(booking) {
+                    PrimaryButton(title: data.myReview(for: booking) == nil ? "Leave a review" : "Edit review") {
+                        route = .review
+                    }
+                    .accessibilityIdentifier("bookingDetail.review")
+                }
+                secondaryButton("Book again", id: "bookingDetail.bookAgain") {
+                    if let instructor { route = .bookAgain(instructor) }
+                }
+            }
+            if data.isGroupBooking(booking), booking.status != .cancelled {
+                secondaryButton("Class-mates", id: "bookingDetail.classmates") {
+                    route = .classmates
+                }
+            }
+        }
+    }
+
+    private func secondaryButton(_ title: LocalizedStringKey, id: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(FloweFont.sans(15, .medium))
+                .foregroundStyle(Color.flowePinkDeep)
+                .frame(maxWidth: .infinity)
+                .frame(height: 52)
+                .background(Color.flowePinkPale)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+        }
+        .flowePressable()
+        .accessibilityIdentifier(id)
     }
 }

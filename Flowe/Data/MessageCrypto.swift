@@ -106,6 +106,18 @@ final class MessageCrypto {
         await directory.publish(ownerID: ownerID, publicKey: key.publicKey.rawRepresentation)
     }
 
+    /// Erase this device's DM identity on ACCOUNT DELETION. The private key lives in the iCloud Keychain
+    /// (`synchronizable: true`), so without this it survives deletion + reinstall and syncs back on
+    /// re-signin — `activate` would then re-publish the SAME public key, making the "new" account
+    /// cryptographically the old one and leaving old sealed messages decryptable. Dropping the key (and
+    /// the derived caches) forces a fresh keypair the next time messaging is used.
+    func wipeIdentity() {
+        KeychainStore.set(nil, for: Self.privateKeyKeychainKey, synchronizable: true)
+        privateKey = nil
+        publicKeyCache.removeAll()
+        symmetricCache.removeAll()
+    }
+
     // MARK: - Shared key per conversation
 
     private func publicKey(for ownerID: String) async -> Curve25519.KeyAgreement.PublicKey? {

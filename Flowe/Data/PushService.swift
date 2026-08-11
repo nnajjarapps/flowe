@@ -507,8 +507,10 @@ final class PushService {
 
         #if CLOUDKIT_ENABLED
         let defaults = UserDefaults.standard
-        // Nothing was ever registered on this device — don't spend a round trip proving it.
-        guard defaults.bool(forKey: Self.registeredKey) else { return }
+        // Subscriptions are a per-Apple-ID SERVER resource — a second device on the same account may hold
+        // them even though THIS device never registered. Teardown (logout / account deletion) therefore
+        // always sweeps rather than short-circuiting on this device's local `registeredKey`; the old
+        // early-return left a deleted account still receiving pushes from another device's subscription.
         guard let existing = try? await database.allSubscriptions() else { return }
         let mine = existing.map(\.subscriptionID).filter { $0.hasPrefix(Self.idPrefix) }
         guard !mine.isEmpty else {
