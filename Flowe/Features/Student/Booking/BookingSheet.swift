@@ -33,6 +33,8 @@ struct BookingSheet: View {
     @State private var showReport = false
     @State private var confirmBlock = false
     @State private var showCertificate = false
+    @State private var badgePop = false   // the confirmation checkmark's celebratory scale-in
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Route A handoff: a caller that already showed the profile (InstructorProfileView) opens the
     /// sheet at the day picker with `startStep: 1`, skipping the intro it just rendered. Default 0
@@ -152,6 +154,7 @@ struct BookingSheet: View {
                             .frame(width: 28, height: 28)
                             .background(.ultraThinMaterial, in: Circle())
                     }
+                    .accessibilityLabel("Close")
                 }
                 Spacer()
                 HStack(alignment: .bottom) {
@@ -233,7 +236,7 @@ struct BookingSheet: View {
             // dropped when no type is priced. Nested localization reuses "from %@" + "Book a Session · %@".
             GradientButton(title: instructor.price > 0
                 ? "Book a Session · \(String(localized: "from \(settings.money(instructor.price))"))"
-                : "Book a Session") { step = 1 }
+                : "Book a Session") { withAnimation(FloweMotion.spring) { step = 1 } }
         }
     }
 
@@ -317,6 +320,7 @@ struct BookingSheet: View {
                             .frame(width: 32, height: 32)
                             .background(.ultraThinMaterial, in: Circle())
                     }
+                    .accessibilityLabel("Close")
                     .accessibilityIdentifier("booking.certPhotoClose")
                 }
                 Spacer()
@@ -380,7 +384,7 @@ struct BookingSheet: View {
             HStack(spacing: 8) {
                 // Opened from the profile (startStep 1) → back returns to it; opened at the intro →
                 // back steps up to it. Never strands the profile-first flow on the orphaned intro.
-                backButton { if startStep >= 1 { onClose(false) } else { step = 0 } }
+                backButton { if startStep >= 1 { onClose(false) } else { withAnimation(FloweMotion.spring) { step = 0 } } }
                 Text("Choose a day")
                     .font(FloweFont.serif(17))
                     .foregroundStyle(Color.floweInk)
@@ -420,6 +424,7 @@ struct BookingSheet: View {
                     let sel = day == d.pickerValue
                     Button {
                         guard avail else { return }
+                        Haptic.selection()
                         // Changing the day can invalidate an already-picked time — Tuesday
                         // 9am may not exist on Thursday.
                         if day != d.pickerValue { time = "" }
@@ -461,7 +466,7 @@ struct BookingSheet: View {
             }
             .padding(.bottom, 20)
 
-            GradientButton(title: "Continue", enabled: !day.isEmpty) { step = 2 }
+            GradientButton(title: "Continue", enabled: !day.isEmpty) { withAnimation(FloweMotion.spring) { step = 2 } }
         }
         // Lets a UI test confirm the profile→booking handoff landed on the day picker (startStep: 1),
         // not the orphaned intro.
@@ -482,7 +487,7 @@ struct BookingSheet: View {
     private var stepTimeType: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
-                backButton { step = 1 }
+                backButton { withAnimation(FloweMotion.spring) { step = 1 } }
                 Text("Time & type")
                     .font(FloweFont.serif(17))
                     .foregroundStyle(Color.floweInk)
@@ -513,7 +518,7 @@ struct BookingSheet: View {
                     let waitlistable = full && !past && max(selectedTypeCapacity, 1) >= 2
                     // Dead end = past, or a full cell that can't fall through to a waitlist. Dim + disable.
                     let deadEnd = past || (full && !waitlistable)
-                    Button { time = t } label: {
+                    Button { Haptic.selection(); time = t } label: {
                         VStack(spacing: 2) {
                             Text(verbatim: t.localizedTimeSlot)
                                 .font(FloweFont.mono(11))
@@ -573,7 +578,7 @@ struct BookingSheet: View {
                 // proceeds with an empty type (honest — the instructor authored none).
                 ForEach(Array(data.lessonTypes(for: instructor).enumerated()), id: \.element.id) { index, resolved in
                     let sel = type == resolved.name
-                    Button { type = resolved.name } label: {
+                    Button { Haptic.selection(); type = resolved.name } label: {
                         VStack(spacing: 3) {
                             Text(resolved.name)
                                 .font(FloweFont.sans(12))
@@ -613,7 +618,7 @@ struct BookingSheet: View {
                 .padding(.bottom, 14)
             }
 
-            GradientButton(title: ctaTitle, enabled: !time.isEmpty) {
+            GradientButton(title: ctaTitle, enabled: !time.isEmpty, isLoading: isConfirming) {
                 Task { await confirmBooking() }
             }
         }
@@ -739,12 +744,14 @@ struct BookingSheet: View {
             // .failed never occurs for a booking today (a claim failure degrades to .booked, unlocked),
             // but is handled the same way defensively — the row exists, advance to confirmation.
             booked = true
-            step = 3
+            Haptic.success()
+            withAnimation(FloweMotion.spring) { step = 3 }
         case .waitlisted:
             // The group class was full; the booking was still created on an overflow (waitlist) seat.
             booked = true
             waitlisted = true
-            step = 3
+            Haptic.success()
+            withAnimation(FloweMotion.spring) { step = 3 }
         case .slotTaken:
             bookingAlertMessage = String(localized: "This slot was just booked. Pick another time.")
             showBookingAlert = true
@@ -782,6 +789,14 @@ struct BookingSheet: View {
                 .foregroundStyle(.white)
                 .frame(width: 64, height: 64)
                 .background(FlowGradients.gradDark, in: Circle())
+                // Celebrate the confirmation: the badge springs in rather than snapping. Static under
+                // Reduce Motion (shown at full size, no scale).
+                .scaleEffect(badgePop ? 1 : 0.5)
+                .opacity(badgePop ? 1 : 0)
+                .onAppear {
+                    if reduceMotion { badgePop = true }
+                    else { withAnimation(FloweMotion.pop.delay(0.08)) { badgePop = true } }
+                }
                 .padding(.top, 16)
                 .padding(.bottom, 16)
 
@@ -871,5 +886,6 @@ struct BookingSheet: View {
                 .font(.system(size: 18, weight: .medium))
                 .foregroundStyle(Color.floweInk)
         }
+        .accessibilityLabel("Back")
     }
 }

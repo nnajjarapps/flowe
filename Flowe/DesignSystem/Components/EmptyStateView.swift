@@ -32,13 +32,72 @@ struct FeedPlaceholder<EmptyContent: View>: View {
     }
 }
 
+/// A compact branded loading indicator — three gradient dots pulsing in sequence, echoing the graduated
+/// dots in the flowe logomark. The house replacement for a bare `ProgressView` on inline feed loads
+/// (the opaque logo PNG can't sit seamlessly on white feed rows, so inline uses this instead). Reduce
+/// Motion → three static dots (no pulse), matching every motion modifier in `FloweCommon`.
+struct FloweDotsLoader: View {
+    var dot: CGFloat = 8
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var animating = false
+
+    var body: some View {
+        HStack(spacing: dot * 0.75) {
+            ForEach(0..<3, id: \.self) { i in
+                Circle()
+                    .fill(FlowGradients.gradDark)
+                    .frame(width: dot, height: dot)
+                    .scaleEffect(active(i) ? 1 : 0.5)
+                    .opacity(active(i) ? 1 : 0.4)
+                    .animation(reduceMotion ? nil
+                        : .easeInOut(duration: 0.6).repeatForever().delay(Double(i) * 0.18),
+                        value: animating)
+            }
+        }
+        .onAppear { animating = true }
+        .accessibilityLabel(Text("Loading"))
+    }
+
+    private func active(_ i: Int) -> Bool { reduceMotion ? true : animating }
+}
+
+/// Full-screen branded loading surface — the flowe logomark (the FP monogram) breathing gently over the
+/// dots loader, on the mark's OWN cream ground (matched exactly to the opaque PNG so it shows no seam).
+/// For the cold-start splash and any full-screen load; replaces the blank system launch screen.
+struct FloweLoadingView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var breathing = false
+
+    var body: some View {
+        ZStack {
+            // Matches the Logo.png baked-in ground (#F6E8DF) so the opaque square logo is seamless.
+            Color(hex: 0xF6E8DF).ignoresSafeArea()
+            VStack(spacing: 30) {
+                Image("Logo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 190, height: 190)
+                    .scaleEffect(breathing ? 1.035 : 1.0)
+                    .shadow(color: Color.flowePink.opacity(0.18), radius: 22, y: 8)
+                FloweDotsLoader(dot: 9)
+            }
+        }
+        .onAppear {
+            guard !reduceMotion else { return }
+            withAnimation(.easeInOut(duration: 2.6).repeatForever(autoreverses: true)) { breathing = true }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(Text("flowe, loading"))
+    }
+}
+
 /// Shown while a feed's first load is in flight and there's nothing cached to show yet.
 struct LoadingStateView: View {
     var message: LocalizedStringKey = "Loading…"
 
     var body: some View {
         VStack(spacing: FlowSpacing.md) {
-            ProgressView().tint(Color.flowePink)
+            FloweDotsLoader()
             Text(message)
                 .font(FloweFont.sans(13))
                 .foregroundStyle(Color.floweMuted)

@@ -8,6 +8,7 @@ enum ReportedContent: String {
     case communityPost          // a post in the community feed
     case communityComment       // a reply on a community post
     case communityEvent         // an instructor-hosted event (its text is screened; its photo isn't)
+    case review                 // a student's public review on an instructor's profile
 }
 
 /// Why the reporter flagged it. Fixed set so reports can be triaged without reading every one.

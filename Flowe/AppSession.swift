@@ -13,6 +13,16 @@ final class AppSession {
     var authState: AuthState = .unauthenticated
     var currentUser: User?
 
+    /// Guest-browse mode (App Store Guideline 5.1.1(v)): the user chose to explore Discover WITHOUT an
+    /// account. They deliberately stay `authState == .unauthenticated` — so every signed-in-only guard
+    /// (FlowApp's `else if authState == .student`, `guard authState != .unauthenticated`) still fences
+    /// off ALL account writes — while `AppRouter` renders the student tab shell (Discover) instead of
+    /// onboarding. Cleared the instant they sign in (`startSession`) or out (`logout`).
+    private(set) var isGuest = false
+
+    /// Enter guest-browse mode from the welcome screen.
+    func enterGuest() { isGuest = true }
+
     /// True when a signed-in student hasn't finished the onboarding quiz — drives `AppRouter` to show
     /// the quiz before the tabs.
     var needsOnboardingQuiz = false
@@ -260,6 +270,7 @@ final class AppSession {
     /// date — instead of minting a blank identity. Role always comes from this sign-in; the email is
     /// only taken when none was stored, so a real address survives Apple's nil-on-re-auth behaviour.
     private func startSession(defaultName: String, email: String, role: UserRole) {
+        isGuest = false   // signing in always exits guest-browse mode
         if var saved = loadDurableProfile() {
             saved.role = role
             if saved.fullName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -314,13 +325,24 @@ final class AppSession {
     /// Begin a session for an Apple credential, but first check the account's established role so a
     /// second device can't sign in as a different role. On a mismatch the session is NOT started and the
     /// pending identity is cleared — the caller shows the "already set up as …" message.
+    /// `adoptExistingRole`: when true, a role MISMATCH signs the user into their ACCOUNT'S established
+    /// role instead of blocking. Used only by the guest-browse sign-in ([[Guest-Browse-Mode]]): a guest
+    /// isn't choosing student-vs-instructor across devices — they're signing into whatever their account
+    /// actually is — so blocking (which the normal onboarding keeps, to guard cross-device divergence)
+    /// would strand an instructor in the guest student shell. Onboarding leaves this false.
     @MainActor
     func startSignIn(appleUserID: String, name: String, email: String,
-                     desiredRole: UserRole, acceptTerms: Bool = false) async -> SignInOutcome {
+                     desiredRole: UserRole, acceptTerms: Bool = false,
+                     adoptExistingRole: Bool = false) async -> SignInOutcome {
         setAppleUserID(appleUserID)
         let established = await accountRoleService.lookup(for: appleUserID)
         let gate = Self.roleGate(desired: desiredRole, established: established)
         guard gate.proceed else {
+            if adoptExistingRole, case .claimed(let actual) = established {
+                if acceptTerms { recordTermsAcceptance() }
+                startSession(defaultName: name, email: email, role: actual)
+                return .started(actual)
+            }
             clearPendingIdentity()
             return .roleMismatch(existing: gate.existing ?? desiredRole)
         }
@@ -391,6 +413,7 @@ final class AppSession {
         currentUser = nil
         appleUserID = nil
         authState = .unauthenticated
+        isGuest = false   // a signed-out user is not a guest — send them back to onboarding
         needsOnboardingQuiz = false
         // Clear the in-memory prefs, but leave the durable per-account copy on disk — it's restored
         // on re-sign-in, exactly like the durable profile.

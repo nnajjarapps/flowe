@@ -19,7 +19,11 @@ struct InstructorSettingsView: View {
     @State private var confirmLogout = false
     @State private var showDeleteAccount = false
     @State private var showBlocked = false
+    @State private var showSwitchRole = false
+    @State private var switching = false
     @State private var legalDoc: LegalDoc?
+
+    private var isInstructor: Bool { session.authState == .instructor }
 
     private var planLabel: String {
         switch subscription.tier {
@@ -126,6 +130,26 @@ struct InstructorSettingsView: View {
                     }
                 }
 
+                // MARK: Account type
+                // One Apple ID acts as ONE role at a time, but can deliberately switch. Account-wide
+                // (updates the shared claim) so every signed-in device follows — the sanctioned
+                // alternative to signing a second device in as the other role. See AccountRoleService.
+                Section("Account type") {
+                    Button {
+                        showSwitchRole = true
+                    } label: {
+                        HStack {
+                            Label(isInstructor ? "Switch to student account" : "Switch to instructor account",
+                                  systemImage: "arrow.2.squarepath")
+                            Spacer()
+                            if switching { ProgressView() }
+                        }
+                    }
+                    .tint(Color.floweInk)
+                    .disabled(switching)
+                    .accessibilityIdentifier("settings.switchRole")
+                }
+
                 // MARK: Account
                 Section {
                     Button(role: .destructive) {
@@ -166,6 +190,20 @@ struct InstructorSettingsView: View {
             .sheet(isPresented: $showBlocked) { BlockedUsersView() }
             .sheet(item: $legalDoc) { LegalDocumentView(resource: $0.resource, title: $0.title) }
             .manageSubscriptionsSheet(isPresented: $showManageSubscriptions)
+            .confirmationDialog("Switch account type?",
+                                isPresented: $showSwitchRole, titleVisibility: .visible) {
+                Button(isInstructor ? "Become a student" : "Become an instructor") {
+                    switching = true
+                    Task {
+                        await session.switchRole()
+                        switching = false
+                        dismiss()
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Your Flowe account acts as one role at a time. Switching changes it on all your devices — your data is kept and comes back if you switch again.")
+            }
             .confirmationDialog("Log out of Flowe?", isPresented: $confirmLogout, titleVisibility: .visible) {
                 Button("Log Out", role: .destructive) {
                     dismiss()

@@ -262,7 +262,7 @@ struct CalendarSessionCard: View {
                                 .font(FloweFont.serif(16, .medium))
                                 .foregroundStyle(Color.floweInk)
                                 .lineLimit(1)
-                            if data.clientNote(forStudentID: session.studentID ?? "")?.hasFlags == true {
+                            if data.clientNoteHasFlags(forStudentID: session.studentID ?? "") {
                                 ClientNoteFlag()
                             }
                         }
@@ -410,7 +410,7 @@ struct CalendarGroupSessionCard: View {
                                 .font(FloweFont.sans(13))
                                 .foregroundStyle(Color.floweInk)
                                 .lineLimit(1)
-                            if data.clientNote(forStudentID: s.studentID ?? "")?.hasFlags == true {
+                            if data.clientNoteHasFlags(forStudentID: s.studentID ?? "") {
                                 ClientNoteFlag(size: 10)
                             }
                             Spacer(minLength: 0)
@@ -488,7 +488,7 @@ struct BookingRequestCard: View {
                                     .font(FloweFont.serif(16, .medium))
                                     .foregroundStyle(Color.floweInk)
                                     .lineLimit(1)
-                                if data.clientNote(forStudentID: request.studentID ?? "")?.hasFlags == true {
+                                if data.clientNoteHasFlags(forStudentID: request.studentID ?? "") {
                                     ClientNoteFlag()
                                 }
                             }

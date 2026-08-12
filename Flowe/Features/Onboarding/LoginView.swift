@@ -10,6 +10,9 @@ import AuthenticationServices
 /// stable id, and it is the only one this app can honestly issue.
 struct LoginView: View {
     let role: UserRole
+    /// Guest-browse sign-in: adopt the account's real role on a mismatch instead of blocking. See
+    /// [[Guest-Browse-Mode]]. Onboarding leaves this false.
+    var adoptExistingRole: Bool = false
     @Environment(AppSession.self) private var session
 
     @State private var errorMessage: String?
@@ -59,7 +62,7 @@ struct LoginView: View {
                         .flowFont(.bodyMedium)
                         .foregroundStyle(Color.floweMuted)
                     NavigationLink("Join now") {
-                        CreateAccountView(role: role)
+                        CreateAccountView(role: role, adoptExistingRole: adoptExistingRole)
                     }
                     .flowFont(.bodyMedium)
                     .foregroundStyle(Color.flowePinkDeep)
@@ -91,7 +94,8 @@ struct LoginView: View {
                     appleUserID: cred.user,
                     name: AppSession.displayName(fromEmail: cred.email ?? "member@flowe.app"),
                     email: cred.email ?? "member@flowe.app",
-                    desiredRole: role
+                    desiredRole: role,
+                    adoptExistingRole: adoptExistingRole
                 )
                 isSigningIn = false
                 if case .roleMismatch(let existing) = outcome {

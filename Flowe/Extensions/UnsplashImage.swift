@@ -4,7 +4,14 @@ import Foundation
 /// mirroring the `images.unsplash.com/photo-<id>?w=&h=&fit=crop` pattern in the Figma mockup.
 enum UnsplashImage {
     static func url(_ id: String, w: Int, h: Int) -> URL? {
-        URL(string: "https://images.unsplash.com/photo-\(id)?w=\(w)&h=\(h)&fit=crop&auto=format")
+        #if DEBUG
+        return URL(string: "https://images.unsplash.com/photo-\(id)?w=\(w)&h=\(h)&fit=crop&auto=format")
+        #else
+        // Release builds NEVER hotlink a third-party image host (App Store Guideline 5.2.2). These
+        // Unsplash ids only ever seed the DEBUG reference catalog; a shipped build has none, so the
+        // fallback is dormant — but this makes it impossible even if an id somehow appears.
+        return nil
+        #endif
     }
 
     /// Convenience for square avatars.

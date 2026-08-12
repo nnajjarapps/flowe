@@ -16,5 +16,7 @@ struct SecondaryButton: View {
                         .stroke(Color.flowePinkDeep, lineWidth: 1.5)
                 )
         }
+        // Match PrimaryButton's press feedback — the two CTAs sit together on the first-run screens.
+        .flowePressable()
     }
 }

@@ -4,19 +4,23 @@ import SwiftUI
 /// location/session types, and price. Pink scrim + blurred price pill.
 struct FeaturedHeroCard: View {
     @Environment(AppSettings.self) private var settings
+    @Environment(AppSession.self) private var session
     let instructor: Instructor
     let action: () -> Void
 
+    /// Exact address, hidden from a guest (5.1.1(v) privacy) — session types still show.
+    private var addressText: String { session.isGuest ? "" : instructor.address }
+
     /// Whether there is anything to show in the location line (studio address and/or session types).
     private var hasLocationLine: Bool {
-        !instructor.address.isEmpty || !instructor.sessionTypes.isEmpty
+        !addressText.isEmpty || !instructor.sessionTypes.isEmpty
     }
 
     /// Studio address (verbatim) followed by localized session types, joined with " · " via Text
     /// concatenation — a joined String would render the session types as verbatim English.
     private var locationText: Text {
         var pieces: [Text] = []
-        if !instructor.address.isEmpty { pieces.append(Text(instructor.address)) }
+        if !addressText.isEmpty { pieces.append(Text(addressText)) }
         pieces.append(contentsOf: instructor.sessionTypes.map { Text(localizedTag: $0) })
         return pieces.enumerated().reduce(Text("")) { acc, e in
             acc + (e.offset == 0 ? Text("") : Text(" · ")) + e.element

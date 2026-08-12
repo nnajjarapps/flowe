@@ -16,7 +16,7 @@ struct SessionRow: View {
 
     /// A single (non-group) booking whose client carries a safety flag — surfaces the glanceable glyph.
     private var showFlag: Bool {
-        !isGroup && data.clientNote(forStudentID: booking.studentID ?? "")?.hasFlags == true
+        !isGroup && data.clientNoteHasFlags(forStudentID: booking.studentID ?? "")
     }
 
     /// The booker's CURRENT name, resolved live from their profile — not the snapshot

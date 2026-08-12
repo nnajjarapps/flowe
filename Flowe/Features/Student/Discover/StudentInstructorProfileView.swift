@@ -31,12 +31,21 @@ struct StudentInstructorProfileView: View {
 
     @Environment(MockDataStore.self) private var data
     @Environment(AppSettings.self) private var settings
+    @Environment(AppSession.self) private var session
 
     @State private var showReport = false
     @State private var confirmBlock = false
     @State private var showCertificate = false
     @State private var showHeroZoom = false
     @State private var showBooking = false
+    @State private var showGuestSignIn = false
+
+    /// App Store 5.1.1(v): a guest may VIEW this profile but any account action (book, save, join,
+    /// report, block) prompts sign-in instead of running. After signing in, `AppRouter` swaps into the
+    /// real student shell and the user re-taps. Also fences the write off — a guest never mutates data.
+    private func requireAccount(_ action: () -> Void) {
+        if session.isGuest { showGuestSignIn = true } else { action() }
+    }
 
     /// Payment methods we know how to render, in canonical order — an unknown one never reaches a chip.
     private var methods: [String] { PaymentMethod.known(instructor.paymentMethods) }
@@ -131,6 +140,7 @@ struct StudentInstructorProfileView: View {
                 )
             }
         }
+        .sheet(isPresented: $showGuestSignIn) { GuestSignInSheet() }
         .sheet(isPresented: $showReport) {
             ReportSheet(
                 reportedID: instructor.ownerID ?? "",
@@ -261,8 +271,10 @@ struct StudentInstructorProfileView: View {
     private var saveButton: some View {
         let saved = data.isSaved(instructor.ownerID)
         return Button {
-            Haptic.tap()
-            withAnimation(FloweMotion.pop) { data.toggleSaved(instructor.ownerID) }
+            requireAccount {
+                Haptic.tap()
+                withAnimation(FloweMotion.pop) { data.toggleSaved(instructor.ownerID) }
+            }
         } label: {
             Image(systemName: saved ? "heart.fill" : "heart")
                 .font(.system(size: 14, weight: .medium))
@@ -290,9 +302,9 @@ struct StudentInstructorProfileView: View {
         Menu {
             // A listing's name, address, bio and certification are user-written and public, so students
             // need a way to flag one (App Store Review Guideline 1.2).
-            Button("Report this profile", systemImage: "flag") { showReport = true }
+            Button("Report this profile", systemImage: "flag") { requireAccount { showReport = true } }
             Button("Block \(instructor.firstName)", systemImage: "hand.raised",
-                   role: .destructive) { confirmBlock = true }
+                   role: .destructive) { requireAccount { confirmBlock = true } }
         } label: {
             Image(systemName: "ellipsis")
                 .font(.system(size: 14, weight: .medium))
@@ -307,9 +319,12 @@ struct StudentInstructorProfileView: View {
     /// a baked "Address · ~2 km" string would read backwards in Arabic. Distance only appears when it was
     /// threaded in; `address` is user text and passes through unlocalized. Mirrors InstructorCard.
     private var metaText: Text {
-        var run = Text(instructor.address)
+        // A guest (unauthenticated) must NOT see the instructor's exact home address — only the coarse
+        // distance chip, if any. The full address is revealed once they sign in (matching reveal-at-booking).
+        let address = session.isGuest ? "" : instructor.address
+        var run = Text(address)
         if let d = distanceMetres {
-            if !instructor.address.isEmpty { run = run + Text(verbatim: " · ") }
+            if !address.isEmpty { run = run + Text(verbatim: " · ") }
             run = run + Text(FloweDistance.label(metres: d))
         }
         return run
@@ -510,9 +525,12 @@ struct StudentInstructorProfileView: View {
 
     @ViewBuilder
     private var studioLocation: some View {
+        let hasAddress = !instructor.address.isEmpty
+        // A guest never sees the exact address (privacy) — only the coarse distance and a sign-in hint.
+        let showsAddress = hasAddress && !session.isGuest
         // With neither a distance fix nor an address there is nothing true to show, so omit the block
         // rather than print an empty pin.
-        if distanceMetres != nil || !instructor.address.isEmpty {
+        if distanceMetres != nil || hasAddress {
             section("STUDIO LOCATION") {
                 HStack(spacing: 8) {
                     Image(systemName: "mappin.circle")
@@ -524,13 +542,15 @@ struct StudentInstructorProfileView: View {
                             .font(FloweFont.mono(12))
                             .foregroundStyle(Color.flowePinkDeep)
                     }
-                    if !instructor.address.isEmpty {
+                    if showsAddress {
                         Text(instructor.address)
                             .font(FloweFont.sans(14))
                             .foregroundStyle(Color.floweInk)
                     }
                 }
-                Text("The studio where you'll meet.")
+                Text(session.isGuest && hasAddress
+                     ? "Sign in to see the exact studio location."
+                     : "The studio where you'll meet.")
                     .font(FloweFont.mono(9))
                     .foregroundStyle(Color.floweMuted)
             }
@@ -781,11 +801,16 @@ struct StudentInstructorProfileView: View {
                     .foregroundStyle(Color.floweInk)
                     .fixedSize(horizontal: false, vertical: true)
                 Button {
-                    data.setCommunityVisible(true)
-                    Task {
-                        if let id = instructor.ownerID {
-                            circle = await data.fetchInstructorCircle(ownerID: id)
-                            circleLoaded = true
+                    // Gate for guests: setCommunityVisible publishes a public StudentProfile and would
+                    // fall back to the placeholder owner even with a nil currentUserID — so this MUST be
+                    // its own guest guard, not left to the nil-owner backstop.
+                    requireAccount {
+                        data.setCommunityVisible(true)
+                        Task {
+                            if let id = instructor.ownerID {
+                                circle = await data.fetchInstructorCircle(ownerID: id)
+                                circleLoaded = true
+                            }
                         }
                     }
                 } label: {
@@ -866,7 +891,8 @@ struct StudentInstructorProfileView: View {
                 GradientButton(title: instructor.price > 0
                     ? "Book a session · \(String(localized: "from \(settings.money(instructor.price))"))"
                     : "Book a session") {
-                    showBooking = true
+                    Haptic.tap()
+                    requireAccount { showBooking = true }   // 5.1.1(v): booking is account-based
                 }
                 .accessibilityIdentifier("instructor.book")
                 Text("Free to book. You'll pay \(instructor.firstName) directly.")

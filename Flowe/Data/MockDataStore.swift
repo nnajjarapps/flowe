@@ -63,6 +63,7 @@ final class MockDataStore {
     private let bookingService = BookingService()
     private let messagingService = MessagingService()
     private let messageCrypto = MessageCrypto()
+    private let noteCrypto = NoteCrypto()   // encryption-at-rest for private ClientNotes (health data)
     private let deletionService = AccountDeletionService()
     private let reportService = ReportService()
     private let reviewService = ReviewService()
@@ -1425,13 +1426,39 @@ final class MockDataStore {
     // ClientNote inside any *Service, and NEVER copy one onto a Booking (Booking is double-written to
     // the world-readable public SessionBooking record — that would leak health data).
 
-    /// This instructor's single private note about a client, if one exists.
-    func clientNote(forStudentID studentID: String) -> ClientNote? {
-        clientNotes.first { $0.studentID == studentID }
+    /// This instructor's single private note about a client, DECRYPTED, if one exists AND can be opened on
+    /// this device. Returns nil for BOTH "no note" and "locked" (ciphertext present but the key hasn't
+    /// synced here yet) — a locked note must NOT be presented as blank, or a save would overwrite it. Use
+    /// `clientNoteIsLocked` to tell the two apart. Decryption happens on THIS device (the instructor holds
+    /// the key); the CloudKit mirror only ever held ciphertext.
+    func clientNote(forStudentID studentID: String) -> ClientNoteData? {
+        guard let m = clientNotes.first(where: { $0.studentID == studentID }) else { return nil }
+        switch noteCrypto.open(m.sealed, as: ClientNoteData.Sealed.self) {
+        case .value(let payload): return ClientNoteData(studentID: m.studentID, updatedAt: m.updatedAt, sealed: payload)
+        case .empty:              return ClientNoteData(studentID: m.studentID, updatedAt: m.updatedAt)
+        case .locked:             return nil
+        }
+    }
+
+    /// True when a note EXISTS but its ciphertext can't be opened on this device yet (the encryption key
+    /// hasn't synced from iCloud Keychain). The editor uses this to refuse to seed-and-save over data it
+    /// couldn't read — the fix for the new-device data-loss race.
+    func clientNoteIsLocked(forStudentID studentID: String) -> Bool {
+        guard let m = clientNotes.first(where: { $0.studentID == studentID }) else { return false }
+        if case .locked = noteCrypto.open(m.sealed, as: ClientNoteData.Sealed.self) { return true }
+        return false
+    }
+
+    /// Cheap glyph check — reads the opaque `flagged` hint WITHOUT decrypting (called per session row on
+    /// the calendar). Reveals only that a safety note exists, never which condition.
+    func clientNoteHasFlags(forStudentID studentID: String) -> Bool {
+        clientNotes.first(where: { $0.studentID == studentID })?.flagged ?? false
     }
 
     /// Create-or-update the instructor's private note for a client (find-first-by-studentID upsert;
-    /// uniqueness enforced here, not by a DB constraint). Saves to the private store only.
+    /// uniqueness enforced here, not by a DB constraint). The health-sensitive fields are ENCRYPTED into
+    /// `sealed` — only the opaque `flagged` hint + metadata are stored in the clear (App Store Guideline
+    /// 5.1.3 — no readable health data in iCloud). Saves to the private store only.
     func saveClientNote(studentID: String, hasInjury: Bool, injuryNote: String,
                         isPregnant: Bool, pregnancyNote: String, conditions: String,
                         notes: String, emergencyContact: String, goals: String) {
@@ -1442,10 +1469,15 @@ final class MockDataStore {
                 context.insert(n)
                 return n
             }()
-        note.hasInjury = hasInjury; note.injuryNote = injuryNote
-        note.isPregnant = isPregnant; note.pregnancyNote = pregnancyNote
-        note.conditions = conditions; note.notes = notes
-        note.emergencyContact = emergencyContact; note.goals = goals
+        let payload = ClientNoteData.Sealed(
+            hasInjury: hasInjury, injuryNote: injuryNote,
+            isPregnant: isPregnant, pregnancyNote: pregnancyNote,
+            conditions: conditions, notes: notes,
+            emergencyContact: emergencyContact, goals: goals
+        )
+        note.sealed = noteCrypto.seal(payload)
+        note.flagged = hasInjury || isPregnant
+            || !conditions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         note.updatedAt = Date()
         save()   // context.save() + refresh() → glyphs re-render reactively
     }
@@ -2093,6 +2125,8 @@ final class MockDataStore {
         // DM identity: drop the iCloud-Keychain private key + derived caches so a re-created account
         // regenerates a FRESH keypair instead of resurrecting the old cryptographic identity.
         messageCrypto.wipeIdentity()
+        // ClientNote encryption key — drop it too so a re-created account can't resurrect old notes.
+        noteCrypto.wipe()
         // Device-global (NOT owner-scoped) local state that would otherwise leak to the next account
         // on this device — a saved-instructor wishlist, block-time windows, and delete/end tombstones.
         let d = UserDefaults.standard

@@ -218,7 +218,7 @@ struct StudentsListView: View {
                             .font(.system(size: 10))
                             .foregroundStyle(Color.floweCancel)
                     }
-                    if data.clientNote(forStudentID: summary.id)?.hasFlags == true {
+                    if data.clientNoteHasFlags(forStudentID: summary.id) {
                         ClientNoteFlag(size: 10)
                     }
                 }

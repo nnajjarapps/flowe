@@ -174,3 +174,65 @@ final class MessageCrypto {
         return nil
     }
 }
+
+/// The outcome of opening a sealed value. `.locked` (ciphertext present but the key isn't on this device
+/// yet — e.g. the note rows synced before the iCloud-Keychain key did) MUST NOT be treated as `.empty`
+/// and overwritten, or real health data is destroyed.
+enum NoteOpen<T> { case value(T), empty, locked }
+
+/// Encryption-at-rest for the instructor's PRIVATE ClientNotes (health-adjacent data). One symmetric key
+/// per instructor lives in their **iCloud Keychain** (`synchronizable` — E2E-protected by Apple, syncs
+/// across the instructor's own devices, and is SEPARATE from the CloudKit data path). The CloudKit private
+/// mirror therefore stores only ciphertext, so iCloud never holds readable health information (App Store
+/// Guideline 5.1.3). Wiped on account deletion.
+@MainActor
+final class NoteCrypto {
+    private static let keyKeychainKey = "flowe.clientnote.key.v1"
+    private var cached: SymmetricKey?
+
+    /// The key IF it already exists — NEVER mints one. Reads use this, so a key that is merely mid-sync
+    /// can't be clobbered by this device lazily generating a fresh one and racing it into iCloud Keychain.
+    private func existingKey() -> SymmetricKey? {
+        if let k = cached { return k }
+        guard let stored = KeychainStore.get(Self.keyKeychainKey, synchronizable: true),
+              let data = Data(base64Encoded: stored) else { return nil }
+        let k = SymmetricKey(data: data); cached = k; return k
+    }
+
+    /// The key, minting + persisting one only if none exists. Used ONLY for writes (an active save), where
+    /// a brand-new instructor legitimately needs their first key.
+    private func orCreateKey() -> SymmetricKey {
+        if let k = existingKey() { return k }
+        let k = SymmetricKey(size: .bits256)
+        KeychainStore.set(k.withUnsafeBytes { Data($0) }.base64EncodedString(),
+                          for: Self.keyKeychainKey, synchronizable: true)
+        cached = k
+        return k
+    }
+
+    /// Seal a Codable value → base64 ciphertext ("" only on an encode/seal failure; a blank note still
+    /// seals to non-empty ciphertext of an empty payload).
+    func seal<T: Encodable>(_ value: T) -> String {
+        guard let plain = try? JSONEncoder().encode(value),
+              let box = try? ChaChaPoly.seal(plain, using: orCreateKey()) else { return "" }
+        return box.combined.base64EncodedString()
+    }
+
+    /// Open base64 ciphertext. `.empty` = nothing stored; `.locked` = ciphertext present but the key is
+    /// absent/undecryptable on this device (caller must NOT overwrite it); `.value` = decrypted.
+    func open<T: Decodable>(_ stored: String, as type: T.Type) -> NoteOpen<T> {
+        if stored.isEmpty { return .empty }
+        guard let key = existingKey(),
+              let data = Data(base64Encoded: stored),
+              let box = try? ChaChaPoly.SealedBox(combined: data),
+              let plain = try? ChaChaPoly.open(box, using: key),
+              let value = try? JSONDecoder().decode(type, from: plain) else { return .locked }
+        return .value(value)
+    }
+
+    /// Drop the key on account deletion so a re-created account gets a fresh one (old ciphertext is unreadable).
+    func wipe() {
+        KeychainStore.set(nil, for: Self.keyKeychainKey, synchronizable: true)
+        cached = nil
+    }
+}

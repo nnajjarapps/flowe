@@ -14,6 +14,7 @@ struct DiscoverView: View {
     @State private var filter = "All"
     @State private var retakeQuiz = false
     @State private var showNotifications = false
+    @State private var showGuestSignIn = false   // 5.1.1(v): a guest tapping an account action
     @State private var showOpportunities = false
     /// Natural-language search interpretation in flight (Flowe Intelligence).
     @State private var interpreting = false
@@ -48,7 +49,8 @@ struct DiscoverView: View {
             (filter == "All" || ins.specialties.contains(filter)) &&
             (search.isEmpty
              || ins.name.lowercased().contains(search.lowercased())
-             || ins.address.lowercased().contains(search.lowercased()))
+             // A guest can't probe/confirm a street by typing it — address is not searchable for them.
+             || (!session.isGuest && ins.address.lowercased().contains(search.lowercased())))
         }
         let measured = matches.map {
             Row(instructor: $0,
@@ -164,7 +166,7 @@ struct DiscoverView: View {
                         onSelect: { instructor, dist in
                             selected = Row(instructor: instructor, distanceMetres: dist)
                         },
-                        onTakeQuiz: { retakeQuiz = true }
+                        onTakeQuiz: { if session.isGuest { showGuestSignIn = true } else { retakeQuiz = true } }
                     )
                     .floweAppear()
                 }
@@ -172,7 +174,9 @@ struct DiscoverView: View {
                 // Opportunities nudge — the student on-ramp into the Flowe Pro career marketplace. Only on
                 // the default view, and only when there's actually something open to browse, so it never
                 // leads to an empty list (the Profile card is the evergreen entry). See [[FlowePro]].
-                if filter == "All", search.isEmpty, !data.studentBrowsableOpportunities.isEmpty {
+                // Hidden for a guest: the Flowe Pro career on-ramp is account-based (applying needs an
+                // identity), and its Apply button would otherwise self-abort with no sign-in prompt.
+                if !session.isGuest, filter == "All", search.isEmpty, !data.studentBrowsableOpportunities.isEmpty {
                     opportunitiesBanner
                         .padding(.horizontal, 20)
                         .padding(.bottom, 20)
@@ -267,6 +271,7 @@ struct DiscoverView: View {
             }
         }
         .sheet(isPresented: $showNotifications) { NotificationSettingsView() }
+        .sheet(isPresented: $showGuestSignIn) { GuestSignInSheet() }
         .sheet(isPresented: $showOpportunities) { StudentOpportunitiesView() }
         // Keep the open feed fresh so the banner's show/hide (gated on there being something to browse)
         // reflects reality — otherwise it only appears after the student opens the sheet once.
@@ -349,20 +354,25 @@ struct DiscoverView: View {
                     .foregroundStyle(Color.floweInk)
             }
             Spacer()
-            viewToggle
-            Button {
-                showNotifications = true
-            } label: {
-                Image(systemName: "bell")
-                    .font(.system(size: 16))
-                    .foregroundStyle(Color.floweInk)
-                    .frame(width: 36, height: 36)
-                    .background(Color.floweCardBg)
-                    .clipShape(Circle())
-                    .overlay(Circle().stroke(Color.floweBorder, lineWidth: 1))
+            // A guest stays in the LIST — the Map plots exact studio coordinates (a precise-location
+            // leak), and the notifications bell would request push authorization + register subscriptions.
+            // Both are hidden until sign-in.
+            if !session.isGuest {
+                viewToggle
+                Button {
+                    showNotifications = true
+                } label: {
+                    Image(systemName: "bell")
+                        .font(.system(size: 16))
+                        .foregroundStyle(Color.floweInk)
+                        .frame(width: 36, height: 36)
+                        .background(Color.floweCardBg)
+                        .clipShape(Circle())
+                        .overlay(Circle().stroke(Color.floweBorder, lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Notifications")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Notifications")
         }
     }
 

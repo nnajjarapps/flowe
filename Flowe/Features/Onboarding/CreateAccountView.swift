@@ -5,6 +5,9 @@ import AuthenticationServices
 /// email/password form was removed rather than repaired.
 struct CreateAccountView: View {
     let role: UserRole
+    /// Guest-browse sign-in: adopt the account's real role on a mismatch instead of blocking. Onboarding
+    /// leaves this false so the cross-device role guard still applies. See [[Guest-Browse-Mode]].
+    var adoptExistingRole: Bool = false
     @Environment(AppSession.self) private var session
 
     @State private var errorMessage: String?
@@ -66,7 +69,7 @@ struct CreateAccountView: View {
                         .flowFont(.bodyMedium)
                         .foregroundStyle(Color.floweMuted)
                     NavigationLink("Log in") {
-                        LoginView(role: role)
+                        LoginView(role: role, adoptExistingRole: adoptExistingRole)
                     }
                     .flowFont(.bodyMedium)
                     .foregroundStyle(Color.flowePinkDeep)
@@ -104,7 +107,8 @@ struct CreateAccountView: View {
                     name: name.isEmpty ? "Member" : name,
                     email: cred.email ?? "",
                     desiredRole: role,
-                    acceptTerms: true
+                    acceptTerms: true,
+                    adoptExistingRole: adoptExistingRole
                 )
                 isSigningIn = false
                 if case .roleMismatch(let existing) = outcome {
@@ -133,7 +137,7 @@ struct TermsAcceptanceView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top, spacing: 10) {
-                Button { isAgreed.toggle() } label: {
+                Button { Haptic.selection(); isAgreed.toggle() } label: {
                     Image(systemName: isAgreed ? "checkmark.square.fill" : "square")
                         .font(.system(size: 20))
                         .foregroundStyle(isAgreed ? Color.flowePinkDeep : Color.floweMuted)
@@ -148,7 +152,7 @@ struct TermsAcceptanceView: View {
                     .foregroundStyle(Color.floweMuted)
                     .fixedSize(horizontal: false, vertical: true)
                     .contentShape(Rectangle())
-                    .onTapGesture { isAgreed.toggle() }
+                    .onTapGesture { Haptic.selection(); isAgreed.toggle() }
             }
             HStack(spacing: 16) {
                 Link("Terms of Use", destination: eula)

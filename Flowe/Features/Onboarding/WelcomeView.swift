@@ -10,6 +10,8 @@ import SwiftUI
 struct WelcomeView: View {
     var onGetStarted: () -> Void
     var onSignIn: () -> Void
+    /// Browse Discover without an account (App Store 5.1.1(v)). A low-emphasis third way in.
+    var onBrowse: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -93,6 +95,19 @@ struct WelcomeView: View {
 
             SecondaryButton(title: "I already have an account") { onSignIn() }
                 .floweAppear(5)
+
+            Button { onBrowse() } label: {
+                Text("Browse instructors")
+                    .font(FloweFont.sans(14, .medium))
+                    .foregroundStyle(Color.floweMuted)
+                    .padding(.vertical, 10)
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
+            }
+            .flowePressable()
+            .padding(.top, 2)
+            .floweAppear(5)
+            .accessibilityIdentifier("welcome.browse")
         }
         .padding(.horizontal, 24)
         .padding(.top, 4)

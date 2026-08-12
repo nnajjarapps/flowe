@@ -14,12 +14,22 @@ struct AppRouter: View {
     @ViewBuilder private var routed: some View {
         switch session.authState {
         case .unauthenticated:
-            OnboardingFlowView()
-                .floweAdaptiveColumn()
-                .transition(.asymmetric(
-                    insertion: .opacity,
-                    removal: .move(edge: .leading).combined(with: .opacity)
-                ))
+            // App Store 5.1.1(v): a guest may browse the non-account features (Discover + instructor
+            // profiles) without registering. A guest stays `.unauthenticated` (so every account write is
+            // still fenced off) but gets the student tab shell directly — NOT behind the terms gate
+            // (`hasAcceptedTerms` is false for the placeholder owner) or the student quiz (a student-only
+            // gate). Sign-in from any gated action clears `isGuest` and flips into the real `.student` arm.
+            if session.isGuest {
+                StudentTabView()
+                    .transition(.opacity)
+            } else {
+                OnboardingFlowView()
+                    .floweAdaptiveColumn()
+                    .transition(.asymmetric(
+                        insertion: .opacity,
+                        removal: .move(edge: .leading).combined(with: .opacity)
+                    ))
+            }
         case .student:
             gated {
                 Group {

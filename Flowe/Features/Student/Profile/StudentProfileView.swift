@@ -37,7 +37,7 @@ struct StudentProfileView: View {
     private var profile: StudentProfile? { data.studentProfile(forOwnerID: studentID) }
 
     /// The instructor's PRIVATE clinical/safety note about this client (private DB only), if any.
-    private var note: ClientNote? { data.clientNote(forStudentID: studentID) }
+    private var note: ClientNoteData? { data.clientNote(forStudentID: studentID) }
 
     /// The instructor's OWN bookings with this student — the sole source of relationship context.
     private var mySessions: [Booking] {
@@ -336,6 +336,17 @@ struct StudentProfileView: View {
 
                     if let note, note.hasContent {
                         noteReadRows(note)
+                    } else if data.clientNoteIsLocked(forStudentID: studentID) {
+                        // A note exists but its ciphertext hasn't decrypted on this device yet — show that,
+                        // NOT the empty "Add private notes" prompt (which would look like there's no note).
+                        HStack(spacing: 8) {
+                            Image(systemName: "lock.rotation")
+                                .font(.system(size: 14))
+                                .foregroundStyle(Color.flowePinkDeep)
+                            Text("Encrypted notes — syncing to this device…")
+                                .font(FloweFont.sans(14))
+                                .foregroundStyle(Color.floweMuted)
+                        }
                     } else {
                         HStack(spacing: 8) {
                             Image(systemName: "square.and.pencil")
@@ -359,7 +370,7 @@ struct StudentProfileView: View {
     /// The structured read-out of a saved note — one labelled row per populated field. Safety-critical
     /// fields (injury / pregnancy / conditions) always render when set; the rest only when non-empty.
     @ViewBuilder
-    private func noteReadRows(_ note: ClientNote) -> some View {
+    private func noteReadRows(_ note: ClientNoteData) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             if note.hasInjury {
                 noteRow(icon: "cross.case.fill", tint: .floweCancel,

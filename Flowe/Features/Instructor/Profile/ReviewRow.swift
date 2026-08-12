@@ -7,6 +7,10 @@ struct ReviewRow: View {
 
     let review: Review
 
+    /// A review is public, student-authored UGC, so it needs a report path like every other authored
+    /// surface (App Store Guideline 1.2). Long-press → Report.
+    @State private var showReport = false
+
     /// The reviewer's CURRENT name, resolved live from their profile — not the snapshot
     /// `Review.studentName` (which re-stamps from the remote each sync, so backfill can't fix it).
     /// Falls back to the review's own display name ("A student") when nothing is cached.
@@ -46,6 +50,18 @@ struct ReviewRow: View {
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .floweCard(cornerRadius: 16)
+        .contextMenu {
+            Button("Report review", systemImage: "flag", role: .destructive) { showReport = true }
+        }
+        .sheet(isPresented: $showReport) {
+            ReportSheet(
+                reportedID: review.studentID,
+                reportedName: reviewerName,
+                content: .review,
+                contentID: review.remoteID ?? review.bookingID,
+                snapshot: review.text
+            )
+        }
     }
 }
 

@@ -69,6 +69,7 @@ struct RoleSelectionView: View {
                 }
                 .flowFont(.bodyMedium)
                 .foregroundStyle(Color.flowePinkDeep)
+                .flowePressable()
             }
             .padding(.horizontal, FlowSpacing.xl)
             .padding(.bottom, FlowSpacing.xxxl)

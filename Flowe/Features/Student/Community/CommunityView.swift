@@ -34,6 +34,7 @@ struct CommunityView: View {
 
     @State private var tab: CommunityTab = .feed
     @State private var showCompose = false
+    @State private var selectedInstructor: Instructor?   // stories-strip tap → profile
 
     /// Namespace for the segmented control's sliding selection pill (matchedGeometryEffect).
     @Namespace private var segNS
@@ -54,6 +55,9 @@ struct CommunityView: View {
         }
         .sheet(isPresented: $showCompose) {
             ComposePostSheet()
+        }
+        .sheet(item: $selectedInstructor) { ins in
+            StudentInstructorProfileView(instructor: ins) { selectedInstructor = nil }
         }
     }
 
@@ -235,14 +239,25 @@ struct CommunityView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 12) {
                 ForEach(data.publishedInstructors.prefix(5)) { ins in
-                    VStack(spacing: 4) {
-                        AvatarView(id: ins.img, photo: ins.photo, size: 52, ring: true)
-                        Text(ins.firstName)
-                            .font(FloweFont.sans(9))
-                            .foregroundStyle(Color.floweInk)
-                            .lineLimit(1)
-                            .frame(width: 48)
+                    // The story-ring avatar reads as tappable (Instagram affordance) — wire it to the
+                    // instructor's profile instead of being a dead end.
+                    Button {
+                        Haptic.selection()
+                        selectedInstructor = ins
+                    } label: {
+                        VStack(spacing: 4) {
+                            AvatarView(id: ins.img, photo: ins.photo, size: 52, ring: true)
+                            Text(ins.firstName)
+                                .font(FloweFont.sans(9))
+                                .foregroundStyle(Color.floweInk)
+                                .lineLimit(1)
+                                .frame(width: 48)
+                        }
                     }
+                    .buttonStyle(.plain)
+                    .flowePressable()
+                    .accessibilityLabel(Text(verbatim: ins.firstName))
+                    .accessibilityHint("Opens profile")
                 }
             }
             .padding(.horizontal, 20)

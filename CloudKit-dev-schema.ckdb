@@ -53,15 +53,9 @@ DEFINE SCHEMA
     );
 
     RECORD TYPE CD_ClientNote (
-        CD_conditions       STRING QUERYABLE SEARCHABLE SORTABLE,
-        CD_emergencyContact STRING QUERYABLE SEARCHABLE SORTABLE,
         CD_entityName       STRING QUERYABLE SEARCHABLE SORTABLE,
-        CD_goals            STRING QUERYABLE SEARCHABLE SORTABLE,
-        CD_hasInjury        INT64 QUERYABLE SORTABLE,
-        CD_injuryNote       STRING QUERYABLE SEARCHABLE SORTABLE,
-        CD_isPregnant       INT64 QUERYABLE SORTABLE,
-        CD_notes            STRING QUERYABLE SEARCHABLE SORTABLE,
-        CD_pregnancyNote    STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_flagged          INT64 QUERYABLE SORTABLE,
+        CD_sealed           STRING,
         CD_studentID        STRING QUERYABLE SEARCHABLE SORTABLE,
         CD_updatedAt        TIMESTAMP QUERYABLE SORTABLE,
         "___createTime"     TIMESTAMP,

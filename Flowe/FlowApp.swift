@@ -85,6 +85,8 @@ struct FlowApp: App {
     @State private var data: MockDataStore
     @State private var settings = AppSettings()
     @State private var subscription = SubscriptionService()
+    /// Branded cold-start splash, shown once per launch (this state is created with the app) then faded.
+    @State private var showSplash = true
 
     init() {
         let container = FloweModelContainer.make()
@@ -123,7 +125,10 @@ struct FlowApp: App {
                 .environment(\.layoutDirection, settings.layoutDirection)
                 .task { await session.validateAppleCredential() }
                 .task(id: session.authState) {
-                    data.currentUserID = session.ownerID
+                    // Leave the store OWNERLESS for a guest (unauthenticated): with no currentUserID
+                    // every owner-keyed publish/mutator self-aborts, so a missed UI gate can't write
+                    // account data under the placeholder owner. Real identity is set only once signed in.
+                    data.currentUserID = session.authState == .unauthenticated ? nil : session.ownerID
                     data.currentUserName = session.currentUser?.fullName ?? ""
                     let isInstructor = session.authState == .instructor
                     if isInstructor {
@@ -232,7 +237,23 @@ struct FlowApp: App {
                 }
                 // Reflect the instructor's subscription onto their feed listing.
                 .onChange(of: subscription.tier) {
+                    // Only an instructor owns a listing to reveal — never publish visibility for a guest
+                    // or student under the placeholder owner. (The one write-capable onChange lacking a guard.)
+                    guard session.authState == .instructor else { return }
                     data.applyVisibility(subscription.tier?.mapsToVisibility ?? .none, for: session.ownerID)
+                }
+                // Branded cold-start moment: a short animated-logo splash over the app while the first
+                // frame settles, then a gentle fade to content. Replaces the blank system launch screen
+                // (empty UILaunchScreen). Fires once per launch — `showSplash` is created with the app.
+                .overlay {
+                    if showSplash {
+                        FloweLoadingView()
+                            .transition(.opacity)
+                            .task {
+                                try? await Task.sleep(for: .milliseconds(800))
+                                withAnimation(FloweMotion.gentle) { showSplash = false }
+                            }
+                    }
                 }
         }
     }

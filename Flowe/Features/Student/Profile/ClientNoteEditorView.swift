@@ -3,7 +3,8 @@ import SwiftUI
 /// The glanceable safety glyph shown on the instructor's booking surfaces when a client has a
 /// `ClientNote` with `hasFlags` set (injury / pregnancy / conditions). It shows ONLY that a safety
 /// note exists — never any note content. Gate its presence on
-/// `data.clientNote(forStudentID:)?.hasFlags == true`; this renders the glyph itself.
+/// `data.clientNoteHasFlags(forStudentID:)` (reads the opaque `flagged` hint, NO decrypt); this renders
+/// the glyph itself.
 struct ClientNoteFlag: View {
     var size: CGFloat = 11
     var body: some View {
@@ -39,10 +40,26 @@ struct ClientNoteEditorView: View {
     @State private var notes = ""
     /// Seed the editor from the existing note exactly once (a re-render must not clobber edits).
     @State private var didLoad = false
+    /// The note exists but its ciphertext can't be opened on this device yet (encryption key not synced).
+    /// Editing is disabled so a save can't overwrite the real health data with blanks.
+    @State private var isLocked = false
 
     var body: some View {
         NavigationStack {
             Form {
+                if isLocked {
+                    Section {
+                        HStack(alignment: .top, spacing: 10) {
+                            Image(systemName: "lock.rotation")
+                                .font(.system(size: 13))
+                                .foregroundStyle(Color.flowePinkDeep)
+                            Text("These notes are encrypted and haven't synced to this device yet. They'll appear once your iCloud Keychain catches up. Editing is disabled here so they can't be overwritten.")
+                                .font(FloweFont.sans(12))
+                                .foregroundStyle(Color.floweInk)
+                        }
+                        .padding(.vertical, 2)
+                    }
+                }
                 Section {
                     HStack(alignment: .top, spacing: 10) {
                         Image(systemName: "lock.fill")
@@ -88,6 +105,7 @@ struct ClientNoteEditorView: View {
                         .lineLimit(3...8)
                 }
             }
+            .disabled(isLocked)   // can't edit a note we couldn't decrypt — see isLocked
             .navigationTitle(Text("Client notes"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -95,7 +113,7 @@ struct ClientNoteEditorView: View {
                     Button("Cancel") { onClose() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { saveAndClose() }
+                    Button("Save") { saveAndClose() }.disabled(isLocked)
                 }
             }
         }
@@ -106,6 +124,9 @@ struct ClientNoteEditorView: View {
     private func seedIfNeeded() {
         guard !didLoad else { return }
         didLoad = true
+        // A note that exists but can't be decrypted here yet must NOT be seeded blank — lock the editor
+        // so a save can't overwrite the real ciphertext with empties (the new-device key-sync race).
+        if data.clientNoteIsLocked(forStudentID: studentID) { isLocked = true; return }
         guard let note = data.clientNote(forStudentID: studentID) else { return }
         hasInjury = note.hasInjury
         injuryNote = note.injuryNote
@@ -118,6 +139,7 @@ struct ClientNoteEditorView: View {
     }
 
     private func saveAndClose() {
+        guard !isLocked else { return onClose() }   // never overwrite a note we couldn't read
         data.saveClientNote(studentID: studentID,
                             hasInjury: hasInjury, injuryNote: injuryNote,
                             isPregnant: isPregnant, pregnancyNote: pregnancyNote,

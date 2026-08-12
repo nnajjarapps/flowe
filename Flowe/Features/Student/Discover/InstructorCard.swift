@@ -3,7 +3,11 @@ import SwiftUI
 /// Horizontal Discover list row: left image + right detail column, tappable.
 struct InstructorCard: View {
     @Environment(AppSettings.self) private var settings
+    @Environment(AppSession.self) private var session
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// Exact address, hidden from a guest (5.1.1(v) privacy) — the pin + distance chip still show.
+    private var addressText: String { session.isGuest ? "" : instructor.address }
     /// Instagram-style peek: a stationary long-press floats a richer preview card above the row
     /// (photo + name + rate + specialties); lifting the finger dismisses it. A normal tap still
     /// opens the profile via `action` — the peek is purely additive and non-hit-testing.
@@ -61,13 +65,13 @@ struct InstructorCard: View {
                             .font(.system(size: 10))
                         // The instructor's exact studio address — never localized. Empty shows nothing
                         // (no fallback to `city`), leaving just the pin and/or the distance chip.
-                        if !instructor.address.isEmpty {
-                            Text(instructor.address)
+                        if !addressText.isEmpty {
+                            Text(addressText)
                                 .font(FloweFont.sans(11))
                                 .lineLimit(1)
                         }
                         if let distanceMetres {
-                            if !instructor.address.isEmpty {
+                            if !addressText.isEmpty {
                                 Text(verbatim: "·").font(FloweFont.sans(11))
                             }
                             Text(FloweDistance.label(metres: distanceMetres))

@@ -29,22 +29,53 @@ struct StudentTabView: View {
 
     var body: some View {
         TabView(selection: tabSelection) {
+            // Discover is the NON-account feature — fully browsable by a guest (App Store 5.1.1(v)).
             DiscoverView().floweAdaptiveColumn()
                 .tabItem { Label("Discover", systemImage: "safari") }.tag(0)
 
-            CommunityView().floweAdaptiveColumn()
-                .tabItem { Label("Community", systemImage: "person.3") }.tag(1)
+            // The account-only tabs show a sign-in wall for a guest instead of their real content, so a
+            // guest can never reach an account write from here.
+            Group {
+                if session.isGuest {
+                    GuestSignInWall(icon: "person.3", title: "Join the community",
+                                    message: "Sign in to see familiar faces, follow practice-friends, and join the discussion.")
+                } else {
+                    CommunityView().floweAdaptiveColumn()
+                }
+            }
+            .tabItem { Label("Community", systemImage: "person.3") }.tag(1)
 
-            BookingsView().floweAdaptiveColumn()
-                .tabItem { Label("Bookings", systemImage: "calendar") }.tag(2)
+            Group {
+                if session.isGuest {
+                    GuestSignInWall(icon: "calendar", title: "Your bookings",
+                                    message: "Sign in to book classes and see your upcoming and past sessions here.")
+                } else {
+                    BookingsView().floweAdaptiveColumn()
+                }
+            }
+            .tabItem { Label("Bookings", systemImage: "calendar") }.tag(2)
 
             // Messaging needs both sides reachable — students previously had no way in at all.
-            MessageListView().floweAdaptiveColumn()
-                .tabItem { Label("Messages", systemImage: "message") }.tag(3)
-                .badge(data.unreadMessageCount)
+            Group {
+                if session.isGuest {
+                    GuestSignInWall(icon: "message", title: "Messages",
+                                    message: "Sign in to message instructors and keep your conversations in one place.")
+                } else {
+                    MessageListView().floweAdaptiveColumn()
+                }
+            }
+            .tabItem { Label("Messages", systemImage: "message") }.tag(3)
+            .badge(data.unreadMessageCount)
 
-            ProfileView().floweAdaptiveColumn()
-                .tabItem { Label("Profile", systemImage: "person.circle") }.tag(4)
+            Group {
+                if session.isGuest {
+                    GuestSignInWall(icon: "person.circle", title: "Your profile",
+                                    message: "Sign in to set up your profile, save instructors, and manage your account.")
+                } else {
+                    ProfileView().floweAdaptiveColumn()
+                }
+            }
+            .tabItem { Label("Profile", systemImage: "person.circle") }.tag(4)
         }
         .sidebarAdaptableIfAvailable()
         .tint(Color.flowePinkDeep)

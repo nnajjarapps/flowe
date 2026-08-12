@@ -123,20 +123,31 @@ struct StatTile: View {
 struct GradientButton: View {
     let title: LocalizedStringKey
     var enabled: Bool = true
+    /// While true the label is swapped for a spinner and taps are ignored — for async CTAs (a CloudKit
+    /// round-trip) that would otherwise look inert after the tap. The label keeps its width so the button
+    /// doesn't resize mid-action.
+    var isLoading: Bool = false
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(FloweFont.sans(15, .medium))
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 15)
-                .background(FlowGradients.gradDark)
-                .clipShape(RoundedRectangle(cornerRadius: 18))
+        Button {
+            guard !isLoading else { return }
+            action()
+        } label: {
+            ZStack {
+                Text(title)
+                    .font(FloweFont.sans(15, .medium))
+                    .foregroundStyle(.white)
+                    .opacity(isLoading ? 0 : 1)
+                if isLoading { ProgressView().tint(.white) }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 15)
+            .background(FlowGradients.gradDark)
+            .clipShape(RoundedRectangle(cornerRadius: 18))
         }
         .flowePressable()
-        .disabled(!enabled)
+        .disabled(!enabled || isLoading)
         .opacity(enabled ? 1 : 0.3)
     }
 }

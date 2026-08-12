@@ -27,7 +27,7 @@
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
-	<false/>
+	<true/>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Flowe uses your location to set your studio address so students can find and book you. It's only shared when you set it.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

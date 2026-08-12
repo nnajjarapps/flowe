@@ -10,6 +10,7 @@ struct FilterChipsBar: View {
             HStack(spacing: 8) {
                 ForEach(items, id: \.self) { item in
                     CategoryChip(title: item, isSelected: selection == item) {
+                        Haptic.selection()
                         withAnimation(.easeInOut(duration: 0.15)) { selection = item }
                     }
                 }
@@ -42,7 +43,11 @@ struct CategoryChip: View {
                     Capsule().stroke(isSelected ? Color.clear : Color.floweBorder, lineWidth: 1)
                 )
                 .clipShape(Capsule())
+                // Keep the pill compact but lift the touch target to the 44pt minimum.
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .flowePressable()
     }
 }
