@@ -22,6 +22,24 @@ final class FloweAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificatio
         return true
     }
 
+    /// The APNs device token arrived — hand it to the booking backend so it can push booking alerts to
+    /// this device. Before the backend, CloudKit delivered its own subscription pushes and this token
+    /// was never captured; the booking backend needs it explicitly.
+    func application(
+        _ application: UIApplication,
+        didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
+    ) {
+        let hex = deviceToken.map { String(format: "%02x", $0) }.joined()
+        Task { @MainActor in await FloweBackendClient.shared.registerAPNs(token: hex) }
+    }
+
+    func application(
+        _ application: UIApplication,
+        didFailToRegisterForRemoteNotificationsWithError error: Error
+    ) {
+        // Non-fatal: booking pushes just won't reach this device until registration next succeeds.
+    }
+
     /// A CloudKit subscription push. `shouldSendContentAvailable` on the subscription is what gets
     /// the app woken for this in the background — the point being that the matching sync runs, so
     /// the data behind the alert is already there when the user opens the app.

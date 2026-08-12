@@ -4,9 +4,12 @@ import UserNotifications
 
 /// Notification preferences.
 ///
-/// Every switch here controls something real. Turning one off deletes the matching
-/// `CKQuerySubscription` from the public database (see `PushService`), so the alerts genuinely
-/// stop rather than being hidden client-side — there is no server to filter them later.
+/// Every switch here controls something real. For CloudKit-backed alerts (messages, reviews,
+/// community, coverage) turning one off deletes the matching `CKQuerySubscription` from the public
+/// database (see `PushService`), so the alerts genuinely stop. **Booking requests** are the exception:
+/// those pushes come from the booking backend, so this toggle is sent to it
+/// (`FloweBackendClient.setBookingNotifications`) and honoured server-side via `devices.notify_bookings`
+/// — either way, the alerts truly stop rather than being hidden client-side.
 ///
 /// Two switches were removed rather than left decorative:
 /// - **Payouts.** Flowe processes no session money at all; students settle with the instructor
@@ -145,6 +148,8 @@ struct NotificationSettingsView: View {
         Task {
             await push.refreshSubscriptions(ownerID: session.ownerID, isInstructor: isInstructor)
             await push.scheduleSessionReminders()
+            // Booking pushes come from the backend now, so its per-device preference must be updated too.
+            await FloweBackendClient.shared.setBookingNotifications(bookings)
         }
     }
 }

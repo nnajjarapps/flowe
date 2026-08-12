@@ -100,6 +100,9 @@ struct CreateAccountView: View {
             // as the OTHER role (e.g. it's an instructor on another device), the session is blocked
             // rather than creating a split-brain that shares — and corrupts — the same private database.
             // The user agreed on this screen (the button is disabled otherwise), so pass `acceptTerms`.
+            // The identity token (a JWT) is the credential Apple returns on EVERY sign-in; the booking
+            // backend verifies it to mint a per-device session. Optional, so bootstrap only when present.
+            let identityToken = cred.identityToken.flatMap { String(data: $0, encoding: .utf8) }
             isSigningIn = true
             Task {
                 let outcome = await session.startSignIn(
@@ -108,7 +111,8 @@ struct CreateAccountView: View {
                     email: cred.email ?? "",
                     desiredRole: role,
                     acceptTerms: true,
-                    adoptExistingRole: adoptExistingRole
+                    adoptExistingRole: adoptExistingRole,
+                    identityToken: identityToken
                 )
                 isSigningIn = false
                 if case .roleMismatch(let existing) = outcome {

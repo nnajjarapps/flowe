@@ -262,63 +262,11 @@ final class PushService {
     private func plans(ownerID: String, isInstructor: Bool) -> [Plan] {
         var plans: [Plan] = []
 
-        if isEnabled(NotificationPreference.bookings) {
-            if isInstructor {
-                // Mirrors `BookingService.fetchForInstructor`: requests are addressed by
-                // `instructorID`, and the student is the record's creator, so this can never fire
-                // for the instructor's own write.
-                plans.append(Plan(
-                    id: Self.subscriptionID(.bookings, "requested", ownerID),
-                    recordType: BookingService.bookingRecordType,
-                    predicate: NSPredicate(
-                        format: "\(BookingService.bookingRecipientField) == %@", ownerID
-                    ),
-                    options: [.firesOnRecordCreation],
-                    titleKey: "push.booking.requested.title", titleArgs: [],
-                    bodyKey: "push.booking.requested.body", bodyArgs: ["studentName"]
-                ))
-                // A cancellation is an *update* to that same record — `BookingService.cancel` flips
-                // `cancelled`, and the student is the only person who can write to a booking they
-                // created, so an update to a booking addressed to me is a cancellation.
-                plans.append(Plan(
-                    id: Self.subscriptionID(.bookings, "cancelled", ownerID),
-                    recordType: BookingService.bookingRecordType,
-                    predicate: NSPredicate(
-                        format: "\(BookingService.bookingRecipientField) == %@", ownerID
-                    ),
-                    options: [.firesOnRecordUpdate],
-                    titleKey: "push.booking.cancelled.title", titleArgs: [],
-                    bodyKey: "push.booking.cancelled.body", bodyArgs: ["studentName"]
-                ))
-            } else {
-                // Accept and decline need different words, and one subscription can carry only one
-                // alert, so they are two subscriptions split on `confirmed`. `studentID` is
-                // denormalised onto the decision by `BookingService.respond` precisely so a
-                // predicate can address the student at all.
-                plans.append(Plan(
-                    id: Self.subscriptionID(.bookings, "confirmed", ownerID),
-                    recordType: BookingService.decisionRecordType,
-                    predicate: NSPredicate(
-                        format: "\(BookingService.decisionRecipientField) == %@ AND confirmed == 1",
-                        ownerID
-                    ),
-                    options: [.firesOnRecordCreation, .firesOnRecordUpdate],
-                    titleKey: "push.booking.confirmed.title", titleArgs: [],
-                    bodyKey: "push.booking.confirmed.body", bodyArgs: []
-                ))
-                plans.append(Plan(
-                    id: Self.subscriptionID(.bookings, "declined", ownerID),
-                    recordType: BookingService.decisionRecordType,
-                    predicate: NSPredicate(
-                        format: "\(BookingService.decisionRecipientField) == %@ AND confirmed == 0",
-                        ownerID
-                    ),
-                    options: [.firesOnRecordCreation, .firesOnRecordUpdate],
-                    titleKey: "push.booking.declined.title", titleArgs: [],
-                    bodyKey: "push.booking.declined.body", bodyArgs: []
-                ))
-            }
-        }
+        // Booking requests/decisions now arrive from the booking backend over APNs — it OWNS the push
+        // because those records left the world-readable CloudKit public DB (removing `GRANT READ _world`
+        // would also kill any CKQuerySubscription, which only fires for records the subscriber can read).
+        // See [[BookingBackend]]. The `.bookings` toggle is honoured backend-side; no CloudKit
+        // subscription is registered here anymore. `refreshSubscriptions` sweeps the old ones by absence.
 
         // Both roles message, and `MessagingService` addresses by `recipientID` — the sender is the
         // creator, so this never fires for the user's own message.

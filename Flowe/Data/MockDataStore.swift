@@ -957,11 +957,25 @@ final class MockDataStore {
     /// synchronously on the main actor before the first await, so the check-and-set is atomic.
     private var isSyncingBookings = false
 
+    /// One-time cutover to the booking backend. The backend is now the authoritative source for
+    /// bookings, so any pre-cutover local `Booking` rows (mirrored from the old world-readable CloudKit
+    /// SessionBooking records, which are NOT migrated) are cleared ONCE — otherwise they linger as
+    /// ghosts that never reconcile away (the backend soft-deletes via `cancelled`, so an absent id never
+    /// means "delete this local row"). Pilot booking data is disposable; users re-book against the backend.
+    private func runBookingCutoverIfNeeded() {
+        let key = "flowe.backend.bookingCutover.v1"
+        guard !UserDefaults.standard.bool(forKey: key) else { return }
+        try? context.delete(model: Booking.self)
+        try? context.save()
+        UserDefaults.standard.set(true, forKey: key)
+    }
+
     func syncBookings(asInstructor: Bool) async {
         guard !isPreview, let currentUserID else { return }
         guard !isSyncingBookings else { return }
         isSyncingBookings = true
         defer { isSyncingBookings = false }
+        runBookingCutoverIfNeeded()
         if bookingsPhase != .loaded { bookingsPhase = .loading }
         if asInstructor { await flushPendingListing() } else { await flushPendingStudentProfile() }
         await flushPendingWrites()
@@ -4522,19 +4536,14 @@ final class MockDataStore {
     /// public bookings, warms profiles, keeps only community opt-ins. Empty unless the viewer is opted in
     /// too. See [[Flowe-Community]].
     func fetchInstructorCircle(ownerID: String) async -> [(id: String, name: String)] {
-        guard !isPreview, isCommunityVisible, let me = currentUserID,
-              let bookings = await bookingService.fetchForInstructor(ownerID: ownerID) else { return [] }
-        let unique = Set(bookings
-            .filter { !$0.cancelled && $0.studentID != me && !isBlocked($0.studentID) }
-            .map(\.studentID))
-        await warmRosterPeers(unique)
-        var out: [(id: String, name: String)] = []
-        for id in unique {
-            guard peerCommunityVisible(id) else { continue }
-            let n = displayIdentity(ownerID: id, fallbackName: "").name   // resolves student OR instructor
-            out.append((id, n))
-        }
-        return out.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        // DISABLED under the booking-backend privacy model. This previously fetched a FOREIGN
+        // instructor's ENTIRE student roster (`fetchForInstructor(ownerID: X)`) and showed it to any
+        // profile viewer — exactly the who-trains-with-whom relationship-graph exposure the backend
+        // exists to stop. The backend only ever returns the CALLER's own inbox, never a stranger's, so
+        // this can't be satisfied without re-opening the leak. Re-enabling needs a consent-enforced,
+        // backend-scoped design (see flowe-booking-privacy-deferred / [[BookingBackend]]).
+        // `fetchClassmates` stays: it is party-scoped to a slot the viewer is actually booked into.
+        return []
     }
 
     // MARK: - Circle discussion (Flowe Community slice 4b)

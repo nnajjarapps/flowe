@@ -212,6 +212,9 @@ final class AppSession {
 
     /// On launch, drop the session if Apple has revoked the credential.
     func validateAppleCredential() async {
+        // Retry any interrupted logout / account-deletion backend teardown (offline at the time),
+        // before anything else — this runs even when signed out.
+        await FloweBackendClient.shared.resumePendingTeardown()
         #if DEBUG
         // Injected debug identity (two-party test harness) is unknown to Apple, so the real
         // credential check would report `.notFound` and log us straight back out. Skip it.
@@ -222,6 +225,14 @@ final class AppSession {
             .credentialState(forUserID: appleUserID)
         if state == .revoked || state == .notFound {
             await MainActor.run { logout() }
+            return
+        }
+        // Keep an existing backend session fresh at launch — SILENTLY. An upgraded/new-device user with
+        // no tokens is NOT prompted here (an unbidden Apple sheet over cold-start is jarring and re-nags
+        // on cancel); interactive re-auth is deferred to the first booking action they take
+        // (BookingService writes pass interactive: true).
+        if authState != .unauthenticated {
+            await FloweBackendClient.shared.ensureSessionSilently()
         }
     }
 
@@ -333,7 +344,8 @@ final class AppSession {
     @MainActor
     func startSignIn(appleUserID: String, name: String, email: String,
                      desiredRole: UserRole, acceptTerms: Bool = false,
-                     adoptExistingRole: Bool = false) async -> SignInOutcome {
+                     adoptExistingRole: Bool = false,
+                     identityToken: String? = nil) async -> SignInOutcome {
         setAppleUserID(appleUserID)
         let established = await accountRoleService.lookup(for: appleUserID)
         let gate = Self.roleGate(desired: desiredRole, established: established)
@@ -341,6 +353,7 @@ final class AppSession {
             if adoptExistingRole, case .claimed(let actual) = established {
                 if acceptTerms { recordTermsAcceptance() }
                 startSession(defaultName: name, email: email, role: actual)
+                await bootstrapBackend(identityToken: identityToken)
                 return .started(actual)
             }
             clearPendingIdentity()
@@ -350,7 +363,18 @@ final class AppSession {
         if acceptTerms { recordTermsAcceptance() }
         startSession(defaultName: name, email: email, role: desiredRole)
         if gate.claim { await accountRoleService.setRole(desiredRole, for: appleUserID) }
+        await bootstrapBackend(identityToken: identityToken)
         return .started(desiredRole)
+    }
+
+    /// Bootstrap the booking backend session from the fresh Apple identityToken captured at sign-in.
+    /// Non-fatal: the CloudKit-first local session proceeds regardless; a booking action or launch
+    /// retries via the backend's own refresh token. Placed on the `.started` paths only — a
+    /// `.roleMismatch` clears the pending identity and must leave NO backend session either.
+    @MainActor
+    private func bootstrapBackend(identityToken: String?) async {
+        guard let identityToken else { return }
+        await FloweBackendClient.shared.bootstrap(identityToken: identityToken)
     }
 
     /// Deliberately switch this account between student and instructor (Settings action). Updates the
@@ -410,6 +434,14 @@ final class AppSession {
     }
 
     func logout() {
+        // Tell the backend to stop pushing to this device and drop the backend session tokens.
+        Task { @MainActor in await FloweBackendClient.shared.logout() }
+        clearLocalSession()
+    }
+
+    /// Clear local session state. Shared by `logout` and `deleteAccount`; does NOT itself call the
+    /// backend, so a deletion (which must purge via DELETE /me) can't race the device-only logout.
+    private func clearLocalSession() {
         currentUser = nil
         appleUserID = nil
         authState = .unauthenticated
@@ -435,6 +467,8 @@ final class AppSession {
     /// scoped by `ownerID` (== `appleUserID`), so they MUST be removed BEFORE `logout()` nils
     /// `appleUserID` — after that `ownerID` falls back to the local placeholder and the removals miss.
     func deleteAccount() {
+        // Purge every backend row this user is party to (DELETE /me) before the session is dropped.
+        Task { @MainActor in await FloweBackendClient.shared.deleteAccount() }
         let owner = ownerID
         let d = UserDefaults.standard
         d.removeObject(forKey: durableProfileKey(for: owner))
@@ -442,7 +476,7 @@ final class AppSession {
         d.removeObject(forKey: termsKey(for: owner))
         d.removeObject(forKey: termsKey(for: owner) + ".date")
         d.removeObject(forKey: "flowe.studioWizardDismissed.\(owner)")
-        logout()
+        clearLocalSession()
     }
 
     private func persist(role: UserRole) {

@@ -88,6 +88,9 @@ struct LoginView: View {
             // as the OTHER role, the session is blocked instead of creating a split-brain that shares
             // (and corrupts) the same private database. A user who has never accepted the terms is caught
             // by the router's gate right after sign-in.
+            // The identity token (a JWT) is the credential Apple returns on EVERY sign-in; the booking
+            // backend verifies it to mint a per-device session. Optional, so bootstrap only when present.
+            let identityToken = cred.identityToken.flatMap { String(data: $0, encoding: .utf8) }
             isSigningIn = true
             Task {
                 let outcome = await session.startSignIn(
@@ -95,7 +98,8 @@ struct LoginView: View {
                     name: AppSession.displayName(fromEmail: cred.email ?? "member@flowe.app"),
                     email: cred.email ?? "member@flowe.app",
                     desiredRole: role,
-                    adoptExistingRole: adoptExistingRole
+                    adoptExistingRole: adoptExistingRole,
+                    identityToken: identityToken
                 )
                 isSigningIn = false
                 if case .roleMismatch(let existing) = outcome {

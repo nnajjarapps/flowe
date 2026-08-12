@@ -144,6 +144,7 @@
 		CBFB8B8FCECB055D0CD20613 /* LocationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 489CC61A3C045B16825417BC /* LocationService.swift */; };
 		CF622EEBD2BC486D9A84998C /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15B1DE12827C5A88561BD697 /* SettingsView.swift */; };
 		D25960D86785C7A62A7E889F /* BookingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76B4EA7D7447F4834D4A1344 /* BookingService.swift */; };
+		F2E1D0C9B8A7F6E5D4C3B2A1 /* FloweBackendClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F2 /* FloweBackendClient.swift */; };
 		D366C3A2F61CAD85483EF88D /* FeedPost.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8FDF5E6BF0F2C754325BF04 /* FeedPost.swift */; };
 		D5AA2DE96CEDB7C90B840036 /* RoleSelectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 185D1CBA0B81BE9EA96AC524 /* RoleSelectionView.swift */; };
 		D9BB2A3E7220EBE6FC21C87D /* DiscoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9E71A63E8A8245F5C5FD06C /* DiscoverView.swift */; };
@@ -315,6 +316,7 @@
 		7577F6212A80C9C837232B63 /* FlowSpacing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowSpacing.swift; sourceTree = "<group>"; };
 		75EABC10430200F40133C4BA /* BookingFlowUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookingFlowUITests.swift; sourceTree = "<group>"; };
 		76B4EA7D7447F4834D4A1344 /* BookingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookingService.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6A7B8C9D0E1F2 /* FloweBackendClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloweBackendClient.swift; sourceTree = "<group>"; };
 		7C215EA6CA9B6C406E13E338 /* DMSans-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "DMSans-Regular.ttf"; sourceTree = "<group>"; };
 		7F25A7337CFD62358334F757 /* User.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = User.swift; sourceTree = "<group>"; };
 		FEEDFACE000000000000FF02 /* StudentProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudentProfile.swift; sourceTree = "<group>"; };
@@ -492,6 +494,7 @@
 				809064CB2D2B53C56BDBAFB0 /* AccountDeletionService.swift */,
 				F71DDCF02E488698B7C62351 /* AppSettings.swift */,
 				76B4EA7D7447F4834D4A1344 /* BookingService.swift */,
+				A1B2C3D4E5F6A7B8C9D0E1F2 /* FloweBackendClient.swift */,
 				10A50AB15C47E4490CEB456C /* CatalogService.swift */,
 				FEEDFACE000000000000FF12 /* StudentDirectoryService.swift */,
 				FEEDFACE000000000000FF14 /* AccountRoleService.swift */,
@@ -1117,6 +1120,7 @@
 				B856A8B42978FBFBE8435D06 /* BookingCard.swift in Sources */,
 				FF05000000000000000CLM02 /* ClassmatesSheet.swift in Sources */,
 				D25960D86785C7A62A7E889F /* BookingService.swift in Sources */,
+				F2E1D0C9B8A7F6E5D4C3B2A1 /* FloweBackendClient.swift in Sources */,
 				C153033035FA8E7A3BB94A43 /* BookingSheet.swift in Sources */,
 				3FF8C57AFCC90DFF4A68A8D3 /* BookingStatus+Badge.swift in Sources */,
 				40D6611F9D19149DD4E25E1A /* BookingsView.swift in Sources */,

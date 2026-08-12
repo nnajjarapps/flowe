@@ -1,0 +1,316 @@
+import Foundation
+import AuthenticationServices
+#if canImport(UIKit)
+import UIKit
+#endif
+
+/// Where the booking authorization backend lives. The rest of the app stays serverless on CloudKit;
+/// only the booking/decision exchange (and the roster/class-mates read) go through here so that
+/// who-trains-with-whom is returned ONLY to the two parties, via a per-request authorization check
+/// CloudKit's public DB cannot provide. See flowe_vault/nodes/system/BookingBackend.md.
+enum FloweBackend {
+    /// The live Cloudflare Worker. A custom domain can front this later without touching callers.
+    static let baseURL = URL(string: "https://flowe-backend.flowepilates.workers.dev")!
+}
+
+enum BackendError: Error {
+    /// No session and no non-interactive way to obtain one (caller should degrade, not crash).
+    case notAuthenticated
+    case http(Int)
+    case transport(Error)
+}
+
+/// The single HTTP client for the booking backend. Owns the per-device session lifecycle:
+/// verifies the Apple identity token ONCE (via POST /auth/apple) to mint a short session token +
+/// long-lived refresh token, both kept in the NON-synchronizable Keychain (device-scoped — unlike the
+/// DM key, a rotating token must not sync across devices). Transport only; the booking *domain* calls
+/// live in `BookingService`, which uses `authorized(...)` here.
+@MainActor
+final class FloweBackendClient {
+    static let shared = FloweBackendClient()
+    private init() {}
+
+    // Non-synchronizable (default) Keychain slots — device-scoped, do not ride iCloud Keychain.
+    private let sessionKey = "flowe.session.token.v1"
+    private let refreshKey = "flowe.session.refresh.v1"
+    private let deviceKey  = "flowe.session.device.v1"
+    // Set when a logout/delete teardown couldn't reach the backend, so a later launch retries it
+    // instead of orphaning the device row / the user's booking rows.
+    private let pendingLogoutKey = "flowe.session.pendingLogout"
+    private let pendingDeleteKey = "flowe.session.pendingDelete"
+
+    private let urlSession = URLSession(configuration: .default)
+    /// Latest APNs device token (hex). Cached because the token callback can land before or during
+    /// auth; we (re)post it whenever a session exists.
+    private var apnsTokenHex: String?
+    /// Retains the in-flight Apple re-auth helper for the duration of the request.
+    private var reauth: AppleReauth?
+
+    /// The debug two-party harness injects an ownerID with no real Apple credential; skip the backend
+    /// entirely there so those launches don't 401 against live JWKS verification.
+    private var isDebugInjected: Bool {
+        #if DEBUG
+        return UserDefaults.standard.string(forKey: "flowe.debugAppleUserID")?.isEmpty == false
+        #else
+        return false
+        #endif
+    }
+
+    /// Stable per-install id; minted once and persisted. Maps to the backend `devices` row.
+    private var deviceID: String {
+        if let existing = KeychainStore.get(deviceKey) { return existing }
+        let fresh = UUID().uuidString
+        KeychainStore.set(fresh, for: deviceKey)
+        return fresh
+    }
+
+    var hasSession: Bool { KeychainStore.get(sessionKey) != nil || KeychainStore.get(refreshKey) != nil }
+
+    /// The app's "Booking requests" toggle (NotificationPreference.bookings, default on), sent to the
+    /// backend so it can honour it server-side — the toggle is otherwise inert now that booking pushes
+    /// come from the backend rather than a CloudKit subscription.
+    private var bookingNotificationsEnabled: Bool {
+        UserDefaults.standard.object(forKey: "notif.bookings") as? Bool ?? true
+    }
+
+    // MARK: - Session lifecycle
+
+    /// Exchange a fresh Apple identityToken for a backend session. Non-fatal on failure — the local
+    /// CloudKit-first session still proceeds; a later authorized call or launch retries.
+    func bootstrap(identityToken: String) async {
+        guard !isDebugInjected else { return }
+        struct Req: Encodable { let identityToken: String; let deviceId: String; let apnsToken: String?; let notifyBookings: Bool }
+        let payload = Req(identityToken: identityToken, deviceId: deviceID,
+                          apnsToken: apnsTokenHex, notifyBookings: bookingNotificationsEnabled)
+        do {
+            let data = try await rawSend("/auth/apple", method: "POST",
+                                         jsonBody: try JSONEncoder().encode(payload), bearer: nil)
+            struct Resp: Decodable { let sessionToken: String; let refreshToken: String }
+            let resp = try JSONDecoder().decode(Resp.self, from: data)
+            KeychainStore.set(resp.sessionToken, for: sessionKey)
+            KeychainStore.set(resp.refreshToken, for: refreshKey)
+            clearPendingTeardown()
+            await flushPendingAPNs()   // token that arrived mid-bootstrap is now postable
+        } catch {
+            // swallow — booking calls degrade to notAuthenticated until a session exists
+        }
+    }
+
+    /// Silent session ensure (NO UI): valid session → true; else try a refresh. For launch/background.
+    @discardableResult
+    func ensureSessionSilently() async -> Bool {
+        guard !isDebugInjected else { return false }
+        if KeychainStore.get(sessionKey) != nil { return true }
+        return await refreshSession()
+    }
+
+    /// Interactive ensure: silent first; if that fails, re-auth with Apple for a fresh identityToken.
+    /// Call ONLY from a user-initiated action (a booking write) — never a launch/background path.
+    @discardableResult
+    func ensureInteractiveSession() async -> Bool {
+        guard !isDebugInjected else { return false }
+        if await ensureSessionSilently() { return true }
+        let helper = AppleReauth()
+        reauth = helper
+        defer { reauth = nil }
+        guard let token = try? await helper.identityToken() else { return false }
+        await bootstrap(identityToken: token)
+        return KeychainStore.get(sessionKey) != nil
+    }
+
+    /// Refresh the short session token. On a DEFINITIVE 401 (refresh token revoked/expired) wipe BOTH
+    /// tokens so `hasSession` drops and the app re-auths cleanly; on transport/5xx keep them (offline
+    /// is recoverable). Stores the rotated refresh token the backend returns.
+    private func refreshSession() async -> Bool {
+        guard let refresh = KeychainStore.get(refreshKey) else { return false }
+        struct Req: Encodable { let refreshToken: String; let deviceId: String }
+        do {
+            let data = try await rawSend("/auth/refresh", method: "POST",
+                                         jsonBody: try JSONEncoder().encode(Req(refreshToken: refresh, deviceId: deviceID)),
+                                         bearer: nil)
+            struct Resp: Decodable { let sessionToken: String; let refreshToken: String? }
+            let resp = try JSONDecoder().decode(Resp.self, from: data)
+            KeychainStore.set(resp.sessionToken, for: sessionKey)
+            if let rotated = resp.refreshToken { KeychainStore.set(rotated, for: refreshKey) }
+            return true
+        } catch BackendError.http(401) {
+            wipeTokens()   // the refresh token is dead — don't leave a permanently wedged session
+            return false
+        } catch {
+            return false   // transient — keep tokens for the next attempt
+        }
+    }
+
+    // MARK: - Authorized requests (the seam BookingService uses)
+
+    func authorized(_ path: String, method: String = "GET", query: [URLQueryItem] = [], interactive: Bool = false) async throws -> Data {
+        try await authorizedData(path, method: method, query: query, jsonBody: nil, interactive: interactive)
+    }
+
+    func authorized<T: Encodable>(_ path: String, method: String = "POST", query: [URLQueryItem] = [], body: T, interactive: Bool = false) async throws -> Data {
+        try await authorizedData(path, method: method, query: query, jsonBody: try JSONEncoder().encode(body), interactive: interactive)
+    }
+
+    /// Core: guarantee a session, attach the bearer, and transparently refresh once on a 401. Reads
+    /// pass `interactive: false` (a failed session → `.notAuthenticated`, degrade quietly); user-driven
+    /// writes pass `interactive: true` so an upgraded/new-device user gets a contextual Apple re-auth.
+    private func authorizedData(_ path: String, method: String, query: [URLQueryItem], jsonBody: Data?, interactive: Bool) async throws -> Data {
+        guard !isDebugInjected else { throw BackendError.notAuthenticated }
+        try await ensureAuthed(interactive: interactive)
+        do {
+            return try await rawSend(path, method: method, query: query, jsonBody: jsonBody, bearer: KeychainStore.get(sessionKey))
+        } catch BackendError.http(401) {
+            try await ensureAuthed(interactive: interactive, forceRefresh: true)
+            return try await rawSend(path, method: method, query: query, jsonBody: jsonBody, bearer: KeychainStore.get(sessionKey))
+        }
+    }
+
+    private func ensureAuthed(interactive: Bool, forceRefresh: Bool = false) async throws {
+        if !forceRefresh, KeychainStore.get(sessionKey) != nil { return }
+        if await refreshSession() { return }
+        if interactive, await ensureInteractiveSession() { return }
+        throw BackendError.notAuthenticated
+    }
+
+    // MARK: - Device / push
+
+    /// Cache the APNs token and, if a session exists, register it. Re-posts on rotation.
+    func registerAPNs(token hex: String) async {
+        apnsTokenHex = hex
+        guard !isDebugInjected, hasSession else { return }
+        struct Req: Encodable { let deviceId: String; let apnsToken: String }
+        _ = try? await authorized("/devices", method: "POST", body: Req(deviceId: deviceID, apnsToken: hex))
+    }
+
+    /// Re-post a token that was cached before a session existed (e.g. it arrived mid-bootstrap).
+    private func flushPendingAPNs() async {
+        guard let hex = apnsTokenHex, KeychainStore.get(sessionKey) != nil else { return }
+        struct Req: Encodable { let deviceId: String; let apnsToken: String }
+        guard let jsonBody = try? JSONEncoder().encode(Req(deviceId: deviceID, apnsToken: hex)) else { return }
+        _ = try? await rawSend("/devices", method: "POST", jsonBody: jsonBody, bearer: KeychainStore.get(sessionKey))
+    }
+
+    /// Push the "Booking requests" toggle to the backend so booking pushes actually stop/resume.
+    func setBookingNotifications(_ enabled: Bool) async {
+        guard !isDebugInjected, hasSession else { return }
+        struct Req: Encodable { let deviceId: String; let notifyBookings: Bool }
+        _ = try? await authorized("/devices", method: "POST", body: Req(deviceId: deviceID, notifyBookings: enabled))
+    }
+
+    // MARK: - Teardown
+
+    /// Logout: stop the backend pushing to this device, then wipe local tokens. Wipes ONLY on a
+    /// confirmed DELETE; otherwise keeps the session and flags a retry so the device row isn't
+    /// orphaned (which would keep pushing the prior user's booking alerts to a signed-out device).
+    func logout() async {
+        struct Req: Encodable { let deviceId: String }
+        let ok = (try? await authorized("/devices", method: "DELETE", body: Req(deviceId: deviceID))) != nil
+        if ok {
+            UserDefaults.standard.removeObject(forKey: pendingLogoutKey)
+            wipeTokens()
+        } else {
+            UserDefaults.standard.set(true, forKey: pendingLogoutKey)
+        }
+    }
+
+    /// Account deletion (Guideline 5.1.1v): purge every backend row this user is party to, then wipe.
+    /// Wipes ONLY on a confirmed DELETE; otherwise keeps the session and flags a retry so the user's
+    /// relationship-graph rows are never silently orphaned (which would defeat the deletion promise).
+    func deleteAccount() async {
+        let ok = (try? await authorized("/me", method: "DELETE")) != nil
+        if ok {
+            UserDefaults.standard.removeObject(forKey: pendingDeleteKey)
+            wipeTokens()
+        } else {
+            UserDefaults.standard.set(true, forKey: pendingDeleteKey)
+        }
+    }
+
+    /// Retry an interrupted logout/delete at launch (a deletion takes priority over a logout).
+    func resumePendingTeardown() async {
+        guard !isDebugInjected else { return }
+        if UserDefaults.standard.bool(forKey: pendingDeleteKey) { await deleteAccount(); return }
+        if UserDefaults.standard.bool(forKey: pendingLogoutKey) { await logout() }
+    }
+
+    private func clearPendingTeardown() {
+        UserDefaults.standard.removeObject(forKey: pendingLogoutKey)
+        UserDefaults.standard.removeObject(forKey: pendingDeleteKey)
+    }
+
+    private func wipeTokens() {
+        KeychainStore.set(nil, for: sessionKey)
+        KeychainStore.set(nil, for: refreshKey)
+        // deviceID intentionally preserved — a fresh sign-in reuses the same device row.
+    }
+
+    // MARK: - Raw transport
+
+    private func rawSend(_ path: String, method: String, query: [URLQueryItem] = [], jsonBody: Data?, bearer: String?) async throws -> Data {
+        var comps = URLComponents(url: FloweBackend.baseURL, resolvingAgainstBaseURL: false)!
+        comps.path = path
+        if !query.isEmpty { comps.queryItems = query }
+        guard let url = comps.url else { throw BackendError.transport(URLError(.badURL)) }
+        var req = URLRequest(url: url)
+        req.httpMethod = method
+        if let bearer { req.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization") }
+        if let jsonBody {
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.httpBody = jsonBody
+        }
+        let data: Data, response: URLResponse
+        do {
+            (data, response) = try await urlSession.data(for: req)
+        } catch {
+            throw BackendError.transport(error)
+        }
+        let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200..<300).contains(code) else { throw BackendError.http(code) }
+        return data
+    }
+}
+
+/// One-shot Apple re-authentication that yields a fresh identityToken. Used only when the backend
+/// refresh token is gone; for an already-authorized user on the same device this typically completes
+/// with minimal or no UI. This is the codebase's only hand-rolled ASAuthorizationController (all other
+/// sign-in goes through SwiftUI's SignInWithAppleButton).
+@MainActor
+final class AppleReauth: NSObject, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
+    private var continuation: CheckedContinuation<String, Error>?
+
+    func identityToken() async throws -> String {
+        try await withCheckedThrowingContinuation { cont in
+            continuation = cont
+            let request = ASAuthorizationAppleIDProvider().createRequest()
+            let controller = ASAuthorizationController(authorizationRequests: [request])
+            controller.delegate = self
+            controller.presentationContextProvider = self
+            controller.performRequests()
+        }
+    }
+
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
+        guard let cred = authorization.credential as? ASAuthorizationAppleIDCredential,
+              let data = cred.identityToken,
+              let token = String(data: data, encoding: .utf8) else {
+            continuation?.resume(throwing: BackendError.notAuthenticated); continuation = nil; return
+        }
+        continuation?.resume(returning: token); continuation = nil
+    }
+
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
+        continuation?.resume(throwing: error); continuation = nil
+    }
+
+    func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+        #if canImport(UIKit)
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        if let window = scenes.flatMap({ $0.windows }).first(where: { $0.isKeyWindow }) ?? scenes.first?.windows.first {
+            return window
+        }
+        return ASPresentationAnchor()
+        #else
+        return ASPresentationAnchor()
+        #endif
+    }
+}
