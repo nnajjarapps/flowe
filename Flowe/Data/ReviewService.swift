@@ -1,121 +1,138 @@
 import Foundation
-import CloudKit
 
-/// A review as it exists in the shared store (plain DTO decoded from a CKRecord).
+/// Outcome of publishing a review — distinguishes a definitive rejection (don't retry) from a
+/// transient failure (retry), so a review the backend refuses isn't queued forever.
+enum ReviewSubmitResult {
+    case published(String)   // the review id
+    case notEarned           // 403 — no completed booking with this instructor; do NOT retry
+    case failed              // transient (offline / not authenticated) — retry later
+}
+
+/// A review as it exists in the backend (plain DTO decoded from JSON).
 struct RemoteReview {
     let id: String
     let bookingID: String
     let instructorID: String
+    /// Empty on the PUBLIC read (the backend strips the reviewer's ownerID); the author's own fetch
+    /// carries it. Display falls back to `studentName` when empty.
     let studentID: String
     let studentName: String
     let rating: Int
     let text: String
     let createdAt: Date
 
-    init?(record: CKRecord) {
-        guard let bookingID = record["bookingID"] as? String,
-              let instructorID = record["instructorID"] as? String,
-              let studentID = record["studentID"] as? String else { return nil }
-        id = record.recordID.recordName
+    init(id: String, bookingID: String, instructorID: String, studentID: String,
+         studentName: String, rating: Int, text: String, createdAt: Date) {
+        self.id = id
         self.bookingID = bookingID
         self.instructorID = instructorID
         self.studentID = studentID
-        studentName = record["studentName"] as? String ?? ""
-        rating = record["rating"] as? Int ?? 0
-        text = record["text"] as? String ?? ""
-        createdAt = record["createdAt"] as? Date ?? .distantPast
+        self.studentName = studentName
+        self.rating = rating
+        self.text = text
+        self.createdAt = createdAt
     }
 }
 
-/// Session reviews over CloudKit's **public** database, for the same reason bookings and messages
-/// live there: the private database is per-account, so a student's review would never reach the
-/// instructor it is about.
-///
-/// The record name is derived from the booking (`review-<bookingID>`) rather than generated. That
-/// does two things: it caps a booking at one review no matter how many times the student submits,
-/// and it keeps the student the record's creator so the default `_creator`-write role lets them
-/// edit their own review without a two-record split.
+/// Session reviews. Moved behind the authz backend — was world-readable `SessionReview`, whose QUERYABLE
+/// `studentID` let anyone pull a person's whole review history (each row proof of a completed session) or
+/// an instructor's named client roster. Reviews stay PUBLIC and named (first name, by design): the public
+/// read is served **per-instructor with the reviewer's stable ownerID STRIPPED**, and there is NO
+/// by-student query — so the enumeration/re-linking leak is closed while the profile wall (guests
+/// included) still renders. Writing is authorized + EARNED (the backend verifies a real booking with that
+/// instructor — impossible to enforce on CloudKit). See [[BookingBackend]] / flowe-booking-privacy-deferred.
 @MainActor
 final class ReviewService {
+    /// Legacy CloudKit constants, kept for the AccountDeletionService one-time sweep of pre-cutover records.
     static let recordType = "SessionReview"
-
-    /// The field a review addresses by — the instructor it is about, who is never its author.
-    /// Shared with `PushService` so the query and the subscription predicate can't drift apart.
     static let recipientField = "instructorID"
-
-    private static let pageSize = 400
-
-    #if CLOUDKIT_ENABLED
-    private let database = CKContainer(identifier: FloweModelContainer.cloudKitContainerID).publicCloudDatabase
-    #endif
-
-    /// Record name for a booking's review — deterministic, so submitting twice updates.
     static func recordName(for bookingID: String) -> String { "review-\(bookingID)" }
 
-    /// Publish (or update) the review for a booking. Returns the remote id, or nil if it didn't land.
+    private let backend = FloweBackendClient.shared
+
+    /// Publish (or update) the review for a booking. The backend files it under the verified caller and
+    /// enforces earned-ness; `studentID`/`createdAt` are advisory. Returns the id, or nil if it didn't land.
     func submit(bookingID: String,
                 instructorID: String,
                 studentID: String,
                 studentName: String,
                 rating: Int,
                 text: String,
-                createdAt: Date) async -> String? {
-        #if CLOUDKIT_ENABLED
-        let id = CKRecord.ID(recordName: Self.recordName(for: bookingID))
-        let record = (try? await database.record(for: id))
-            ?? CKRecord(recordType: Self.recordType, recordID: id)
-        record["bookingID"] = bookingID
-        record["instructorID"] = instructorID
-        record["studentID"] = studentID
-        record["studentName"] = studentName
-        record["rating"] = rating
-        record["text"] = text
-        record["createdAt"] = createdAt
-        do {
-            let saved = try await database.save(record)
-            return saved.recordID.recordName
-        } catch {
-            return nil   // offline / not signed into iCloud / schema not deployed
+                createdAt: Date) async -> ReviewSubmitResult {
+        struct Body: Encodable {
+            let bookingID: String
+            let instructorID: String
+            let studentName: String
+            let rating: Int
+            let text: String
         }
-        #else
-        return nil
-        #endif
-    }
-
-    /// Every review written about an instructor.
-    func fetchForInstructor(ownerID: String) async -> [RemoteReview] {
-        await fetch(NSPredicate(format: "instructorID == %@", ownerID))
-    }
-
-    /// Every review this student has written — so the app knows which bookings are already done.
-    func fetchForStudent(ownerID: String) async -> [RemoteReview] {
-        await fetch(NSPredicate(format: "studentID == %@", ownerID))
-    }
-
-    private func fetch(_ predicate: NSPredicate) async -> [RemoteReview] {
-        #if CLOUDKIT_ENABLED
-        let query = CKQuery(recordType: Self.recordType, predicate: predicate)
-        query.sortDescriptors = [NSSortDescriptor(key: "createdAt", ascending: false)]
-        var reviews: [RemoteReview] = []
+        let body = Body(bookingID: bookingID, instructorID: instructorID, studentName: studentName, rating: rating, text: text)
         do {
-            var page = try await database.records(
-                matching: query, desiredKeys: nil, resultsLimit: Self.pageSize
-            )
-            reviews += page.matchResults.compactMap { try? $0.1.get() }.compactMap(RemoteReview.init)
-            // Follow the cursor: a popular instructor past one page would otherwise lose reviews,
-            // and with a descending sort those losses would be the oldest ones silently vanishing.
-            while let cursor = page.queryCursor {
-                page = try await database.records(
-                    continuingMatchFrom: cursor, desiredKeys: nil, resultsLimit: Self.pageSize
-                )
-                reviews += page.matchResults.compactMap { try? $0.1.get() }.compactMap(RemoteReview.init)
-            }
-            return reviews
+            let data = try await backend.authorized("/reviews", method: "POST", body: body, interactive: true)
+            struct Resp: Decodable { let id: String }
+            return .published(try JSONDecoder().decode(Resp.self, from: data).id)
+        } catch BackendError.http(403) {
+            return .notEarned   // no completed booking — a definitive rejection, not a transient error
+        } catch {
+            return .failed      // offline / not authenticated — retry later
+        }
+    }
+
+    /// Every review about an instructor — the PUBLIC profile wall (guests included, so this uses the
+    /// UNAUTHENTICATED read). The reviewer's studentID is not returned (stripped server-side).
+    func fetchForInstructor(ownerID: String) async -> [RemoteReview] {
+        do {
+            let data = try await backend.publicData("/reviews", query: [URLQueryItem(name: "instructorID", value: ownerID)])
+            return Self.decode(data)
         } catch {
             return []
         }
-        #else
-        return []
-        #endif
     }
+
+    /// Every review THIS user wrote — full rows (incl. bookingID) so the app can match them to local
+    /// bookings and let the author edit. Requires a session (a guest wrote none).
+    func fetchForStudent(ownerID: String) async -> [RemoteReview] {
+        do {
+            let data = try await backend.authorized("/reviews/mine")
+            return Self.decode(data)
+        } catch {
+            return []
+        }
+    }
+
+    private static func decode(_ data: Data) -> [RemoteReview] {
+        struct Resp: Decodable { let reviews: [WireReview] }
+        return ((try? JSONDecoder.reviewSnakeCase.decode(Resp.self, from: data))?.reviews ?? []).map(\.remote)
+    }
+}
+
+// MARK: - Wire decoding
+
+private struct WireReview: Decodable {
+    let id: String              // stable OPAQUE dedup key — present on BOTH reads (hash of booking id)
+    let bookingId: String?      // real booking id — ONLY on the author's own fetch (for edit-matching)
+    let instructorId: String
+    let studentId: String?      // stripped on the public read; present on the author's own fetch
+    let studentName: String
+    let rating: Int
+    let text: String
+    let createdAt: Double
+
+    var remote: RemoteReview {
+        RemoteReview(id: id, bookingID: bookingId ?? "", instructorID: instructorId,
+                     studentID: studentId ?? "", studentName: studentName, rating: rating, text: text,
+                     createdAt: Date(reviewMsEpoch: createdAt))
+    }
+}
+
+private extension JSONDecoder {
+    static var reviewSnakeCase: JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return decoder
+    }
+}
+
+private extension Date {
+    init(reviewMsEpoch ms: Double) { self.init(timeIntervalSince1970: ms / 1000) }
 }

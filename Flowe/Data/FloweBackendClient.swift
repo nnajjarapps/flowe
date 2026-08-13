@@ -118,6 +118,19 @@ final class FloweBackendClient {
         return KeychainStore.get(sessionKey) != nil
     }
 
+    /// Recover a backend session for someone signed in to the app who has NO backend session — they
+    /// signed in BEFORE the backend existed (so `bootstrap` never ran) or their refresh token was
+    /// wiped. Reads are non-interactive and can't self-heal, so the booking screens call this from a
+    /// **user-initiated** pull-to-refresh / retry (never a launch or background path — that keeps
+    /// `ensureInteractiveSession`'s contract intact). It is **silent-first**: a live session or a
+    /// working refresh token recovers with NO prompt (the common case, so a normal user never sees a
+    /// sheet); only a genuinely session-less user gets one contextual Apple re-auth. Returns whether a
+    /// session exists afterward.
+    @discardableResult
+    func recoverSessionIfNeeded() async -> Bool {
+        await ensureInteractiveSession()
+    }
+
     /// Refresh the short session token. On a DEFINITIVE 401 (refresh token revoked/expired) wipe BOTH
     /// tokens so `hasSession` drops and the app re-auths cleanly; on transport/5xx keep them (offline
     /// is recoverable). Stores the rotated refresh token the backend returns.
@@ -195,6 +208,60 @@ final class FloweBackendClient {
         guard !isDebugInjected, hasSession else { return }
         struct Req: Encodable { let deviceId: String; let notifyBookings: Bool }
         _ = try? await authorized("/devices", method: "POST", body: Req(deviceId: deviceID, notifyBookings: enabled))
+    }
+
+    /// Push the "Reviews" toggle to the backend so review pushes actually stop/resume.
+    func setReviewNotifications(_ enabled: Bool) async {
+        guard !isDebugInjected, hasSession else { return }
+        struct Req: Encodable { let deviceId: String; let notifyReviews: Bool }
+        _ = try? await authorized("/devices", method: "POST", body: Req(deviceId: deviceID, notifyReviews: enabled))
+    }
+
+    /// Unauthenticated GET for a PUBLIC endpoint (e.g. the reviews wall a guest browses) — no session or
+    /// bearer required, so it works before/without sign-in. Callers degrade on throw.
+    func publicData(_ path: String, query: [URLQueryItem] = []) async throws -> Data {
+        try await rawSend(path, method: "GET", query: query, jsonBody: nil, bearer: nil)
+    }
+
+    /// Sync the user's community opt-in + display name to the backend `profiles` table. This is what
+    /// makes the event "who's going" roster secure — the mutual opt-in is enforced server-side, so a
+    /// name is returned only when both the viewer and the attendee have opted in. Best-effort.
+    func setCommunityVisible(_ visible: Bool, name: String) async {
+        guard !isDebugInjected, hasSession else { return }
+        struct Req: Encodable { let communityVisible: Bool; let displayName: String }
+        _ = try? await authorized("/profile", method: "POST", body: Req(communityVisible: visible, displayName: name))
+    }
+
+    // MARK: - Presence ("last seen")
+
+    /// Heartbeat MY last-seen — the backend stamps SERVER time on the authenticated ownerID (a client
+    /// timestamp is never trusted). Fire-and-forget; the caller gates on the presence opt-out + non-guest.
+    func heartbeatPresence() async {
+        guard !isDebugInjected, hasSession else { return }
+        _ = try? await authorized("/presence", method: "POST")
+    }
+
+    /// Last-seen for the given owners (the caller's conversation partners). Server enforces WhatsApp
+    /// reciprocity + each owner's visibility, so it returns only owners the backend permits.
+    func fetchPresence(ownerIDs: [String]) async -> [String: Date] {
+        guard !isDebugInjected, hasSession, !ownerIDs.isEmpty else { return [:] }
+        let query = ownerIDs.prefix(200).map { URLQueryItem(name: "ownerID", value: $0) }
+        do {
+            let data = try await authorized("/presence", method: "GET", query: Array(query))
+            struct Resp: Decodable { let presence: [String: Double] }
+            let resp = try JSONDecoder().decode(Resp.self, from: data)
+            return resp.presence.mapValues { Date(timeIntervalSince1970: $0 / 1000) }
+        } catch {
+            return [:]
+        }
+    }
+
+    /// Publish the "show when I'm active" opt-out to the backend (server-enforced, WhatsApp reciprocity —
+    /// hiding yours also hides everyone else's from you).
+    func setPresenceVisible(_ visible: Bool) async {
+        guard !isDebugInjected, hasSession else { return }
+        struct Req: Encodable { let presenceVisible: Bool }
+        _ = try? await authorized("/profile", method: "POST", body: Req(presenceVisible: visible))
     }
 
     // MARK: - Teardown

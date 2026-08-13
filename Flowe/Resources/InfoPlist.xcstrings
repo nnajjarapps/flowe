@@ -26,25 +26,25 @@
       }
     },
     "NSLocationWhenInUseUsageDescription": {
-      "comment": "Shown by iOS when Flowe first asks for location. Must cover BOTH uses: on-device distance for students, and the public teaching area for instructors.",
+      "comment": "Shown by iOS when Flowe first asks for location. Must cover BOTH uses: on-device distance for students, and the public teaching location for instructors.",
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يستخدم Flowe موقعك لعرض المدربين القريبين منك. وإذا كنت تُدرّس عبر Flowe، فستظهر المنطقة التقريبية التي تختارها في ملفك العام ليجدك الطلاب — ولن يظهر عنوانك الدقيق أبدًا."
+            "value": "يستخدم Flowe موقعك لعرض المدربين القريبين منك. وإذا كنت تُدرّس عبر Flowe، فإن موقع الاستوديو الذي تحدده يصبح جزءًا من ملفك العام حتى يتمكن الطلاب من العثور عليك وحجز حصصك."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Flowe uses your location to show instructors near you. If you teach on Flowe, the approximate area you choose is shown on your public profile so students can find you — never your exact address."
+            "value": "Flowe uses your location to show you instructors nearby. If you teach on Flowe, the studio location you set becomes part of your public profile so students can find and book you."
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "‏Flowe משתמש במיקום שלך כדי להציג מדריכים קרוב אליך. אם את/ה מלמד/ת ב‑Flowe, האזור המשוער שתבחר/י יוצג בפרופיל הציבורי שלך כדי שמתאמנים יוכלו למצוא אותך — לעולם לא הכתובת המדויקת."
+            "value": "‏Flowe משתמש במיקום שלך כדי להציג לך מדריכים קרובים אליך. אם את/ה מלמד/ת ב‑Flowe, מיקום הסטודיו שתגדיר/י הופך לחלק מהפרופיל הציבורי שלך כדי שמתאמנים יוכלו למצוא אותך ולהזמין שיעור."
           }
         }
       }

@@ -73,7 +73,7 @@ struct InstructorCalendarView: View {
         .background(Color.flowWhite.ignoresSafeArea())
         .task { await data.syncBookings(asInstructor: true) }
         // Manual pull-to-refresh for the request inbox — pulls just-sent booking requests instantly.
-        .refreshable { await data.syncBookings(asInstructor: true) }
+        .refreshable { await data.syncBookings(asInstructor: true, recoverSession: true) }
         .onChange(of: weekOffset) { _, newOffset in
             // Keep a visible day selected: if the selected day is off the new page, snap to its first day.
             if selectedDay < newOffset * 7 || selectedDay > newOffset * 7 + 6 {

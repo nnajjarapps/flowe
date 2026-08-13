@@ -25,11 +25,11 @@
 	<key>CFBundleShortVersionString</key>
 	<string>1.0</string>
 	<key>CFBundleVersion</key>
-	<string>1</string>
+	<string>2</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
-	<true/>
+	<false/>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Flowe uses your location to set your studio address so students can find and book you. It's only shared when you set it.</string>
+	<string>Flowe uses your location to show you instructors nearby. If you teach on Flowe, the studio location you set becomes part of your public profile so students can find and book you.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Flowe uses your photo library so you can share images in posts.</string>
 	<key>NSUbiquitousContainers</key>

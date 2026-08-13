@@ -970,11 +970,18 @@ final class MockDataStore {
         UserDefaults.standard.set(true, forKey: key)
     }
 
-    func syncBookings(asInstructor: Bool) async {
+    func syncBookings(asInstructor: Bool, recoverSession: Bool = false) async {
         guard !isPreview, let currentUserID else { return }
         guard !isSyncingBookings else { return }
         isSyncingBookings = true
         defer { isSyncingBookings = false }
+        // User-initiated refresh/retry only: a user who signed in before the backend existed (or whose
+        // refresh token was wiped) has no backend session, and a non-interactive read can't establish
+        // one — so it would silently show an empty inbox forever. An explicit pull-to-refresh / retry
+        // escalates to a one-time contextual Apple re-auth. Silent-first, so a user who already has a
+        // session sees no prompt; once recovered, the fetch below (and every other backend call on this
+        // screen) works.
+        if recoverSession { await FloweBackendClient.shared.recoverSessionIfNeeded() }
         runBookingCutoverIfNeeded()
         if bookingsPhase != .loaded { bookingsPhase = .loading }
         if asInstructor { await flushPendingListing() } else { await flushPendingStudentProfile() }
@@ -1721,6 +1728,49 @@ final class MockDataStore {
         readReceipts.first { $0.conversationID == conversationID && $0.readerID == readerID }?.lastReadAt
     }
 
+    // MARK: - Presence ("last seen")
+
+    /// Conversation partners' fetched last-seen — in-memory (a transient remote signal, not a @Model),
+    /// keyed by ownerID. `@Observable` tracks it so a fetched value re-renders the open thread / inbox.
+    private var presence: [String: Date] = [:]
+
+    /// Events already registered as organizer with the backend this session — a register-once guard so
+    /// reconcile doesn't re-POST /events every cycle (waste + the per-user write rate limit).
+    private var registeredEventOwners: Set<String> = []
+
+    /// When `ownerID` was last active — only while I am myself publishing presence (client reciprocity:
+    /// hide mine → I see none). nil = unknown / hidden / opted-out.
+    func lastSeen(ownerID: String) -> Date? {
+        guard presenceVisiblePref else { return nil }
+        return presence[ownerID]
+    }
+
+    /// Whether this user shows their "last seen" — OPT-IN (off until enabled). Local mirror of the server
+    /// flag; also gates the client display + fetch so a failed sync can't leave the two diverged.
+    private var presenceVisiblePref: Bool { UserDefaults.standard.object(forKey: "notif.presence") as? Bool ?? false }
+
+    /// Heartbeat MY last-seen (server-stamped) on foreground / sign-in / thread-open. Skipped unless
+    /// opted in, so nothing about the user is stored server-side while hidden.
+    func heartbeatPresence() async {
+        guard !isPreview, currentUserID != nil, presenceVisiblePref else { return }
+        await FloweBackendClient.shared.heartbeatPresence()
+    }
+
+    /// Fetch last-seen for the given partners, and EVICT any the server withheld (a partner who opted out
+    /// is dropped, not left stale). Skipped entirely when I've hidden my own presence.
+    func refreshPresence(for ownerIDs: [String]) async {
+        guard !isPreview, currentUserID != nil, presenceVisiblePref, !ownerIDs.isEmpty else { return }
+        let fetched = await FloweBackendClient.shared.fetchPresence(ownerIDs: ownerIDs)
+        for id in ownerIDs { presence[id] = fetched[id] }   // nil assignment removes → honours opt-out
+    }
+
+    /// Opt in/out of showing "last seen" — server-enforced (hiding yours also hides everyone else's from
+    /// you). Clears the cache immediately so nothing stale keeps rendering after opt-out.
+    func setPresenceVisible(_ on: Bool) {
+        if !on { presence.removeAll() }
+        Task { await FloweBackendClient.shared.setPresenceVisible(on) }
+    }
+
     /// Mark everything received in a thread as read (called when the thread is opened), and — so the
     /// SENDER can show "Seen" — publish our own read marker for the conversation, stamped to the newest
     /// message we hold (a value in the sender's own clock domain, so their `sentAt <= lastReadAt`
@@ -1748,6 +1798,8 @@ final class MockDataStore {
         }
         let remote = await messagingService.fetchMessages(for: me)
         await merge(remote, me: me)
+        await heartbeatPresence()
+        await refreshPresence(for: conversations.map { $0.counterpart.id })
     }
 
     /// Refresh a single thread — cheaper than a full sync while a conversation is open.
@@ -1760,12 +1812,18 @@ final class MockDataStore {
         if let receipt = await messagingService.fetchReadReceipt(conversationID: convo, readerID: counterpartID) {
             cacheReadReceipt(receipt)
         }
+        // Heartbeat me + pull the partner's last-seen while the thread is open (highest-signal moment).
+        await heartbeatPresence()
+        await refreshPresence(for: [counterpartID])
     }
 
     /// Ensure my end-to-end messaging keypair exists and my public key is published, so others can
     /// send me encrypted messages. Cheap to call on every sign-in — the publish no-ops when unchanged.
     func activateMessaging() async {
         guard !isPreview, let me = currentUserID else { return }
+        // Reconcile the presence opt-out to the backend on every sign-in/launch, so a toggle that failed
+        // to sync (offline) is re-pushed and the server flag converges to the user's actual choice.
+        await FloweBackendClient.shared.setPresenceVisible(presenceVisiblePref)
         await messageCrypto.activate(ownerID: me)
     }
 
@@ -1881,8 +1939,10 @@ final class MockDataStore {
 
     // MARK: - Reviews
 
-    /// Reviews written about an instructor, newest first. Blocked students are filtered out for the
-    /// same reason their messages are.
+    /// Reviews written about an instructor, newest first. The block-filter still hides reviews whose
+    /// author id is known, but a PUBLIC wall review carries no studentID (stripped server-side for
+    /// privacy — see [[BookingBackend]]), so a blocked author's public review isn't hidden here. It stays
+    /// reportable, and a report triages it for removal — the Guideline 1.2 obligation is met via reporting.
     func reviews(for instructorOwnerID: String) -> [Review] {
         reviews
             .filter { $0.instructorID == instructorOwnerID && !isBlocked($0.studentID) }
@@ -1949,7 +2009,7 @@ final class MockDataStore {
     }
 
     private func upload(_ review: Review) async {
-        let remoteID = await reviewService.submit(
+        switch await reviewService.submit(
             bookingID: review.bookingID,
             instructorID: review.instructorID,
             studentID: review.studentID,
@@ -1957,9 +2017,17 @@ final class MockDataStore {
             rating: review.rating,
             text: review.text,
             createdAt: review.createdAt
-        )
-        review.remoteID = remoteID
-        review.pendingUpload = remoteID == nil
+        ) {
+        case .published(let id):
+            review.remoteID = id
+            review.pendingUpload = false
+        case .notEarned:
+            // The backend rejected it (no completed booking with this instructor) — drop the local review
+            // so it isn't retried every sync forever. The client `canReview` gate should prevent reaching here.
+            context.delete(review)
+        case .failed:
+            review.pendingUpload = true   // transient — retry on the next sync
+        }
         save()
     }
 
@@ -1998,17 +2066,29 @@ final class MockDataStore {
         guard !remote.isEmpty else { return }
         var changed = false
         for entry in remote {
-            if let existing = reviews.first(where: { $0.bookingID == entry.bookingID }) {
+            // Match on the stable OPAQUE id (both reads carry it) OR — for a just-written local review not
+            // yet assigned its remote id — on the real bookingID (only the author's own rows carry it).
+            if let existing = reviews.first(where: {
+                $0.remoteID == entry.id || (!entry.bookingID.isEmpty && $0.bookingID == entry.bookingID)
+            }) {
                 // The remote copy wins — it is the one other people see.
+                let adoptBooking = !entry.bookingID.isEmpty && existing.bookingID != entry.bookingID
+                let adoptStudent = !entry.studentID.isEmpty && existing.studentID != entry.studentID
                 guard existing.remoteID != entry.id
                         || existing.rating != entry.rating
-                        || existing.text != entry.text else { continue }
+                        || existing.text != entry.text
+                        || existing.studentName != entry.studentName
+                        || adoptBooking || adoptStudent else { continue }
                 existing.remoteID = entry.id
                 existing.rating = entry.rating
                 existing.text = entry.text
                 existing.studentName = entry.studentName
                 existing.createdAt = entry.createdAt
                 existing.pendingUpload = false
+                // Adopt the authoritative non-empty fields — the author's own fetch corrects a public row
+                // that arrived with bookingID/studentID stripped for privacy.
+                if adoptBooking { existing.bookingID = entry.bookingID }
+                if adoptStudent { existing.studentID = entry.studentID }
             } else {
                 context.insert(Review(
                     remoteID: entry.id,
@@ -3651,6 +3731,17 @@ final class MockDataStore {
     /// withdraws — the outside student is told and their record removed.
     private func reconcileAttendance(eventIDs: [String], subjects: [CommunityEvent]) async {
         guard !eventIDs.isEmpty, let me = currentUserID else { return }
+        // Keep the backend profile current so the server-side roster scoping (mutual community opt-in)
+        // is accurate for this read, and register any events I organize so I can read/manage their rosters.
+        await FloweBackendClient.shared.setCommunityVisible(isCommunityVisible, name: currentUserName)
+        for subject in subjects where subject.organizerID == me {
+            // Register each owned event with the backend ONCE per session (only on success), not on
+            // every reconcile — avoids redundant writes and brushing the per-user write rate limit.
+            if let rid = subject.remoteID, !registeredEventOwners.contains(rid),
+               await eventService.ensureEventOwner(eventID: rid) {
+                registeredEventOwners.insert(rid)
+            }
+        }
         // nil means the query failed — NOT "nobody joined". Conflating them would zero every count
         // offline and could withdraw a genuine registration on no evidence.
         guard let rows = await eventService.fetchRegistrations(eventIDs: eventIDs) else { return }
@@ -3674,7 +3765,12 @@ final class MockDataStore {
                 // lag). Dropping it makes a just-accepted request reappear in the organizer's queue, so they
                 // tap Accept a second time — the reported "accept twice" bug. Server truth still wins for
                 // any student it DID return.
-                for (studentID, accepted) in eventDecisions[remoteID] ?? [:] where fresh[studentID] == nil {
+                // Only preserve an optimistic decision for a student who STILL has a live registration in
+                // this fetch. Otherwise a student who LEFT after being accepted resurrects here and
+                // permanently consumes a capacity slot (their backend row is deleted on leave).
+                let liveIDs = Set(mineRows.map(\.studentID))
+                for (studentID, accepted) in eventDecisions[remoteID] ?? [:]
+                    where fresh[studentID] == nil && liveIDs.contains(studentID) {
                     fresh[studentID] = accepted
                 }
                 eventDecisions[remoteID] = fresh
@@ -3684,7 +3780,9 @@ final class MockDataStore {
             // The count is how many the organizer has ACCEPTED — that's what "going" and `spotsLeft`
             // mean now that joining is request→accept. A pending request consumes no spot until accepted.
             let acceptedCount = mineRows.reduce(0) { $0 + (decided[$1.studentID] == true ? 1 : 0) }
-            event.attendees = acceptedCount
+            // Prefer the server-authoritative accepted count (correct even when co-attendee NAMES are
+            // withheld by the scoped roster); fall back to the locally-derived count.
+            event.attendees = eventService.acceptedCount(forEventID: remoteID) ?? acceptedCount
 
             if !event.pendingJoin {
                 // `joined` = "I have a live registration" (pending OR accepted OR declined-but-not-yet-
@@ -4413,6 +4511,9 @@ final class MockDataStore {
     /// `publishMyListing`), a student on their PROFILE. Reciprocity: opting in is what lets you both see
     /// other members AND appear to them. See [[Flowe-Community]].
     func setCommunityVisible(_ on: Bool) {
+        // Enforce the opt-in server-side too — this is what makes the event "who's going" roster secure
+        // (the backend returns a name only when both viewer and attendee have opted in).
+        Task { await FloweBackendClient.shared.setCommunityVisible(on, name: currentUserName) }
         if let ins = currentInstructor {
             ins.communityVisible = on
             publishMyListing()   // marks pendingPublish + publishes the listing with the new flag

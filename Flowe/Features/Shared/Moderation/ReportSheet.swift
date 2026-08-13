@@ -23,6 +23,9 @@ struct ReportSheet: View {
     @State private var failed = false
 
     private var subject: String { reportedName.isEmpty ? "this user" : reportedName }
+    /// A public review's author is anonymized (no ownerID), so blocking them isn't possible — don't
+    /// offer an inert "Also block" toggle. Reporting the review still works via its content id.
+    private var canBlock: Bool { !reportedID.isEmpty }
 
     var body: some View {
         NavigationStack {
@@ -44,12 +47,14 @@ struct ReportSheet: View {
                     Text("Details (optional)")
                 }
 
-                Section {
-                    Toggle("Also block \(subject)", isOn: $alsoBlock)
-                        .tint(Color.flowePinkDeep)
-                        .accessibilityIdentifier("report.alsoBlock")
-                } footer: {
-                    Text("Blocking hides their messages and their profile from you.")
+                if canBlock {
+                    Section {
+                        Toggle("Also block \(subject)", isOn: $alsoBlock)
+                            .tint(Color.flowePinkDeep)
+                            .accessibilityIdentifier("report.alsoBlock")
+                    } footer: {
+                        Text("Blocking hides their messages and their profile from you.")
+                    }
                 }
 
                 Section {
@@ -84,7 +89,7 @@ struct ReportSheet: View {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text("Check your connection and try again. "
-                     + (alsoBlock ? "\(subject) has still been blocked." : ""))
+                     + (canBlock && alsoBlock ? "\(subject) has still been blocked." : ""))
             }
         }
     }
@@ -103,7 +108,7 @@ struct ReportSheet: View {
             )
             // Block regardless of whether the report reached the server — the user asked to stop
             // seeing this person, and that shouldn't depend on the network.
-            if alsoBlock { data.block(id: reportedID, name: reportedName) }
+            if canBlock && alsoBlock { data.block(id: reportedID, name: reportedName) }
             isSending = false
             if sent { dismiss() } else { failed = true }
         }

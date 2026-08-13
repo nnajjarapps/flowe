@@ -61,7 +61,7 @@ struct BookingsView: View {
         // Manual pull-to-refresh: an instructor's accept/decline lands server-side with no live
         // socket, so a swipe-down is the instant way to see Pending → Confirmed. Mirrors the .task.
         .refreshable {
-            await data.syncBookings(asInstructor: false)
+            await data.syncBookings(asInstructor: false, recoverSession: true)
             await data.syncReviews(asInstructor: false)
             data.checkMilestones()
         }
@@ -113,7 +113,7 @@ struct BookingsView: View {
     @ViewBuilder
     private var emptyState: some View {
         FeedPlaceholder(phase: data.bookingsPhase,
-                        retry: { Task { await data.syncBookings(asInstructor: false) } }) {
+                        retry: { Task { await data.syncBookings(asInstructor: false, recoverSession: true) } }) {
             switch tab {
             case .upcoming:
                 EmptyStateView(

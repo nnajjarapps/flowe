@@ -32,10 +32,21 @@ enum ContentFilter {
 
     /// Slurs and sexual terms that have no place in a public Pilates listing. Matched on word
     /// boundaries so ordinary words that merely contain them ("Scunthorpe", "class") are unaffected.
+    /// Covers all three shipped languages — English, Arabic and Hebrew — because the Israel-first
+    /// market means most public text is not Latin script; an English-only list is a null filter there.
+    /// Word-boundary matching (split on non-letters) works the same for Arabic/Hebrew letters; as with
+    /// English this is a coarse first pass that will miss prefixed/inflected forms — report + block are
+    /// the real backstop.
     private static let blockedTerms: Set<String> = [
+        // English
         "fuck", "shit", "cunt", "bitch", "whore", "slut",
         "nigger", "faggot", "retard", "tranny",
         "porn", "escort", "nudes",
+        // Arabic — vulgar / slurs
+        "شرموطة", "شرموطه", "قحبة", "قحبه", "عرص", "منيوك", "منيك",
+        "كسمك", "طيز", "خرا", "لوطي", "زانية",
+        // Hebrew — vulgar / slurs
+        "זונה", "שרמוטה", "מניאק", "זין", "כוסית", "חרא", "זיון", "מזדיין", "להזדיין",
     ]
 
     /// Reject text that shouldn't be published, or nil if it's fine.

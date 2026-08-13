@@ -232,15 +232,15 @@ struct FlowApp: App {
                         // Pull any profile edit made on another device while we were away
                         // (last-writer-wins; throttled + no-clobber guarded inside).
                         if session.authState == .instructor { await data.hydrateOwnListingIfNeeded() }
-                        // Pull-to-refresh has been removed app-wide, so foreground is now the async
-                        // refresh seam: re-sync the live feeds on every return so the visible tab is
-                        // current without a swipe. `.task` covers first load; push keeps it live between.
+                        // Foreground is a refresh seam alongside pull-to-refresh: re-sync the live feeds
+                        // on every return so the visible tab is current without a swipe. `.task` covers
+                        // first load; push keeps it live between; a swipe-down is the manual override.
                         let isInstructor = session.authState == .instructor
                         await data.syncBookings(asInstructor: isInstructor)
                         await data.syncMessages()
                         // Reviews have no push topic on the student side and lesson types have none at
                         // all, so without this foreground pull they'd only refresh on first load / relaunch
-                        // now that pull-to-refresh is gone — the two feeds that would otherwise go stale.
+                        // or a manual swipe — the two feeds that would otherwise go stale.
                         await data.syncReviews(asInstructor: isInstructor)
                         if isInstructor {
                             await data.syncCoverage(asInstructor: true)

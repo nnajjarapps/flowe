@@ -20,6 +20,20 @@ struct ConversationView: View {
 
     private var messages: [Message] { data.thread(with: counterpart.id) }
 
+    /// The partner's presence line for the header: "Active now" (active < 5 min) or "Last seen …". nil
+    /// when the backend didn't permit us to see it (they hid it / reciprocity / never active).
+    private var presenceLine: (text: String, online: Bool)? {
+        guard let seen = data.lastSeen(ownerID: counterpart.id) else { return nil }
+        if Date().timeIntervalSince(seen) < 300 { return (String(localized: "Active now"), true) }
+        return (String(localized: "Last seen \(Self.presenceRelative.localizedString(for: seen, relativeTo: Date()))"), false)
+    }
+
+    private static let presenceRelative: RelativeDateTimeFormatter = {
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .short
+        return f
+    }()
+
     var body: some View {
         VStack(spacing: 0) {
             ScrollViewReader { proxy in
@@ -96,9 +110,16 @@ struct ConversationView: View {
                 } label: {
                     HStack(spacing: 10) {
                         AvatarView(id: counterpart.avatarID, photo: counterpart.photo, size: 30)
-                        Text(counterpart.firstName)
-                            .font(FloweFont.serif(15))
-                            .foregroundStyle(Color.floweInk)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(counterpart.firstName)
+                                .font(FloweFont.serif(15))
+                                .foregroundStyle(Color.floweInk)
+                            if let presence = presenceLine {
+                                Text(presence.text)
+                                    .font(FloweFont.sans(11))
+                                    .foregroundStyle(presence.online ? Color.green : Color.floweMuted)
+                            }
+                        }
                     }
                 }
                 .buttonStyle(.plain)

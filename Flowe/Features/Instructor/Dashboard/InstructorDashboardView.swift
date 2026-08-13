@@ -257,7 +257,7 @@ struct InstructorDashboardView: View {
         // serverless CloudKit app there's no live socket, so a swipe-down is the one instant way to
         // pull just-landed requests / event responses / coverage claims. Mirrors the .task syncs.
         .refreshable {
-            await data.syncBookings(asInstructor: true)
+            await data.syncBookings(asInstructor: true, recoverSession: true)
             await data.syncEvents(asOrganizer: true)
             await data.syncCoverage(asInstructor: true)
             await data.syncOpportunities()

@@ -32,6 +32,7 @@ struct NotificationSettingsView: View {
     @AppStorage(NotificationPreference.community) private var community = true
     @AppStorage(NotificationPreference.reminders) private var reminders = true
     @AppStorage(NotificationPreference.coverage)  private var coverage = true
+    @AppStorage(NotificationPreference.presence)  private var presence = false   // "last seen" is opt-in
 
     private var isInstructor: Bool { session.authState == .instructor }
 
@@ -67,6 +68,14 @@ struct NotificationSettingsView: View {
                 } footer: {
                     Text("An alert an hour before each confirmed session. Scheduled on this device, so it works offline.")
                 }
+
+                Section {
+                    toggle("Show when I'm active", "dot.radiowaves.left.and.right", $presence, id: "notifications.presence")
+                } header: {
+                    Text("Privacy")
+                } footer: {
+                    Text("Let people you message see when you were last active. If you turn this off, you won't see their activity either.")
+                }
             }
             .tint(Color.flowePinkDeep)
             .navigationTitle("Notifications")
@@ -79,7 +88,7 @@ struct NotificationSettingsView: View {
             .task { await push.refreshAuthorizationStatus() }
             // One observer for all five: each change is applied the same way, and grouping them
             // keeps a toggle from ever being added without being wired up.
-            .onChange(of: [bookings, messages, reviews, community, reminders, coverage]) { apply() }
+            .onChange(of: [bookings, messages, reviews, community, reminders, coverage, presence]) { apply() }
         }
     }
 
@@ -148,8 +157,11 @@ struct NotificationSettingsView: View {
         Task {
             await push.refreshSubscriptions(ownerID: session.ownerID, isInstructor: isInstructor)
             await push.scheduleSessionReminders()
-            // Booking pushes come from the backend now, so its per-device preference must be updated too.
+            // Booking + review pushes come from the backend now, so their per-device preferences sync there.
             await FloweBackendClient.shared.setBookingNotifications(bookings)
+            await FloweBackendClient.shared.setReviewNotifications(reviews)
+            // Presence "last seen" opt-out is server-enforced (WhatsApp reciprocity).
+            await FloweBackendClient.shared.setPresenceVisible(presence)
         }
     }
 }

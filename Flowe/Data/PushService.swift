@@ -30,6 +30,9 @@ enum NotificationPreference {
     static let community = "notif.community"
     static let reminders = "notif.reminders"
     static let coverage  = "notif.coverage"
+    /// "Show when I'm active" (last seen). Gates the presence heartbeat + the server-enforced opt-out
+    /// (`FloweBackendClient.setPresenceVisible`) — not a notification, but a real, enforced control.
+    static let presence  = "notif.presence"
 
     /// Everything on by default — but the *system* prompt is still what actually turns alerts on,
     /// and that is asked for separately (see `PushService.requestAuthorizationIfWarranted`).
@@ -38,7 +41,7 @@ enum NotificationPreference {
     /// implicitly at the `register(defaults:)` call site, which wants `[String: Any]`.
     static let defaults: [String: Bool] = [
         bookings: true, messages: true, reviews: true, community: true, reminders: true,
-        coverage: true
+        coverage: true, presence: false   // "last seen" is OPT-IN
     ]
 
     /// Retired keys, removed on launch so a stale `true` can't linger in `UserDefaults`.
@@ -286,19 +289,10 @@ final class PushService {
             ))
         }
 
-        // Reviews are written by students *about* instructors, so only an instructor has any.
-        if isInstructor && isEnabled(NotificationPreference.reviews) {
-            plans.append(Plan(
-                id: Self.subscriptionID(.reviews, "received", ownerID),
-                recordType: ReviewService.recordType,
-                predicate: NSPredicate(format: "\(ReviewService.recipientField) == %@", ownerID),
-                // Creation only: `ReviewService` reuses `review-<bookingID>`, so an update is the
-                // same student editing the same review — not news.
-                options: [.firesOnRecordCreation],
-                titleKey: "push.review.title", titleArgs: [],
-                bodyKey: "push.review.body", bodyArgs: ["studentName"]
-            ))
-        }
+        // Review notifications now come from the booking backend over APNs — SessionReview left the
+        // world-readable CloudKit DB (which also kills any CKQuerySubscription). The `.reviews` toggle is
+        // honoured backend-side via `devices.notify_reviews` (POST /reviews pushes the instructor). See
+        // [[BookingBackend]]. `refreshSubscriptions` sweeps the old subscription by absence.
 
         // Both roles now have a Community tab and can post to the feed, so both subscribe to replies
         // addressed to them.
