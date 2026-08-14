@@ -141,6 +141,12 @@ struct FlowApp: App {
                 .modelContainer(container)
                 .environment(\.locale, settings.locale)
                 .environment(\.layoutDirection, settings.layoutDirection)
+                // Dynamic Type: the whole type scale now grows with the user's text-size setting
+                // (FlowTypography moved from fixedSize: to relativeTo: text styles). Clamp the CEILING to
+                // accessibility1 for v1 — Flowe's layouts are fixed-frame-heavy, so the largest AX sizes
+                // would clip until each screen gets a large-size pass on device; raise/remove this after
+                // that TestFlight QA.
+                .dynamicTypeSize(...DynamicTypeSize.accessibility1)
                 .task { await session.validateAppleCredential() }
                 .task(id: session.authState) {
                     // Leave the store OWNERLESS for a guest (unauthenticated): with no currentUserID
@@ -187,6 +193,17 @@ struct FlowApp: App {
                     // Messages/Bookings before anything is tapped: an instructor caches the students
                     // they transact with; a student caches the instructors they message or booked.
                     if isInstructor { await data.syncStudentProfiles() } else { await data.syncBookedInstructors() }
+
+                    // A signed-out→signed-in student (or a fresh device on the same Apple id) has a
+                    // `currentUser` rebuilt from Apple — no name after the first authorization, never a
+                    // photo — so "My Profile" reads blank while the instructor still sees the intact
+                    // public record. Restore name/photo/bio from that same public profile, mirroring the
+                    // instructor's `hydrateOwnListingIfNeeded` above.
+                    if session.authState == .student, let mine = await data.hydrateOwnStudentProfileIfNeeded() {
+                        session.restoreProfileFromDirectory(name: mine.name, bio: mine.bio,
+                                                            photo: mine.photo, memberSince: mine.memberSince)
+                        data.currentUserName = session.currentUser?.fullName ?? data.currentUserName
+                    }
 
                     // Re-arm APNs on every sign-in, not just at launch. `tearDown` unregisters the
                     // device token, and signing back in without relaunching would otherwise leave
@@ -268,7 +285,7 @@ struct FlowApp: App {
                         FloweLoadingView()
                             .transition(.opacity)
                             .task {
-                                try? await Task.sleep(for: .milliseconds(800))
+                                try? await Task.sleep(for: .seconds(2))
                                 withAnimation(FloweMotion.gentle) { showSplash = false }
                             }
                     }

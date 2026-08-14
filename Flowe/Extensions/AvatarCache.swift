@@ -60,6 +60,29 @@ enum AvatarCache {
         sharedDefaults?.set(ids, forKey: blockedKey)
     }
 
+    // MARK: - Sender display names (app writes, the extension reads)
+    //
+    // A DM's stored `senderName` is a snapshot frozen when the message was sent, so it can be empty (the
+    // sender hadn't set a name yet) or stale. The app caches each counterpart's CURRENT name here — keyed
+    // by ownerID, alongside their avatar — so the Notification Service Extension can title the banner
+    // "New message from <current name>" instead of the frozen one.
+
+    private static let namesKey = "flowe.senderNames"
+
+    /// Cache a counterpart's current display name for the notification extension. No-op on empty input.
+    static func writeName(senderID: String, name: String) {
+        guard !senderID.isEmpty, !name.isEmpty else { return }
+        var dict = sharedDefaults?.dictionary(forKey: namesKey) as? [String: String] ?? [:]
+        guard dict[senderID] != name else { return }
+        dict[senderID] = name
+        sharedDefaults?.set(dict, forKey: namesKey)
+    }
+
+    /// Extension side: the sender's current cached name, or nil if we've never cached their profile.
+    static func name(senderID: String) -> String? {
+        (sharedDefaults?.dictionary(forKey: namesKey) as? [String: String])?[senderID]
+    }
+
     // MARK: - Account deletion
 
     /// Erase all App-Group residue on account deletion: every cached counterpart face photo AND the
@@ -70,6 +93,7 @@ enum AvatarCache {
     static func purgeAll() {
         if let dir = directory { try? FileManager.default.removeItem(at: dir) }
         sharedDefaults?.removeObject(forKey: blockedKey)
+        sharedDefaults?.removeObject(forKey: namesKey)
     }
 
     /// Extension side: has the recipient blocked this sender? Then hide their notification's content.

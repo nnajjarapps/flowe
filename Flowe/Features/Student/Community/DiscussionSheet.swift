@@ -121,6 +121,7 @@ struct DiscussionSheet: View {
                                         : AnyShapeStyle(Color.flowePinkSoft), in: Circle())
             }
             .disabled(!canSend)
+            .accessibilityLabel("Send message")
             .accessibilityIdentifier("discussion.send")
         }
         .padding(.horizontal, 16).padding(.vertical, 10)

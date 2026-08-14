@@ -155,6 +155,43 @@ final class AppSession {
         persistDurableProfile()
     }
 
+    /// Refill the signed-in student's own name / photo / bio from their AUTHORITATIVE public profile
+    /// when the local copy is missing them — the fix for "my name and photo vanished after I signed out
+    /// and back in". Apple returns the name only on the first authorization and never a photo, and the
+    /// durable per-account copy can be absent (a fresh device, or a profile created before that copy
+    /// existed), so `currentUser` can come back blank while the public `StudentProfile` an instructor
+    /// still sees stays intact. Fills ONLY empty fields, so an edit already in flight is never clobbered,
+    /// then re-persists (session + durable) so the NEXT sign-in is instant. Values come from
+    /// `MockDataStore.hydrateOwnStudentProfileIfNeeded`, orchestrated by `FlowApp`.
+    func restoreProfileFromDirectory(name: String, bio: String?, photo: Data?, memberSince: Date) {
+        guard var user = currentUser else { return }
+        var changed = false
+        // The name is restored when the local copy is EMPTY *or* an onboarding placeholder: Apple omits
+        // the real name on re-auth, so the login flow seeds a generic "Member" (or role default) that
+        // masks the real name the user set. The authoritative public name overrides those — but never a
+        // real name the user actually chose.
+        if !name.isEmpty, Self.isPlaceholderName(user.fullName) {
+            user.fullName = name; changed = true
+        }
+        if user.photo == nil, let photo { user.photo = photo; changed = true }
+        if (user.bio ?? "").isEmpty, let bio, !bio.isEmpty { user.bio = bio; changed = true }
+        // A `currentUser` rebuilt from Apple stamps TODAY as the join date; prefer the real earlier one.
+        if memberSince != .distantPast, memberSince < user.memberSince { user.memberSince = memberSince; changed = true }
+        guard changed else { return }
+        currentUser = user
+        persistUser()
+        persistDurableProfile()
+    }
+
+    /// The names the onboarding flow auto-assigns when Apple withholds the real name on re-authorization
+    /// ("Member" from Login/Create-account, plus the role defaults) and the empty string. The
+    /// authoritative public profile name must override these — but never a real name the user chose.
+    /// Static + `nonisolated` so it's unit-testable in isolation (mirrors `roleGate`).
+    nonisolated static func isPlaceholderName(_ name: String) -> Bool {
+        let n = name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return n.isEmpty || ["member", "student", "instructor"].contains(n)
+    }
+
     // MARK: - Durable per-account profile
     //
     // `userKey` is the *session* copy — `logout()` clears it so the next person on a shared device

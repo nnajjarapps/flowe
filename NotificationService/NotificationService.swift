@@ -52,7 +52,11 @@ final class NotificationService: UNNotificationServiceExtension {
             nseLog.info("NSE gate: not a DM / keys absent — shipping plain banner.")
             return contentHandler(request.content)
         }
-        let senderName = (af["senderName"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? "Flowe"
+        // Prefer the sender's CURRENT cached name (app-written into the App Group) over the message's
+        // frozen `senderName`, which can be empty (name unset at send) or stale; then the field, then a default.
+        let senderName = AvatarCache.name(senderID: senderID)
+            ?? (af["senderName"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+            ?? "Flowe"
         nseLog.info("NSE gate: DM matched — sender=\(senderName, privacy: .public) convo=\(conversationID, privacy: .public)")
 
         // Avatar: cached JPEG written by the app into the App Group, else a brand monogram.

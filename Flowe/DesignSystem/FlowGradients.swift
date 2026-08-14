@@ -24,9 +24,10 @@ enum FlowGradients {
         endPoint: .bottomTrailing
     )
 
-    // #D45880 → #E8789A → #F4A8C0  (primary CTAs, active chips, story rings)
+    // #A8375B → #B44468 → #BE486A  (primary CTAs, active chips, story rings). Deepened so WHITE button
+    // text clears WCAG AA on EVERY stop (>=4.5:1); the old #D45880→#F4A8C0 dropped white to 1.87:1.
     static let gradDark = LinearGradient(
-        colors: [Color(hex: 0xD45880), Color(hex: 0xE8789A), Color(hex: 0xF4A8C0)],
+        colors: [Color(hex: 0xA8375B), Color(hex: 0xB44468), Color(hex: 0xBE486A)],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
     )

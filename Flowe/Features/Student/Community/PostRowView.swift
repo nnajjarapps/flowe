@@ -303,6 +303,7 @@ struct PostRowView: View {
                 .foregroundStyle(Color.floweMuted)
                 .frame(width: 32, height: 32, alignment: .trailing)
         }
+        .accessibilityLabel("More options")
         .accessibilityIdentifier("post.moderation")
     }
 }

@@ -19,6 +19,15 @@ struct RemoteBooking {
     let modifiedAt: Date?
 }
 
+/// The result of creating a booking: the server row id plus — when a class-credit was requested — whether
+/// one was actually consumed (`credited`) and the student's fresh per-instructor balance afterward, so the
+/// UI can show the ring tick-down or fall back to "pay as usual" without a second round-trip.
+struct RemoteBookingCreate {
+    let id: String
+    let credited: Bool
+    let balance: Int?
+}
+
 /// An instructor's accept/decline for a booking. Reconstructed from the inline decision the backend
 /// returns on each booking row (per-occurrence) or from the series_decisions table (standing series).
 struct RemoteDecision {
@@ -76,7 +85,9 @@ final class BookingService {
                 time: String,
                 type: String,
                 duration: String,
-                recordName: String? = nil) async -> String? {
+                recordName: String? = nil,
+                useCredit: Bool = false,
+                creditClassDate: String? = nil) async -> RemoteBookingCreate? {
         struct Body: Encodable {
             let id: String?
             let instructorID: String
@@ -85,13 +96,21 @@ final class BookingService {
             let time: String
             let type: String
             let duration: String
+            let useCredit: Bool
+            let creditClassDate: String?
         }
+        // `useCredit` asks the backend to redeem ONE class-credit against this instructor (it ignores it
+        // for a series id, and books normally with `credited:false` when there's no capacity).
+        // `creditClassDate` (yyyy-MM-dd) lets the delivery-gated refund know if a later cancel is pre- or
+        // post-class. Both are inert on a normal (non-credit) booking.
         let body = Body(id: recordName, instructorID: instructorID, studentName: studentName,
-                        date: date, time: time, type: type, duration: duration)
+                        date: date, time: time, type: type, duration: duration,
+                        useCredit: useCredit, creditClassDate: creditClassDate)
         do {
             let data = try await backend.authorized("/bookings", method: "POST", body: body, interactive: true)
-            struct Resp: Decodable { let id: String }
-            return try JSONDecoder().decode(Resp.self, from: data).id
+            struct Resp: Decodable { let id: String; let credited: Bool?; let balance: Int? }
+            let resp = try JSONDecoder().decode(Resp.self, from: data)
+            return RemoteBookingCreate(id: resp.id, credited: resp.credited ?? false, balance: resp.balance)
         } catch {
             return nil   // offline / not authenticated with the backend yet
         }
@@ -431,6 +450,17 @@ private extension JSONDecoder {
         return decoder
     }
 }
+
+#if DEBUG
+/// Internal decode seam for **FloweUnitTests only** — excluded from Release. Locks the booking wire
+/// contract (`instructor_id`→`instructorID`, `cancelled` Int→Bool, `cancelled_at`→`modifiedAt`) whose
+/// break once made an instructor's inbox decode to nothing. See `BookingDecodeTests`.
+enum BookingWireDecodeSeam {
+    static func booking(_ data: Data) throws -> RemoteBooking {
+        try JSONDecoder.snakeCase.decode(WireBooking.self, from: data).remote
+    }
+}
+#endif
 
 private extension Date {
     /// Backend timestamps are JS `Date.now()` — milliseconds since the epoch.

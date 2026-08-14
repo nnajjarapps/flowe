@@ -25,7 +25,7 @@ enum FloweFont {
         case (.medium,  false): name = "Fraunces-Medium"
         case (.medium,  true):  name = "Fraunces-Italic"   // no medium-italic cut bundled
         }
-        return .custom(name, fixedSize: size)
+        return .custom(name, size: size, relativeTo: Self.textStyle(for: size))
     }
 
     /// DM Sans
@@ -36,12 +36,30 @@ enum FloweFont {
         case .regular: name = "DMSans-Regular"
         case .medium:  name = "DMSans-Medium"
         }
-        return .custom(name, fixedSize: size)
+        return .custom(name, size: size, relativeTo: Self.textStyle(for: size))
     }
 
     /// DM Mono (Light 300 / Regular 400)
     static func mono(_ size: CGFloat, light: Bool = false) -> Font {
-        .custom(light ? "DMMono-Light" : "DMMono-Regular", fixedSize: size)
+        .custom(light ? "DMMono-Light" : "DMMono-Regular", size: size, relativeTo: Self.textStyle(for: size))
+    }
+
+    /// Maps a raw design point-size to the nearest Dynamic Type text style so `.custom(size:relativeTo:)`
+    /// scales every font with the user's accessibility text-size setting. The app previously used
+    /// `.custom(_:fixedSize:)`, which pinned point sizes and disabled Dynamic Type entirely — a larger
+    /// design size now tracks a larger text style so the whole scale grows proportionally.
+    private static func textStyle(for size: CGFloat) -> Font.TextStyle {
+        switch size {
+        case ..<11.5: return .caption2
+        case ..<13:   return .caption
+        case ..<15:   return .footnote
+        case ..<16:   return .subheadline
+        case ..<18:   return .body
+        case ..<21:   return .title3
+        case ..<25:   return .title2
+        case ..<31:   return .title
+        default:      return .largeTitle
+        }
     }
 }
 

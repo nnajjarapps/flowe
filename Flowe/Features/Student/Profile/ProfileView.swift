@@ -413,6 +413,7 @@ struct ProfileView: View {
                     .overlay(Circle().stroke(Color.floweBorder, lineWidth: 1))
                     .clipShape(Circle())
             }
+            .accessibilityLabel("Settings")
             .accessibilityIdentifier("student.settings")
         }
         .padding(.horizontal, 20)

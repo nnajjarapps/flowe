@@ -693,6 +693,7 @@ struct AvailabilityView: View {
                     .foregroundStyle(Color.floweMuted)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Remove date override")
             .accessibilityIdentifier("availability.removeOverride.\(key)")
         }
         .padding(.horizontal, 14)

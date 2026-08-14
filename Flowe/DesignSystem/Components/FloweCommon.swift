@@ -666,3 +666,269 @@ extension View {
         modifier(ScrollToTopOnTabReselect(trigger: trigger, proxy: proxy, anchorID: anchorID))
     }
 }
+
+// ============================================================================
+// MARK: - Class packages / credits ([[ClassPackages]]) — shared UI components
+// Live here (not new files) because xcodegen is not installed. The CreditRing is
+// the feature's hero: "6 classes left" as a gradient progress ring that ticks
+// DOWN with a numeric transition + haptic when a credit is redeemed. All are
+// Reduce-Motion-aware and RTL-safe. See ClassPackages.md.
+// ============================================================================
+
+/// The hero credit meter. `remaining`/`total` drive a gradient arc from 12 o'clock; the centre shows the
+/// count (numeric-transition so a redeem ticks it down live). `.hero` adds the "CLASSES LEFT" caption;
+/// `.compact` is a bare number for wallet cards / inline use.
+struct CreditRing: View {
+    enum Style { case hero, compact }
+    let remaining: Int
+    let total: Int
+    var size: CGFloat = 132
+    var style: Style = .hero
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var animated: CGFloat = 0
+
+    private var fraction: CGFloat { total <= 0 ? 0 : min(1, CGFloat(remaining) / CGFloat(total)) }
+    private var lineWidth: CGFloat { max(4, size * 0.075) }
+    private var low: Bool { remaining <= 1 }
+
+    var body: some View {
+        ZStack {
+            Circle().stroke(Color.flowePink.opacity(0.15), lineWidth: lineWidth)
+            Circle()
+                .trim(from: 0, to: animated)
+                .stroke(FlowGradients.gradDark, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                .rotationEffect(.degrees(-90))   // start the arc at 12 o'clock
+            centre
+        }
+        .frame(width: size, height: size)
+        .onAppear {
+            if reduceMotion { animated = fraction }
+            else { withAnimation(FloweMotion.spring.delay(0.05)) { animated = fraction } }
+        }
+        .onChange(of: fraction) { _, new in
+            withAnimation(reduceMotion ? nil : FloweMotion.pop) { animated = new }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text("\(remaining) of \(total) classes left"))
+    }
+
+    @ViewBuilder private var centre: some View {
+        switch style {
+        case .hero:
+            VStack(spacing: size * 0.015) {
+                Text(verbatim: "\(remaining)")
+                    .font(FloweFont.serif(size * 0.34, .medium))
+                    .foregroundStyle(low ? Color.flowePinkDeep : Color.floweInk)
+                    .contentTransition(.numericText())
+                Text("CLASSES LEFT")
+                    .font(FloweFont.mono(max(8, size * 0.072)))
+                    .foregroundStyle(Color.floweMuted)
+            }
+        case .compact:
+            Text(verbatim: "\(remaining)")
+                .font(FloweFont.serif(size * 0.42, .medium))
+                .foregroundStyle(Color.flowePinkDeep)
+                .contentTransition(.numericText())
+        }
+    }
+}
+
+/// Secondary texture for small packs (total ≤ 12): a row of filled/hollow dots. The ring carries the
+/// a11y label, so this is decorative.
+struct CreditDots: View {
+    let remaining: Int
+    let total: Int
+    var dot: CGFloat = 10
+
+    var body: some View {
+        HStack(spacing: dot * 0.5) {
+            ForEach(0..<max(total, 0), id: \.self) { i in
+                Circle()
+                    .fill(i < remaining ? AnyShapeStyle(FlowGradients.gradDark) : AnyShapeStyle(Color.clear))
+                    .overlay(Circle().strokeBorder(Color.flowePink.opacity(i < remaining ? 0 : 0.4), lineWidth: 1.5))
+                    .frame(width: dot, height: dot)
+            }
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+/// One instructor package on offer — used on the student profile (with a "Request to buy" footer) and in
+/// the instructor's manager (with a menu row). Pass any trailing content via `footer`.
+struct PackageOfferingCard: View {
+    @Environment(AppSettings.self) private var settings
+    let offering: RemoteOffering
+    var footer: AnyView? = nil
+
+    private var perClass: Int { offering.credits > 0 ? offering.price / offering.credits : offering.price }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: FlowSpacing.sm) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(offering.title)
+                    .font(FloweFont.serif(18, .medium))
+                    .foregroundStyle(Color.floweInk)
+                Spacer()
+                Text(settings.money(offering.price))
+                    .font(FloweFont.serif(18, .medium))
+                    .foregroundStyle(Color.flowePinkDeep)
+            }
+            HStack(spacing: FlowSpacing.xs) {
+                Label("\(offering.credits) classes", systemImage: "ticket.fill")
+                    .font(FloweFont.sans(12, .medium))
+                    .foregroundStyle(Color.flowePinkDeep)
+                Text("· \(settings.money(perClass))/class")
+                    .font(FloweFont.sans(12))
+                    .foregroundStyle(Color.floweMuted)
+                Spacer()
+                validityChip
+            }
+            if let footer { footer }
+        }
+        .padding(FlowSpacing.lg)
+        .floweCard()
+    }
+
+    private var validityChip: some View {
+        Group {
+            if let days = offering.validityDays {
+                Text("\(days)-day")
+            } else {
+                Text("No expiry")
+            }
+        }
+        .font(FloweFont.mono(10))
+        .foregroundStyle(Color.floweMuted)
+        .padding(.horizontal, 8).padding(.vertical, 3)
+        .background(Color.floweMuted.opacity(0.10))
+        .clipShape(Capsule())
+    }
+}
+
+/// An instructor's purchase-request approval card. Approve only once you've been paid offline; approval
+/// grants the credits server-side.
+struct PackagePurchaseRequestCard: View {
+    @Environment(AppSettings.self) private var settings
+    let purchase: RemotePurchase
+    var studentPhoto: Data? = nil   // resolved by the caller — the card has no store to look it up
+    var onApprove: () -> Void = {}
+    var onDecline: () -> Void = {}
+    @State private var deciding = false
+
+    private var name: String { purchase.studentName.isEmpty ? String(localized: "a student") : purchase.studentName }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: FlowSpacing.md) {
+            HStack(spacing: FlowSpacing.md) {
+                // The resolved buyer photo if we have it, else initials (the app's standard fallback) —
+                // NOT the pink gradient (passing a dotted appleUserID as `id` would hit the release-
+                // disabled Unsplash path and fall through to the gradient).
+                if let studentPhoto {
+                    AvatarView(id: "", photo: studentPhoto, size: 44)
+                } else {
+                    InitialAvatar(name: name, size: 44)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(verbatim: name)
+                        .font(FloweFont.serif(16, .medium)).foregroundStyle(Color.floweInk)
+                    Text("\(purchase.credits)-class pack · \(settings.money(purchase.price))")
+                        .font(FloweFont.sans(13)).foregroundStyle(Color.floweMuted)
+                }
+                Spacer()
+            }
+            switch purchase.status {
+            case .pending:
+                Text("Approve once you've received \(settings.money(purchase.price)) from \(name).")
+                    .font(FloweFont.sans(12)).foregroundStyle(Color.floweMuted)
+                HStack(spacing: FlowSpacing.sm) {
+                    Button { deciding = true; Haptic.tap(); onDecline() } label: {
+                        Text("Decline").font(FloweFont.sans(14, .medium)).foregroundStyle(Color.floweInk)
+                            .frame(maxWidth: .infinity).padding(.vertical, 12)
+                            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.floweBorder, lineWidth: 1))
+                    }.flowePressable()
+                    Button { deciding = true; Haptic.success(); onApprove() } label: {
+                        Text("Approve").font(FloweFont.sans(14, .medium)).foregroundStyle(.white)
+                            .frame(maxWidth: .infinity).padding(.vertical, 12)
+                            .background(FlowGradients.gradDark).clipShape(RoundedRectangle(cornerRadius: 14))
+                    }.flowePressable()
+                }
+                .disabled(deciding)
+                .opacity(deciding ? 0.5 : 1)
+            case .approved:
+                Label("Approved · \(purchase.credits) credits added", systemImage: "checkmark.circle.fill")
+                    .font(FloweFont.mono(11)).foregroundStyle(Color.floweSuccess)
+            case .declined:
+                Label("Declined", systemImage: "xmark.circle")
+                    .font(FloweFont.mono(11)).foregroundStyle(Color.floweMuted)
+            }
+        }
+        .padding(FlowSpacing.lg)
+        .floweCard()
+    }
+}
+
+/// A wallet-carousel tile — the student's credit standing with one instructor. Tap opens the detail.
+struct CreditWalletCard: View {
+    let balance: InstructorBalance
+    var instructorName: String = ""
+    var instructorPhoto: Data? = nil
+    var onTap: () -> Void = {}
+
+    var body: some View {
+        Button { Haptic.tap(); onTap() } label: {
+            VStack(alignment: .leading, spacing: FlowSpacing.sm) {
+                HStack(spacing: FlowSpacing.sm) {
+                    AvatarView(id: balance.instructorID, photo: instructorPhoto, size: 30)
+                    Text(verbatim: instructorName.isEmpty ? String(localized: "Instructor") : instructorName)
+                        .font(FloweFont.sans(13, .medium)).foregroundStyle(Color.floweInk).lineLimit(1)
+                }
+                CreditRing(remaining: balance.balance, total: max(balance.balance, 1), size: 56, style: .compact)
+                    .frame(maxWidth: .infinity)
+                Text(expiryText)
+                    .font(FloweFont.mono(10)).foregroundStyle(Color.floweMuted)
+            }
+            .padding(FlowSpacing.md)
+            .frame(width: 150)
+            .floweCard()
+        }
+        .flowePressable()
+    }
+
+    private var expiryText: LocalizedStringKey {
+        guard let exp = balance.nextExpiry else { return "Never expires" }
+        let days = Calendar.current.dateComponents([.day], from: Date(), to: exp).day ?? 0
+        return days <= 0 ? "Expires today" : "Expires in \(days)d"
+    }
+}
+
+/// The booking-sheet redeem control — shown only when the student holds credits with this instructor.
+/// Toggling it makes the booking spend one class-credit; the count preview ticks as it flips.
+struct CreditRedeemToggle: View {
+    let remaining: Int
+    @Binding var useCredit: Bool
+
+    private var after: Int { max(0, remaining - (useCredit ? 1 : 0)) }
+
+    var body: some View {
+        HStack(spacing: FlowSpacing.md) {
+            ZStack {
+                Circle().fill(Color.flowePink.opacity(0.12)).frame(width: 40, height: 40)
+                Text(verbatim: "\(remaining)")
+                    .font(FloweFont.serif(17, .medium)).foregroundStyle(Color.flowePinkDeep)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Use 1 class credit")
+                    .font(FloweFont.sans(14, .medium)).foregroundStyle(Color.floweInk)
+                Text("\(after) left after this")
+                    .font(FloweFont.sans(12)).foregroundStyle(Color.floweMuted)
+                    .contentTransition(.numericText())
+            }
+            Spacer()
+            Toggle("", isOn: $useCredit).labelsHidden().tint(Color.flowePinkDeep)
+        }
+        .padding(FlowSpacing.md)
+        .floweCard()
+        .onChange(of: useCredit) { _, _ in Haptic.selection() }
+    }
+}

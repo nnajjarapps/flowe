@@ -150,6 +150,7 @@ struct ConversationView: View {
                     Image(systemName: "ellipsis.circle")
                         .foregroundStyle(Color.floweInk)
                 }
+                .accessibilityLabel("More options")
                 .accessibilityIdentifier("conversation.moderation")
             }
         }
@@ -345,6 +346,7 @@ struct ConversationView: View {
             }
             .flowePressable()
             .disabled(!canSend)
+            .accessibilityLabel("Send message")
             .accessibilityIdentifier("conversation.send")
         }
         .padding(.horizontal, 16)

@@ -56,3 +56,8 @@ ck-wipe-dev.py
 PHOTO-*.jpg
 appstore-mockup*.png
 openapi.json
+
+# Sensitive / third-party: never commit
+# - PII export from the live DB; - Apple's copyrighted review guidelines PDF
+database-export-logs-*.json
+AppStore-Review-Guidelines.pdf

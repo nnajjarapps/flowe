@@ -127,6 +127,7 @@ struct InstructorMapView: View {
                         .foregroundStyle(Color.floweMuted)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Clear search")
             } else {
                 // Mirrors the mockup's location glyph — decorative here; the "Use my location" flow
                 // lives on the list, and the map already centres on-device via `.task`.

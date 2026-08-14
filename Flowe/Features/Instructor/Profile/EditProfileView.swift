@@ -788,15 +788,18 @@ struct EditProfileView: View {
                     Image(systemName: "chevron.up").font(.system(size: 12, weight: .semibold))
                 }
                 .disabled(index == 0)
+                .accessibilityLabel("Move lesson type up")
 
                 Button { moveLessonType(from: index, up: false) } label: {
                     Image(systemName: "chevron.down").font(.system(size: 12, weight: .semibold))
                 }
                 .disabled(index == count - 1)
+                .accessibilityLabel("Move lesson type down")
 
                 Button(role: .destructive) { data.deleteLessonType(type) } label: {
                     Image(systemName: "trash").font(.system(size: 12))
                 }
+                .accessibilityLabel("Delete lesson type")
                 .accessibilityIdentifier("lessonType.delete")
             }
             .buttonStyle(.plain)
@@ -899,6 +902,7 @@ struct EditProfileView: View {
             .buttonStyle(.plain)
             .tint(Color.floweMuted)
             .foregroundStyle(Color.floweMuted)
+            .accessibilityLabel("Delete role")
             .accessibilityIdentifier("editProfile.experienceDelete")
         }
         .padding(12)

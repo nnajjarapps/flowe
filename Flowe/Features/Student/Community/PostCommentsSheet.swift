@@ -149,6 +149,7 @@ struct PostCommentsSheet: View {
                     .foregroundStyle(Color.floweMuted)
                     .frame(width: 28, height: 28)
             }
+            .accessibilityLabel("More options")
             .accessibilityIdentifier("comment.moderation")
         }
         .padding(.horizontal, 16)
@@ -190,6 +191,7 @@ struct PostCommentsSheet: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(!canSend)
+                .accessibilityLabel("Send reply")
                 .accessibilityIdentifier("comment.send")
             }
         }

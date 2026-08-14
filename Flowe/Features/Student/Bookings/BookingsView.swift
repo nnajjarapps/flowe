@@ -11,6 +11,7 @@ struct BookingsView: View {
     @Environment(MockDataStore.self) private var data
 
     @State private var tab: BookingTab = .upcoming
+    @State private var showingCredit: InstructorBalance?
 
     /// Namespace for the segmented control's sliding selection pill (matchedGeometryEffect).
     @Namespace private var segNS
@@ -26,6 +27,8 @@ struct BookingsView: View {
             // pull-gesture otherwise intermittently swallows the segment taps on device (the production
             // "tapping Past does nothing" bug). Mirrors the proven-working CommunityView structure.
             VStack(spacing: 0) {
+                walletCarousel
+
                 if list.isEmpty {
                     if data.bookingsPhase == .loading {
                         // First load with nothing cached: shimmering card skeletons rather than a
@@ -53,6 +56,7 @@ struct BookingsView: View {
         .safeAreaInset(edge: .top, spacing: 0) { header }
         .task {
             await data.syncBookings(asInstructor: false)
+            await data.syncWallet()
             // Reviews come along so "Leave a review" flips to "Edit review" after a reinstall.
             await data.syncReviews(asInstructor: false)
             // Auto-celebrate any newly-crossed practice milestone to the community (Flowe Community).
@@ -62,8 +66,37 @@ struct BookingsView: View {
         // socket, so a swipe-down is the instant way to see Pending → Confirmed. Mirrors the .task.
         .refreshable {
             await data.syncBookings(asInstructor: false, recoverSession: true)
+            await data.syncWallet(recoverSession: true)
             await data.syncReviews(asInstructor: false)
             data.checkMilestones()
+        }
+        .sheet(item: $showingCredit) { balance in
+            CreditDetailSheet(balance: balance,
+                              instructorName: data.instructor(ownerID: balance.instructorID)?.name ?? "")
+        }
+    }
+
+    /// "YOUR CREDITS" — the class-credit wallet as a horizontal carousel of CreditWalletCards, shown only
+    /// when the student holds credits with any instructor. Tapping one opens its detail.
+    @ViewBuilder private var walletCarousel: some View {
+        if !data.wallet.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                SectionHeader(text: "YOUR CREDITS")
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(data.wallet) { balance in
+                            CreditWalletCard(
+                                balance: balance,
+                                instructorName: data.instructor(ownerID: balance.instructorID)?.name ?? "",
+                                instructorPhoto: data.instructor(ownerID: balance.instructorID)?.photo,
+                                onTap: { showingCredit = balance }
+                            )
+                        }
+                    }
+                    .padding(.horizontal, 2)
+                }
+            }
+            .padding(.top, 16)
         }
     }
 

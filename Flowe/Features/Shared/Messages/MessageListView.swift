@@ -119,6 +119,7 @@ struct MessageListView: View {
                     .clipShape(Circle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("New message")
             .accessibilityIdentifier("messages.compose")
         }
         .padding(.horizontal, 20)
@@ -145,6 +146,7 @@ struct MessageListView: View {
                         .foregroundStyle(Color.floweMuted)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Clear search")
             }
         }
         .padding(.horizontal, 14)

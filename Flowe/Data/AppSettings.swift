@@ -60,15 +60,26 @@ final class AppSettings {
     static let maxCoverageRadiusKm: Double = 100
     static let defaultCoverageRadiusKm: Double = 25
 
+    /// The instructor's saved Out-of-Studio window (From / Until). Persisted so it survives closing the
+    /// sheet — `OutOfStudioView` rolls a stale (past) window forward on appear, preserving the DURATION
+    /// the instructor set. Mirrors `coverageRadiusKm`.
+    var oosWindowStart: Date { didSet { defaults.set(oosWindowStart.timeIntervalSince1970, forKey: oosStartKey) } }
+    var oosWindowEnd: Date { didSet { defaults.set(oosWindowEnd.timeIntervalSince1970, forKey: oosEndKey) } }
+
     private let defaults = UserDefaults.standard
     private let languageKey = "flowe.language"
     private let coverageRadiusKey = "flowe.coverageRadiusKm"
+    private let oosStartKey = "flowe.oosWindowStart"
+    private let oosEndKey = "flowe.oosWindowEnd"
 
     init() {
         language = defaults.string(forKey: languageKey).flatMap(AppLanguage.init) ?? .system
         let stored = defaults.object(forKey: coverageRadiusKey) as? Double
         coverageRadiusKm = stored.map { min(max($0, Self.minCoverageRadiusKm), Self.maxCoverageRadiusKm) }
             ?? Self.defaultCoverageRadiusKm
+        oosWindowStart = (defaults.object(forKey: oosStartKey) as? Double).map(Date.init(timeIntervalSince1970:)) ?? Date()
+        oosWindowEnd = (defaults.object(forKey: oosEndKey) as? Double).map(Date.init(timeIntervalSince1970:))
+            ?? Calendar.current.date(byAdding: .hour, value: 8, to: Date()) ?? Date()
     }
 
     /// Locale that drives both string localization and number/currency/date formatting.

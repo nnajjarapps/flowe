@@ -192,6 +192,7 @@ struct StudentsListView: View {
                         .foregroundStyle(Color.floweMuted)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Clear search")
             }
         }
         .padding(.horizontal, 14)

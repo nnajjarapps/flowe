@@ -21,6 +21,8 @@ struct InstructorDashboardView: View {
     @State private var selectedOpportunity: Opportunity?
     @State private var manageOpportunity: Opportunity?
     @State private var showComposeOpportunity = false
+    @State private var showPackages = false
+    @State private var showStudents = false
 
     /// The No-Show Shield card surfaces only when there's something to act on — a session to judge,
     /// a fee to reconcile, or a risky upcoming booking worth a nudge.
@@ -125,6 +127,12 @@ struct InstructorDashboardView: View {
                 // learn how to turn it on — hiding it until a fee is already owed is why it read as
                 // "unclear how to use". The subtitle carries the state (action items / on / not set up).
                 shieldCard
+
+                packagesCard
+
+                // Your client book — folded here from its former tab (the iPhone tab bar holds only 5),
+                // so the roster stays one tap away.
+                studentsCard
 
                 if ownerCoverageSignal {
                     ownerCoverageCard
@@ -253,6 +261,7 @@ struct InstructorDashboardView: View {
         .task { await data.syncEvents(asOrganizer: true) }
         .task { await data.syncCoverage(asInstructor: true) }
         .task { await data.syncOpportunities() }
+        .task { await data.syncOfferings() }
         // Manual pull-to-refresh, restored alongside the on-appear .task + foreground re-sync: on a
         // serverless CloudKit app there's no live socket, so a swipe-down is the one instant way to
         // pull just-landed requests / event responses / coverage claims. Mirrors the .task syncs.
@@ -261,6 +270,7 @@ struct InstructorDashboardView: View {
             await data.syncEvents(asOrganizer: true)
             await data.syncCoverage(asInstructor: true)
             await data.syncOpportunities()
+            await data.syncOfferings()
         }
         .fullScreenCover(isPresented: $showStudioWizard) { StudioSetupWizard() }
         .sheet(isPresented: $showAvailability) { AvailabilityView() }
@@ -268,6 +278,8 @@ struct InstructorDashboardView: View {
         .sheet(isPresented: $showPaywall) { PaywallView() }
         .sheet(isPresented: $showComposeEvent) { ComposeEventSheet() }
         .sheet(isPresented: $showShield) { NavigationStack { NoShowShieldView() } }
+        .sheet(isPresented: $showPackages) { PackagesManagerView() }
+        .sheet(isPresented: $showStudents) { StudentsListView() }
         .sheet(isPresented: $showCoveragePicker) { CoveragePickerView() }
         .sheet(isPresented: $showCoverageInbox) { CoverageInboxView() }
         .sheet(item: $selectedEvent) { event in
@@ -303,6 +315,77 @@ struct InstructorDashboardView: View {
         }
         .flowePressable()
         .accessibilityIdentifier("dashboard.noShowShield")
+    }
+
+    /// Class-packages entry — always present (a new instructor needs to discover it), with the pending
+    /// purchase-request count as a badge. Cloned from `shieldCard`.
+    private var packagesCard: some View {
+        Button { showPackages = true } label: {
+            HStack(spacing: FlowSpacing.md) {
+                Image(systemName: "creditcard.fill")
+                    .font(.system(size: 22))
+                    .foregroundStyle(Color.flowePinkDeep)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Class packages")
+                        .font(FloweFont.serif(16))
+                        .foregroundStyle(Color.floweInk)
+                    Text(packagesSubtitle)
+                        .font(FloweFont.sans(12))
+                        .foregroundStyle(Color.floweMuted)
+                }
+                Spacer()
+                if data.pendingPurchaseCards.count > 0 {
+                    Text(verbatim: "\(data.pendingPurchaseCards.count)")
+                        .font(FloweFont.mono(12)).foregroundStyle(.white)
+                        .frame(minWidth: 20).padding(5)
+                        .background(Color.flowePinkDeep).clipShape(Capsule())
+                }
+                Image(systemName: "chevron.right").foregroundStyle(Color.floweMuted)
+            }
+            .padding(FlowSpacing.lg)
+            .floweCard(cornerRadius: 18)
+        }
+        .flowePressable()
+        .accessibilityIdentifier("dashboard.packages")
+    }
+
+    private var packagesSubtitle: LocalizedStringKey {
+        let pending = data.pendingPurchaseCards.count
+        if pending > 0 { return "^[\(pending) request](inflect: true) to review" }
+        if !data.myOfferings.isEmpty { return "^[\(data.myOfferings.count) package](inflect: true) on offer" }
+        return "Sell prepaid class packages"
+    }
+
+    /// Client book entry — folded here from its former tab so the instructor shell stays at 5 tabs.
+    /// Cloned from `packagesCard`; opens the full `StudentsListView` (which brings its own NavigationStack).
+    private var studentsCard: some View {
+        Button { showStudents = true } label: {
+            HStack(spacing: FlowSpacing.md) {
+                Image(systemName: "person.2.fill")
+                    .font(.system(size: 22))
+                    .foregroundStyle(Color.flowePinkDeep)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Students")
+                        .font(FloweFont.serif(16))
+                        .foregroundStyle(Color.floweInk)
+                    Text(studentsSubtitle)
+                        .font(FloweFont.sans(12))
+                        .foregroundStyle(Color.floweMuted)
+                }
+                Spacer()
+                Image(systemName: "chevron.right").foregroundStyle(Color.floweMuted)
+            }
+            .padding(FlowSpacing.lg)
+            .floweCard(cornerRadius: 18)
+        }
+        .flowePressable()
+        .accessibilityIdentifier("dashboard.students")
+    }
+
+    private var studentsSubtitle: LocalizedStringKey {
+        let count = data.instructorStudents.count
+        if count > 0 { return "^[\(count) student](inflect: true) in your book" }
+        return "Your client book"
     }
 
     /// Out-of-Studio OWNER entry — a session this instructor handed off has been claimed and needs a

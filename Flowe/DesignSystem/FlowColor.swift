@@ -17,7 +17,7 @@ extension Color {
 
     // MARK: - Figma pink palette (app source of truth)
     static let flowePink     = Color(hex: 0xE8789A)
-    static let flowePinkDeep = Color(hex: 0xD45880)
+    static let flowePinkDeep = Color(hex: 0xB23E63)   // WCAG AA >=4.5:1 as text on white/cream/cardBg AND for white text on pink fills/badges (was 0xD45880, ~3.4:1 — failing)
     static let flowePinkSoft = Color(hex: 0xF4A8C0)
     static let flowePinkPale = Color(hex: 0xFFC2D4)
     static let floweCardBg   = Color(hex: 0xFFF0F4)

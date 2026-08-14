@@ -247,6 +247,7 @@ struct EventDetailView: View {
                 .frame(width: 32, height: 32)
                 .background(.ultraThinMaterial, in: Circle())
         }
+        .accessibilityLabel("More options")
         .accessibilityIdentifier("event.moderation")
     }
 

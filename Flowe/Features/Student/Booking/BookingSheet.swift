@@ -34,6 +34,9 @@ struct BookingSheet: View {
     @State private var confirmBlock = false
     @State private var showCertificate = false
     @State private var badgePop = false   // the confirmation checkmark's celebratory scale-in
+    @State private var creditBalance = 0   // class-credits the student holds with THIS instructor
+    @State private var useCredit = true    // redeem one on confirm (only surfaced when creditBalance > 0)
+    @State private var usedCredit = false  // a credit was actually spent (drives the confirm receipt)
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Route A handoff: a caller that already showed the profile (InstructorProfileView) opens the
@@ -83,6 +86,8 @@ struct BookingSheet: View {
         // The presenting profile already syncs types, but the fetch is idempotent — so a BookingSheet
         // reached by any other path still populates the picker rather than showing only the name cache.
         .task { await data.syncLessonTypes(for: instructor) }
+        // The student's class-credit balance with this instructor — gates the redeem toggle + "N left".
+        .task { if let id = instructor.ownerID { creditBalance = await data.refreshBalance(with: id)?.balance ?? 0 } }
         // Load live occupancy whenever the time/type step is shown or the chosen day changes, so taken
         // slots render Full instead of a stale slate that looks freely bookable.
         .onChange(of: step) { _, newValue in if newValue == 2 { Task { await loadOccupancy() } } }
@@ -145,6 +150,7 @@ struct BookingSheet: View {
                             .frame(width: 28, height: 28)
                             .background(.ultraThinMaterial, in: Circle())
                     }
+                    .accessibilityLabel("More options")
                     .accessibilityIdentifier("booking.moderation")
 
                     Button(action: { onClose(false) }) {
@@ -618,11 +624,25 @@ struct BookingSheet: View {
                 .padding(.bottom, 14)
             }
 
+            // The class-credit redeem control — only when the student holds credits with this instructor
+            // and the slot isn't a waitlist route (a waitlisted seat never spends a credit).
+            if creditBalance > 0 && !isWaitlistSelected {
+                CreditRedeemToggle(remaining: creditBalance, useCredit: $useCredit)
+                    .padding(.bottom, 14)
+            }
+
             GradientButton(title: ctaTitle, enabled: !time.isEmpty, isLoading: isConfirming) {
                 Task { await confirmBooking() }
             }
         }
     }
+
+    /// The currently-selected slot would route to the waitlist (a full group/duet seat) — never on a credit.
+    private var isWaitlistSelected: Bool {
+        !time.isEmpty && isFull(time) && max(selectedTypeCapacity, 1) >= 2
+    }
+    /// Whether confirming will actually redeem a class-credit.
+    private var willUseCredit: Bool { useCredit && creditBalance > 0 && !isWaitlistSelected }
 
     /// The request CTA. A full group/duet time (still selectable) routes to the waitlist, so the button
     /// says so; everything else keeps the priced "Request" label.
@@ -631,6 +651,7 @@ struct BookingSheet: View {
         if !time.isEmpty && isFull(time) && max(selectedTypeCapacity, 1) >= 2 {
             return "Join waitlist"
         }
+        if willUseCredit { return "Book with 1 credit" }
         // A type is chosen at this step, so charge THAT type's price, not the listing's starting rate.
         // An unpriced type shows just "Request" (no misleading "· 0"); Free shows "· Free".
         if let priceText = selectedPriceText { return "Request · \(priceText)" }
@@ -738,12 +759,14 @@ struct BookingSheet: View {
         }
         isConfirming = true
         defer { isConfirming = false }
-        let result = await data.addBooking(instructor: instructor, day: day, time: time, type: type)
+        let credit = willUseCredit
+        let result = await data.addBooking(instructor: instructor, day: day, time: time, type: type, useCredit: credit)
         switch result {
         case .booked, .failed:
             // .failed never occurs for a booking today (a claim failure degrades to .booked, unlocked),
             // but is handled the same way defensively — the row exists, advance to confirmation.
             booked = true
+            usedCredit = credit   // optimistic; the balance refresh corrects the wallet if it ran out
             Haptic.success()
             withAnimation(FloweMotion.spring) { step = 3 }
         case .waitlisted:
@@ -804,6 +827,13 @@ struct BookingSheet: View {
                 .font(FloweFont.serif(22))
                 .foregroundStyle(Color.floweInk)
                 .padding(.bottom, 4)
+
+            if usedCredit {
+                Label("Paid with 1 class credit", systemImage: "ticket.fill")
+                    .font(FloweFont.sans(13, .medium))
+                    .foregroundStyle(Color.flowePinkDeep)
+                    .padding(.bottom, 8)
+            }
 
             (Text(instructor.name) + Text(" · ") + Text(localizedTag: type))
                 .font(FloweFont.sans(14))

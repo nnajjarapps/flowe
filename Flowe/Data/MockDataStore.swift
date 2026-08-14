@@ -69,6 +69,7 @@ final class MockDataStore {
     private let reviewService = ReviewService()
     private let communityService = CommunityService()
     private let eventService = EventService()
+    private let packageService = PackageService()
     private let lessonTypeService = LessonTypeService()
     private let coverageService = CoverageService()
     private let opportunityService = OpportunityService()
@@ -84,6 +85,8 @@ final class MockDataStore {
     private(set) var bookingsPhase: LoadPhase = .idle
     private(set) var communityPhase: LoadPhase = .idle
     private(set) var eventsPhase: LoadPhase = .idle
+    private(set) var packagesPhase: LoadPhase = .idle   // instructor offerings + purchase-request inbox
+    private(set) var walletPhase: LoadPhase = .idle      // student credit wallet
     /// Always `false`. Retained only because ~60 call sites still `guard !isPreview`; the app no
     /// longer has any seed / preview / offline mode — every path talks to the CloudKit-synced store.
     private let isPreview = false
@@ -464,7 +467,7 @@ final class MockDataStore {
     /// (instructor+date+time) via `BookingService.claimSeat` — the serverless mutex that stops two
     /// students holding the same 1-on-1 slot. A lost claim returns `.slotTaken` WITHOUT inserting a row.
     @discardableResult
-    func addBooking(instructor: Instructor, day: String, time: String, type: String) async -> BookingResult {
+    func addBooking(instructor: Instructor, day: String, time: String, type: String, useCredit: Bool = false) async -> BookingResult {
         // Resolve the chosen type name to its authored lesson type: a stated duration wins, so a
         // "90 min" reformer no longer collapses to the old Private/other 55-vs-50 guess. A migrated
         // bare name (durationMinutes 0) or an unresolved past type falls back to that heuristic, so a
@@ -549,7 +552,11 @@ final class MockDataStore {
               let studentID = currentUserID else {
             return waitlistRank.map { .waitlisted(rank: $0) } ?? .booked
         }
-        Task { await upload(booking, instructorID: instructorID, studentID: studentID) }
+        // Redeeming a class-credit: pass the intent + the ISO class date (for the delivery-gated refund)
+        // to the upload. The backend ignores useCredit with no capacity (books normally, credited:false).
+        let creditClassDate = Self.date(forPickerValue: day).map { Booking.seriesDateString($0) }
+        Task { await upload(booking, instructorID: instructorID, studentID: studentID,
+                            useCredit: useCredit, creditClassDate: creditClassDate) }
         return .booked
     }
 
@@ -726,19 +733,31 @@ final class MockDataStore {
     }
 
     /// Push a locally-created booking to the shared database, flagging it for retry if it fails.
-    private func upload(_ booking: Booking, instructorID: String, studentID: String) async {
-        let remoteID = await bookingService.create(
+    /// `useCredit` redeems ONE class-credit against this instructor as part of the same backend insert
+    /// (only ever passed from `addBooking`'s first attempt — a retry books WITHOUT a credit, which fails
+    /// toward the student: they keep the credit rather than lose it to a partial write).
+    private func upload(_ booking: Booking, instructorID: String, studentID: String,
+                        useCredit: Bool = false, creditClassDate: String? = nil) async {
+        let result = await bookingService.create(
             instructorID: instructorID,
             studentID: studentID,
             studentName: booking.studentName,
             date: booking.date,
             time: booking.time,
             type: booking.type,
-            duration: booking.duration
+            duration: booking.duration,
+            useCredit: useCredit,
+            creditClassDate: creditClassDate
         )
-        booking.remoteID = remoteID
-        booking.pendingUpload = remoteID == nil
+        booking.remoteID = result?.id
+        booking.pendingUpload = result == nil
         save()
+        // A credit was requested and the booking landed → refresh the per-instructor balance + wallet so
+        // the ring reflects the redemption (or the graceful no-capacity fallback, credited == false).
+        if useCredit, result != nil {
+            await refreshBalance(with: instructorID)
+            await syncWallet()
+        }
     }
 
     /// Instructor accepts or declines a request; the student sees the result on their next sync.
@@ -783,6 +802,11 @@ final class MockDataStore {
             let delivered = await bookingService.cancel(bookingID: remoteID)
             booking.pendingDecision = !delivered
             save()
+            // A not-yet-delivered cancel refunds any class-credit used — refresh so the ring ticks back up.
+            if delivered, let instructorID = booking.instructorOwnerID {
+                await refreshBalance(with: instructorID)
+                await syncWallet()
+            }
         }
     }
 
@@ -1551,6 +1575,16 @@ final class MockDataStore {
                     avatarID: listing.img,
                     photo: listing.photo
                 )
+            } else if let sp = studentProfile(forOwnerID: counterpart.id) {
+                // Mirror the instructor branch for a STUDENT counterpart: prefer the LIVE StudentProfile
+                // name + photo over the message-stored snapshot (which can be stale or a "Member" sign-in
+                // fallback). syncMessages warms these, so the profile is cached.
+                counterpart = Counterpart(
+                    id: counterpart.id,
+                    name: sp.name.isEmpty ? counterpart.name : sp.name,
+                    avatarID: counterpart.avatarID,
+                    photo: sp.photo
+                )
             } else {
                 counterpart.photo = studentPhoto(forOwnerID: counterpart.id)
             }
@@ -1800,6 +1834,9 @@ final class MockDataStore {
         await merge(remote, me: me)
         await heartbeatPresence()
         await refreshPresence(for: conversations.map { $0.counterpart.id })
+        // Warm counterpart profile photos so a DM from a non-booker student (uncached post-launch) shows a
+        // face, not initials — syncStudentProfiles only warms counterparts at launch.
+        await fetchAuthorProfiles(Set(conversations.map { $0.counterpart.id }))
     }
 
     /// Refresh a single thread — cheaper than a full sync while a conversation is open.
@@ -4330,6 +4367,9 @@ final class MockDataStore {
             // incoming-DM Communication Notification can show this counterpart's photo. See [[AvatarCache]].
             if let owner = ins.ownerID { AvatarCache.write(senderID: owner, photo: photo) }
         }
+        // Cache the display name too (even without a photo) so a DM notification shows this person's
+        // CURRENT name, not the message's frozen/empty snapshot. See [[AvatarCache]].
+        if let owner = ins.ownerID { AvatarCache.writeName(senderID: owner, name: l.name) }
         // Assigned unconditionally, unlike `photo` above: the nil-skip there protects the owner's
         // own not-yet-uploaded image, but for someone else's cached listing a nil means the
         // instructor removed the certificate — and a withdrawn credential must stop being shown.
@@ -4456,6 +4496,30 @@ final class MockDataStore {
         context.insert(profile)
         save()
         return profile
+    }
+
+    /// Pull the signed-in STUDENT's OWN name/photo/bio back from their public profile — the exact
+    /// `StudentProfile` record an instructor already sees on their bookings. A signed-out→signed-in
+    /// student (or a fresh device on the same Apple id) has a blank local row from `ensureStudentProfile`
+    /// and a `currentUser` rebuilt from Apple (no name after the first authorization, never a photo), so
+    /// "My Profile" reads blank while the public record is intact. Mirror of `hydrateOwnListingIfNeeded`.
+    /// Fills only EMPTY local fields (never clobbers a fresh edit) and returns the listing so `AppSession`
+    /// can refill `currentUser`. nil when nothing is published (e.g. after account deletion), so a
+    /// re-signup can never resurrect a deleted profile.
+    @discardableResult
+    func hydrateOwnStudentProfileIfNeeded() async -> StudentListing? {
+        guard !isPreview, let ownerID = currentUserID else { return nil }
+        guard let listing = await studentDirectory.fetch(ownerID: ownerID) else { return nil }
+        // Refresh the local cache row so the student's own avatar resolves everywhere it's shown by id.
+        let me = currentStudentProfile ?? ensureStudentProfile(
+            ownerID: ownerID, name: listing.name, memberSince: listing.memberSince
+        )
+        if AppSession.isPlaceholderName(me.name) { me.name = listing.name }
+        if me.photo == nil { me.photo = listing.photo }
+        if (me.bio ?? "").isEmpty { me.bio = listing.bio }
+        if me.memberSince == .distantPast { me.memberSince = listing.memberSince }
+        save()
+        return listing
     }
 
     /// Apply the student's edits to their own profile and publish it (mirror of `commit`).
@@ -4621,7 +4685,10 @@ final class MockDataStore {
         var out: [(id: String, name: String)] = []
         for p in peers where !seen.contains(p.studentID) {
             seen.insert(p.studentID)
-            guard peerCommunityVisible(p.studentID) else { continue }
+            // Community-visibility is now enforced SERVER-side (/roster returns only community-visible
+            // peers, from the authoritative backend `profiles` table) — so we no longer consult the
+            // divergent CloudKit `peerCommunityVisible` flag, which read false while the backend read true
+            // and silently emptied the roster. warmRosterPeers above still resolves display name/photo.
             let n = displayIdentity(ownerID: p.studentID, fallbackName: p.studentName).name
             out.append((p.studentID, n.isEmpty ? p.studentName : n))
         }
@@ -4865,6 +4932,8 @@ final class MockDataStore {
             // Cache the avatar for the Notification Service Extension, keyed by ownerID. See [[AvatarCache]].
             if let owner = p.ownerID { AvatarCache.write(senderID: owner, photo: photo) }
         }
+        // Cache the student's current name for the DM notification (see [[AvatarCache]]) — not just the photo.
+        if let owner = p.ownerID { AvatarCache.writeName(senderID: owner, name: l.name) }
     }
 
     // MARK: - Out of Studio (coverage)
@@ -4888,6 +4957,124 @@ final class MockDataStore {
     // and they drive the owner picker (`myCoverRequests` + `myClaims`) and the replacer inbox
     // (`myOffers`). The persisted state is only the per-booking ledger (`coverRole` / `coverAmount`
     // / `coverStatus`), which survives offline like the No-Show ledger it clones.
+
+    // MARK: - Class packages / credits ([[ClassPackages]])
+    //
+    // Money-adjacent state ("6 classes left") lives ONLY on the backend behind per-request authz; these
+    // are in-memory, network-derived caches (like the coverage caches below) repopulated by the sync
+    // methods — NO SwiftData @Model, NO CloudKit (a persisted balance would go stale, and forging is the
+    // whole thing we're preventing). See ClassPackages.md.
+
+    /// The signed-in instructor's package menu (active + archived), for the package manager.
+    private(set) var myOfferings: [RemoteOffering] = []
+    /// Purchase requests addressed to the signed-in instructor (pending first) — the approval inbox.
+    private(set) var incomingPurchases: [RemotePurchase] = []
+    /// The signed-in student's own purchase requests (to show "awaiting approval" on a profile).
+    private(set) var myPurchases: [RemotePurchase] = []
+    /// The student's whole credit wallet — one entry per instructor they hold credits with.
+    private(set) var wallet: [InstructorBalance] = []
+    /// Per-instructor credit detail (balance + lots) the student has fetched, keyed by instructorID —
+    /// drives the "6 of 10" ring on the profile and in the booking sheet.
+    private(set) var creditDetail: [String: CreditBalance] = [:]
+
+    /// Pending package-purchase requests — the instructor dashboard signal card + the approval inbox badge.
+    var pendingPurchaseCards: [RemotePurchase] { incomingPurchases.filter { $0.status == .pending } }
+
+    /// Credits the student currently holds with one instructor (0 when unknown / none). Cheap accessor
+    /// for gating the redeem toggle; `refreshBalance(with:)` populates `creditDetail` first.
+    func creditBalance(with instructorID: String) -> Int { creditDetail[instructorID]?.balance ?? 0 }
+
+    // Instructor: offerings + purchase inbox -------------------------------------
+
+    /// Refresh the instructor's own package menu AND their incoming purchase-request inbox in one pass.
+    func syncOfferings() async {
+        guard !isPreview, currentUserID != nil else { return }
+        if packagesPhase != .loaded { packagesPhase = .loading }
+        let offerings = await packageService.fetchMyOfferings()
+        let purchases = await packageService.fetchIncomingPurchases()
+        guard offerings != nil || purchases != nil else {
+            if packagesPhase != .loaded { packagesPhase = .failed }
+            return
+        }
+        if let offerings { myOfferings = offerings }
+        if let purchases {
+            incomingPurchases = purchases
+            // Warm the buyers' profiles so their photo resolves on the request card — a pack can be bought
+            // before any booking, so purchasers aren't warmed by syncBookings.
+            await fetchAuthorProfiles(Set(purchases.map { $0.studentID }))
+        }
+        packagesPhase = .loaded
+    }
+
+    @discardableResult
+    func saveOffering(id: String?, title: String, credits: Int, price: Int, validityDays: Int?) async -> Bool {
+        guard await packageService.saveOffering(id: id, title: title, credits: credits, price: price, validityDays: validityDays) != nil else { return false }
+        await syncOfferings()
+        return true
+    }
+
+    func setOfferingActive(_ offering: RemoteOffering, active: Bool) async {
+        guard await packageService.setOfferingActive(id: offering.id, active: active) else { return }
+        await syncOfferings()
+    }
+
+    /// Instructor approves (grants credits) or declines a purchase request, then refreshes the inbox.
+    func decidePurchase(_ purchase: RemotePurchase, approved: Bool) async {
+        guard await packageService.decidePurchase(id: purchase.id, approved: approved) else { return }
+        await syncOfferings()
+    }
+
+    // Student: browse + request --------------------------------------------------
+
+    /// Public browse of an instructor's active offerings (works pre-session, for a guest on a profile).
+    func fetchOfferings(for instructorID: String) async -> [RemoteOffering] {
+        await packageService.fetchOfferings(instructorID: instructorID) ?? []
+    }
+
+    /// Request to buy a package — payment is offline; this only files the request the instructor approves.
+    func requestPackage(offeringID: String) async -> PurchaseRequestResult {
+        let result = await packageService.requestPurchase(offeringID: offeringID, studentName: currentUserName)
+        if result == .requested { await syncMyPurchases() }
+        return result
+    }
+
+    func syncMyPurchases() async {
+        guard !isPreview, currentUserID != nil else { return }
+        if let purchases = await packageService.fetchMyPurchases() { myPurchases = purchases }
+    }
+
+    /// Whether the student already has a pending buy request for this offering (drives the profile card's
+    /// "Requested — awaiting approval" pill).
+    func hasPendingPurchase(offeringID: String) -> Bool {
+        myPurchases.contains { $0.offeringID == offeringID && $0.status == .pending }
+    }
+
+    // Student: wallet + per-instructor balance -----------------------------------
+
+    /// The whole credit wallet. `recoverSession` (pull-to-refresh only) heals a session-less user, like
+    /// `syncBookings` — a non-interactive read otherwise shows an empty wallet forever after a pre-backend
+    /// sign-in.
+    func syncWallet(recoverSession: Bool = false) async {
+        guard !isPreview, currentUserID != nil else { return }
+        if recoverSession { await FloweBackendClient.shared.recoverSessionIfNeeded() }
+        if walletPhase != .loaded { walletPhase = .loading }
+        guard let balances = await packageService.fetchWallet() else {
+            if walletPhase != .loaded { walletPhase = .failed }
+            return
+        }
+        wallet = balances
+        walletPhase = .loaded
+    }
+
+    /// Fetch (and cache) the student's full credit detail with one instructor — called when the booking
+    /// sheet opens and after any credit movement, so "N left" and the ring are server-fresh.
+    @discardableResult
+    func refreshBalance(with instructorID: String) async -> CreditBalance? {
+        guard !isPreview, currentUserID != nil else { return nil }
+        let detail = await packageService.fetchBalance(instructorID: instructorID)
+        if let detail { creditDetail[instructorID] = detail }
+        return detail
+    }
 
     /// The signed-in owner's own OOS requests (addressed by `requesterID`).
     private var coverRequests: [RemoteCoverageRequest] = []

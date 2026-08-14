@@ -78,4 +78,29 @@ final class ContentFilterTests: XCTestCase {
             "Certified since 2015",
         ]))
     }
+
+    // MARK: Non-Latin slurs (Israel-first market — an English-only list is a null filter here)
+    //
+    // Locks the 2026-08-13 addition of Arabic + Hebrew blocked terms. Word-boundary matching (split on
+    // non-letters) works identically across scripts, so a slur must be caught standalone, mid-sentence,
+    // and with trailing punctuation — while ordinary RTL listing text passes untouched. Terms are taken
+    // verbatim from ContentFilter.blockedTerms; if that list is emptied or the matching regresses to
+    // Latin-only, these fail loudly.
+
+    func testArabicSlurIsRejected() {
+        XCTAssertEqual(ContentFilter.reject("قحبة"), .objectionableLanguage)
+        XCTAssertEqual(ContentFilter.reject("يا قحبة"), .objectionableLanguage)   // mid-sentence
+        XCTAssertEqual(ContentFilter.reject("قحبة!"), .objectionableLanguage)      // punctuation-safe
+    }
+
+    func testHebrewSlurIsRejected() {
+        XCTAssertEqual(ContentFilter.reject("זונה"), .objectionableLanguage)
+        XCTAssertEqual(ContentFilter.reject("את זונה"), .objectionableLanguage)
+        XCTAssertEqual(ContentFilter.reject("זונה!"), .objectionableLanguage)
+    }
+
+    func testCleanArabicAndHebrewListingTextPasses() {
+        XCTAssertNil(ContentFilter.reject("دروس بيلاتس رائعة للمبتدئين والمتقدمين"))
+        XCTAssertNil(ContentFilter.reject("שיעורי פילאטיס נהדרים באווירה רגועה"))
+    }
 }

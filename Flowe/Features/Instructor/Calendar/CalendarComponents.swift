@@ -467,6 +467,7 @@ struct BookingRequestCard: View {
     @Environment(InstructorRouter.self) private var router
     @Environment(\.locale) private var locale
     @State private var showStudent = false
+    @State private var showDeclineConfirm = false
 
     let request: Booking
 
@@ -520,9 +521,7 @@ struct BookingRequestCard: View {
                 HStack(spacing: FlowSpacing.sm) {
                     Button {
                         Haptic.tap()
-                        withAnimation(FloweMotion.spring) {
-                            data.respond(to: request, confirmed: false)
-                        }
+                        showDeclineConfirm = true
                     } label: {
                         Text("Decline")
                             .font(FloweFont.sans(13, .medium))
@@ -562,6 +561,23 @@ struct BookingRequestCard: View {
         }
         .padding(FlowSpacing.lg)
         .floweCard()
+        // Declining is the instructor's "no" — and for a standing WEEKLY request it ends the whole
+        // series (all future weeks), an irreversible, outward-facing decision the student is notified of.
+        // Confirm before it fires (mirrors the careful student-cancel flow); a one-off gets a lighter
+        // confirm. Fixes the UX-audit "un-confirmed tap ends a series" gap.
+        .confirmationDialog(
+            request.isRecurring ? "Decline this weekly request?" : "Decline this request?",
+            isPresented: $showDeclineConfirm, titleVisibility: .visible
+        ) {
+            Button(request.isRecurring ? "End the series" : "Decline", role: .destructive) {
+                withAnimation(FloweMotion.spring) { data.respond(to: request, confirmed: false) }
+            }
+            Button("Keep it", role: .cancel) { }
+        } message: {
+            Text(request.isRecurring
+                 ? "This ends the standing weekly slot for all future weeks — the student will have to request again."
+                 : "The student will be notified you can’t take this booking.")
+        }
         .sheet(isPresented: $showStudent) {
             StudentProfileView(studentID: request.studentID ?? "", studentName: request.studentName,
                                onMessage: {

@@ -1,4 +1,5 @@
 import SwiftUI
+import CoreLocation
 
 /// Out of Studio — the instructor's "I can't teach this window, find me cover" surface.
 ///
@@ -19,10 +20,12 @@ struct OutOfStudioView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.locale) private var locale
 
-    /// The coverage window. Defaults to "now → end of day-ish": most out-of-studio calls are same-day
-    /// ("I'm sick, cover today"), and the instructor widens it from there.
-    @State private var windowStart = Date()
-    @State private var windowEnd = Calendar.current.date(byAdding: .hour, value: 8, to: Date()) ?? Date()
+    // The coverage window now lives in AppSettings (persisted, mirrors coverageRadiusKm) so the chosen
+    // From/Until survive closing the sheet; `rollForwardWindowIfStale` freshens a past window on appear
+    // while preserving its DURATION.
+
+    /// The session whose cover-candidate picker is open — the manual "pick who to ask" sheet.
+    @State private var pickerTarget: Booking?
 
     /// Sessions the instructor just tapped "Request cover" on, keyed by `booking.remoteID`. Optimistic:
     /// the CloudKit publish + fan-out is async (and a whole no-op in the seeded sim), so the button had
@@ -36,7 +39,7 @@ struct OutOfStudioView: View {
 
     /// The instructor's confirmed, upcoming sessions that start inside the chosen window.
     private var sessions: [Booking] {
-        data.sessionsToCoverInWindow(start: windowStart, end: windowEnd)
+        data.sessionsToCoverInWindow(start: settings.oosWindowStart, end: settings.oosWindowEnd)
     }
 
     var body: some View {
@@ -83,25 +86,33 @@ struct OutOfStudioView: View {
             } message: { _ in
                 Text("The instructors you asked will no longer see it. You can request cover again after.")
             }
+            .onAppear { rollForwardWindowIfStale() }
+            .sheet(item: $pickerTarget) { booking in
+                CoverageCandidatePicker(
+                    candidates: data.oosCandidates(for: booking, radiusKm: settings.coverageRadiusKm),
+                    origin: data.currentInstructor?.studioCoordinate
+                ) { selected in requestCover(for: booking, to: selected) }
+            }
         }
     }
 
     // MARK: - Window
 
     private var windowCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        @Bindable var settings = settings
+        return VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("WHEN ARE YOU OUT?")
                     .font(FloweFont.mono(11))
                     .foregroundStyle(Color.floweMuted)
-                Text("We'll find cover for every session that starts in this window.")
+                Text("We'll find cover for every session that starts in this window. Your window is saved.")
                     .font(FloweFont.sans(12))
                     .foregroundStyle(Color.floweMuted)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            DatePicker("From", selection: $windowStart, displayedComponents: [.date, .hourAndMinute])
+            DatePicker("From", selection: $settings.oosWindowStart, displayedComponents: [.date, .hourAndMinute])
                 .font(FloweFont.sans(14))
-            DatePicker("Until", selection: $windowEnd, in: windowStart...,
+            DatePicker("Until", selection: $settings.oosWindowEnd, in: settings.oosWindowStart...,
                        displayedComponents: [.date, .hourAndMinute])
                 .font(FloweFont.sans(14))
         }
@@ -195,11 +206,7 @@ struct OutOfStudioView: View {
                 }
             } else {
                 Button {
-                    if let coverID { requestedIDs.insert(coverID) }   // flip the button now, don't wait on the network
-                    data.requestCoverage(for: booking,
-                                         windowStart: windowStart,
-                                         windowEnd: windowEnd,
-                                         candidates: candidates)
+                    pickerTarget = booking          // open the manual "pick who to ask" sheet
                 } label: {
                     Text(coverLabel(requested: false, count: candidates.count))
                         .font(FloweFont.sans(13, .medium))
@@ -233,6 +240,26 @@ struct OutOfStudioView: View {
         return count == 1 ? "Request cover · 1 nearby" : "Request cover · \(count) nearby"
     }
 
+    /// Send the cover request to the instructors the owner hand-picked in the sheet (was an auto fan-out
+    /// to every candidate). Optimistically flips the row to "Cover requested" before the network lands.
+    private func requestCover(for booking: Booking, to selected: [Instructor]) {
+        guard !selected.isEmpty else { return }
+        if let id = booking.remoteID { requestedIDs.insert(id) }
+        data.requestCoverage(for: booking,
+                             windowStart: settings.oosWindowStart,
+                             windowEnd: settings.oosWindowEnd,
+                             candidates: selected)
+    }
+
+    /// A saved window whose end is already in the past is useless — roll it to start now, KEEPING the
+    /// duration the instructor set, so the persisted window stays actionable across days.
+    private func rollForwardWindowIfStale() {
+        guard settings.oosWindowEnd <= Date() else { return }
+        let duration = max(settings.oosWindowEnd.timeIntervalSince(settings.oosWindowStart), 3600)
+        settings.oosWindowStart = Date()
+        settings.oosWindowEnd = Date().addingTimeInterval(duration)
+    }
+
     private var emptyState: some View {
         EmptyStateView(
             icon: "airplane",
@@ -240,6 +267,124 @@ struct OutOfStudioView: View {
             message: "Widen the window above to cover more of your schedule. Only confirmed, upcoming sessions can be handed off."
         )
         .padding(.top, 40)
+    }
+}
+
+// MARK: - Cover-candidate picker (manual: choose WHO to ask)
+
+/// The instructor hand-picks which nearby instructors to ask to cover a session — replacing the old
+/// auto-fan-out to every candidate. Candidates arrive pre-ranked by distance from `oosCandidates`; only
+/// the selected instructors are notified. Distance shows when both studios publish a coordinate.
+struct CoverageCandidatePicker: View {
+    @Environment(\.dismiss) private var dismiss
+    let candidates: [Instructor]
+    let origin: CLLocationCoordinate2D?
+    let onRequest: ([Instructor]) -> Void
+
+    @State private var selected: Set<String> = []
+
+    private var chosen: [Instructor] {
+        candidates.filter { $0.ownerID.map(selected.contains) ?? false }
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Pick the instructors you want to ask. Only the ones you select are notified — no one else sees your request.")
+                        .font(FloweFont.sans(13))
+                        .foregroundStyle(Color.floweMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if candidates.isEmpty {
+                        EmptyStateView(icon: "person.2.slash",
+                                       title: "No instructors nearby",
+                                       message: "Widen your search radius, or check back — no eligible instructors are within range right now.")
+                            .padding(.top, 30)
+                    } else {
+                        ForEach(candidates, id: \.legacyId) { candidateRow($0) }
+                    }
+                }
+                .padding(20)
+            }
+            .background(Color.flowWhite)
+            .navigationTitle("Request cover")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }.tint(Color.floweMuted)
+                }
+            }
+            .safeAreaInset(edge: .bottom) {
+                if !candidates.isEmpty {
+                    Button {
+                        onRequest(chosen)
+                        dismiss()
+                    } label: {
+                        Text(sendLabel)
+                            .font(FloweFont.sans(15, .medium))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .foregroundStyle(.white)
+                            .background(FlowGradients.gradDark, in: RoundedRectangle(cornerRadius: 14))
+                            .opacity(selected.isEmpty ? 0.5 : 1)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(selected.isEmpty)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+                    .padding(.bottom, 12)
+                    .background(.ultraThinMaterial)
+                }
+            }
+        }
+    }
+
+    private var sendLabel: LocalizedStringKey {
+        selected.isEmpty ? "Select instructors to ask"
+                         : "^[Request cover from \(selected.count) instructor](inflect: true)"
+    }
+
+    @ViewBuilder
+    private func candidateRow(_ ins: Instructor) -> some View {
+        let isOn = ins.ownerID.map(selected.contains) ?? false
+        Button {
+            guard let id = ins.ownerID else { return }
+            if isOn { selected.remove(id) } else { selected.insert(id) }
+            Haptic.selection()
+        } label: {
+            HStack(spacing: 12) {
+                AvatarView(id: "", photo: ins.photo, size: 44)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(ins.name.isEmpty ? "Instructor" : ins.name)
+                        .font(FloweFont.serif(15)).foregroundStyle(Color.floweInk).lineLimit(1)
+                    if let sub = subtitle(ins) {
+                        Text(verbatim: sub).font(FloweFont.sans(12)).foregroundStyle(Color.floweMuted).lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 8)
+                Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 22))
+                    .foregroundStyle(isOn ? Color.flowePinkDeep : Color.floweMuted.opacity(0.45))
+            }
+            .padding(14)
+            .floweCard(cornerRadius: 14)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(ins.name.isEmpty ? "Instructor" : ins.name)
+        .accessibilityValue(isOn ? "Selected" : "Not selected")
+        .accessibilityAddTraits(isOn ? .isSelected : [])
+    }
+
+    /// Distance (when both studios have a coordinate) + rating — the "nearby" signal.
+    private func subtitle(_ ins: Instructor) -> String? {
+        var parts: [String] = []
+        if let o = origin, let c = ins.studioCoordinate {
+            let m = CLLocation(latitude: o.latitude, longitude: o.longitude)
+                .distance(from: CLLocation(latitude: c.latitude, longitude: c.longitude))
+            parts.append(m < 1000 ? "\(Int(m)) m away" : String(format: "%.1f km away", m / 1000))
+        }
+        if ins.reviews > 0 { parts.append(String(format: "★ %.1f", ins.rating)) }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 }
 

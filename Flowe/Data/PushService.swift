@@ -51,7 +51,8 @@ enum NotificationPreference {
     ///   notification, and a toggle promising one implies a capability the app does not have.
     /// - `notif.marketing` — nothing in the app or the CloudKit container can send a marketing
     ///   push; there is no campaign mechanism of any kind. It was a switch wired to nothing.
-    static let retired = ["notif.payouts", "notif.marketing"]
+    /// - `notif.grow` — the Grow feature was removed; sweep its toggle so a stale `true` can't linger.
+    static let retired = ["notif.payouts", "notif.marketing", "notif.grow"]
 }
 
 /// Push notifications for everything two Flowe users do to each other.

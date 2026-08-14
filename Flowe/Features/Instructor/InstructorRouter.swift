@@ -12,7 +12,7 @@ final class InstructorRouter {
         var id: String { rawValue }
     }
 
-    /// 0 Dashboard · 1 Calendar · 2 Messages · 3 Profile · 4 Students
+    /// 0 Dashboard · 1 Calendar · 2 Messages · 3 Profile · 4 Community  (Students folded into the Dashboard)
     var selectedTab = 0
     var profileTab: ProfileTab = .overview
 

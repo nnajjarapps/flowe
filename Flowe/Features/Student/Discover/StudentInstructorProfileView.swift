@@ -39,6 +39,8 @@ struct StudentInstructorProfileView: View {
     @State private var showHeroZoom = false
     @State private var showBooking = false
     @State private var showGuestSignIn = false
+    @State private var offerings: [RemoteOffering] = []
+    @State private var buyingOffering: RemoteOffering?
 
     /// App Store 5.1.1(v): a guest may VIEW this profile but any account action (book, save, join,
     /// report, block) prompts sign-in instead of running. After signing in, `AppRouter` swaps into the
@@ -129,6 +131,16 @@ struct StudentInstructorProfileView: View {
             await data.syncLessonTypes(for: instructor)
         }
         .sheet(item: $selectedFriend) { PracticeFriendSheet(peer: $0) }
+        .task {
+            // Class packages: the public offering menu (works for a guest) + this student's own balance
+            // and pending requests, so the PACKAGES section shows "N left" / "awaiting approval".
+            if let id = instructor.ownerID {
+                offerings = await data.fetchOfferings(for: id)
+                await data.refreshBalance(with: id)
+                await data.syncMyPurchases()
+            }
+        }
+        .sheet(item: $buyingOffering) { RequestToBuySheet(offering: $0, instructorName: instructor.name) }
         .sheet(isPresented: $showCircleChat) {
             if let id = instructor.ownerID {
                 DiscussionSheet(
@@ -312,6 +324,7 @@ struct StudentInstructorProfileView: View {
                 .frame(width: 32, height: 32)
                 .background(.ultraThinMaterial, in: Circle())
         }
+        .accessibilityLabel("More options")
         .accessibilityIdentifier("instructor.moderation")
     }
 
@@ -445,6 +458,8 @@ struct StudentInstructorProfileView: View {
             // instructor has authored any, else the denormalised name cache as name-only cards. The
             // section stays conditional: a genuinely empty resolver omits it, an honest empty state
             // rather than a backfilled default.
+            packagesSection
+
             let types = data.lessonTypes(for: instructor)
             if !types.isEmpty {
                 section("OFFERS") {
@@ -472,6 +487,57 @@ struct StudentInstructorProfileView: View {
         VStack(alignment: .leading, spacing: 8) {
             SectionHeader(text: title)
             content()
+        }
+    }
+
+    // MARK: - Class packages ([[ClassPackages]])
+
+    /// PACKAGES section — the instructor's prepaid packs, above OFFERS. Shows an owned-balance banner
+    /// when the student already holds credits, and each pack's "Request to buy" (or "awaiting approval").
+    @ViewBuilder private var packagesSection: some View {
+        if !offerings.isEmpty {
+            section("PACKAGES") {
+                VStack(spacing: 12) {
+                    if let id = instructor.ownerID, data.creditBalance(with: id) > 0 {
+                        ownedBalanceBanner(data.creditBalance(with: id))
+                    }
+                    ForEach(Array(offerings.enumerated()), id: \.element.id) { i, offering in
+                        PackageOfferingCard(offering: offering, footer: AnyView(buyFooter(offering)))
+                            .floweAppear(i)
+                    }
+                }
+            }
+        }
+    }
+
+    private func ownedBalanceBanner(_ balance: Int) -> some View {
+        HStack(spacing: FlowSpacing.md) {
+            CreditRing(remaining: balance, total: max(balance, 1), size: 40, style: .compact)
+            Text("You have ^[\(balance) class](inflect: true) left with \(instructor.name).")
+                .font(FloweFont.sans(13, .medium)).foregroundStyle(Color.floweInk)
+            Spacer()
+        }
+        .padding(FlowSpacing.md)
+        .background(Color.flowePink.opacity(0.10))
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+
+    @ViewBuilder private func buyFooter(_ o: RemoteOffering) -> some View {
+        if data.hasPendingPurchase(offeringID: o.id) {
+            Text("Requested · awaiting approval")
+                .font(FloweFont.sans(13, .medium)).foregroundStyle(Color.floweMuted)
+                .frame(maxWidth: .infinity).padding(.vertical, 12)
+                .background(Color.floweMuted.opacity(0.10)).clipShape(RoundedRectangle(cornerRadius: 14))
+                .padding(.top, FlowSpacing.xs)
+        } else {
+            Button { requireAccount { buyingOffering = o } } label: {
+                Text("Request to buy")
+                    .font(FloweFont.sans(14, .medium)).foregroundStyle(.white)
+                    .frame(maxWidth: .infinity).padding(.vertical, 12)
+                    .background(FlowGradients.gradDark).clipShape(RoundedRectangle(cornerRadius: 14))
+            }
+            .flowePressable()
+            .padding(.top, FlowSpacing.xs)
         }
     }
 
