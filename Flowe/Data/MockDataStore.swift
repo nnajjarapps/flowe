@@ -5146,10 +5146,16 @@ final class MockDataStore {
         guard !isPreview, let me = currentUserID,
               booking.instructorOwnerID == me,
               let bookingID = booking.remoteID else { return }
+        // Durable "sent" marker, stamped synchronously (before the async publish) so the OOS row still
+        // reads "Cover requested" after an app re-open, independent of a live `fetchMyRequests` re-fetch.
+        // Reconciled against server truth in `syncCoverage`; cleared by `cancelCoverage`.
+        booking.coverRole = .requested
+        save()
         let candidateIDs = candidates.compactMap(\.ownerID).filter { $0 != me }
         Task {
             guard await coverageService.publishRequest(
                 bookingID: bookingID,
+                requesterID: me,
                 sessionDate: booking.date, sessionTime: booking.time,
                 sessionDuration: booking.duration, sessionType: booking.type,
                 windowStart: windowStart, windowEnd: windowEnd
@@ -5171,7 +5177,7 @@ final class MockDataStore {
         // Optimistic local teardown: drop the cached request + its offers and clear the cover role.
         coverRequests.removeAll { $0.bookingID == bookingID }
         coverOffers.removeAll { $0.bookingID == bookingID }
-        if booking.coverRole == .handedOff { booking.coverRole = .none }
+        if booking.coverRole == .requested || booking.coverRole == .handedOff { booking.coverRole = .none }
         save()
         guard !isPreview else { return }
         Task {
@@ -5239,6 +5245,17 @@ final class MockDataStore {
             coverRequests = requests
             coverClaims = claims
             for request in requests { resolveHandOff(request, claims: claims) }
+            // Reconcile the persisted `.requested` flag against server truth: clear it ONLY for a request
+            // the fetch RETURNED that is no longer open (cancelled == 2 / filled == 1). A request the fetch
+            // did NOT return (offline nil-fetch keeps the prior cache, or a not-yet-healed row) is left
+            // alone, so a genuinely-sent cover survives. Awarded requests were already moved to `.handedOff`
+            // by `resolveHandOff` above, so this only closes out cancelled-elsewhere rows.
+            for request in requests where request.status != 0 {
+                if let booking = bookings.first(where: { $0.remoteID == request.bookingID }),
+                   booking.coverRole == .requested {
+                    booking.coverRole = .none
+                }
+            }
 
             // Replacer side: offers addressed to me drive the inbox; a session I was picked for becomes
             // a cover I'm owed for.

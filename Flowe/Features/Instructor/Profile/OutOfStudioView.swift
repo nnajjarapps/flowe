@@ -165,11 +165,16 @@ struct OutOfStudioView: View {
         let candidates = data.oosCandidates(for: booking, radiusKm: settings.coverageRadiusKm)
         let coverID = booking.remoteID
         let arranged = booking.coverRole == .handedOff   // a winner was awarded — past the cancel window here
-        // An OPEN request (optimistic flag, or a synced request that isn't cancelled/filled). Status 0 only,
-        // so a cancelled request (status 2, still returned by the fetch) correctly reads as not-requested.
-        let requestedOpen = !arranged && (coverID.map { id in
-            requestedIDs.contains(id) || data.myCoverRequests.contains { $0.bookingID == id && $0.status == 0 }
-        } ?? false)
+        // An OPEN request: the DURABLE persisted flag (survives re-open) OR the optimistic tap flag OR a
+        // synced request that isn't cancelled/filled. Status 0 only, so a cancelled request (status 2,
+        // still returned by the fetch) correctly reads as not-requested. `.requested` is reconciled away
+        // in `syncCoverage` once the server shows the request cancelled/filled.
+        let requestedOpen = !arranged && (
+            booking.coverRole == .requested
+            || (coverID.map { id in
+                requestedIDs.contains(id) || data.myCoverRequests.contains { $0.bookingID == id && $0.status == 0 }
+            } ?? false)
+        )
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
                 AvatarView(id: "", photo: data.studentPhoto(forOwnerID: booking.studentID ?? ""), size: 40)
@@ -423,7 +428,12 @@ struct CoveragePickerView: View {
             .background(Color.flowWhite)
             .navigationTitle("Pick your cover")
             .navigationBarTitleDisplayMode(.inline)
+            .refreshable { await data.syncCoverage(asInstructor: true) }
             .task {
+                // Pull fresh requests + claims on open, so a claim just filed from the OTHER instructor's
+                // device shows up here — not only after the last dashboard-appear sync. This is what makes
+                // the owner see (and be able to award) an inbound claim as soon as they open the picker.
+                await data.syncCoverage(asInstructor: true)
                 // Warm each claimant's listing so `claimRow` can show their real name + photo (a claim
                 // only carries an id + a frozen name; the catalog cache holds the current identity).
                 let replacerIDs = Set(requests.flatMap { req in

@@ -166,6 +166,7 @@ final class CoverageService {
     /// owner stays the creator of the record they later edit when awarding. Returns the remote id so it
     /// can be cached locally, or nil if the write didn't reach the server.
     func publishRequest(bookingID: String,
+                        requesterID: String,
                         sessionDate: String,
                         sessionTime: String,
                         sessionDuration: String,
@@ -176,13 +177,13 @@ final class CoverageService {
         let id = CKRecord.ID(recordName: "coverage-\(bookingID)")
         let record = (try? await database.record(for: id))
             ?? CKRecord(recordType: Self.requestRecordType, recordID: id)
-        // The requester is the instructor on the booking being covered — copied off `SessionBooking`
-        // the same way `BookingService.respond` copies the student off a booking, rather than trusting
-        // a caller-supplied id. Only written when the lookup succeeds, so a failed fetch on a re-publish
-        // can't blank a `requesterID` already there.
-        if let requesterID = await requesterID(forBooking: bookingID) {
-            record["requesterID"] = requesterID
-        }
+        // The requester is the OWNER, who is publishing on their own device — the caller already proved
+        // `booking.instructorOwnerID == currentUserID`, and CloudKit `_creator`-write binds the record to
+        // that same iCloud identity. Stamped UNCONDITIONALLY (mirrors how `fanOutOffers`/`claim` trust the
+        // caller's id directly): `fetchMyRequests` filters on this field, so a blank one makes the owner's
+        // own request unqueryable. (Was derived from a `SessionBooking` CloudKit read that no longer exists
+        // — bookings moved to the backend — so that read ALWAYS returned nil and this was never written.)
+        record["requesterID"] = requesterID
         record["bookingID"] = bookingID
         record["sessionDate"] = sessionDate
         record["sessionTime"] = sessionTime
@@ -362,18 +363,6 @@ final class CoverageService {
         return false
         #endif
     }
-
-    // MARK: - Booking lookup
-
-    #if CLOUDKIT_ENABLED
-    /// The instructor on a booking — the person stepping out of studio, hence the coverage requester.
-    /// Read off the student-written `SessionBooking` so the id is authoritative rather than caller-
-    /// supplied; nil when the booking can't be read, which is not fatal to the request.
-    private func requesterID(forBooking bookingID: String) async -> String? {
-        let record = try? await database.record(for: CKRecord.ID(recordName: bookingID))
-        return record?["instructorID"] as? String
-    }
-    #endif
 
     // MARK: - Reads
 

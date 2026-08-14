@@ -22,6 +22,7 @@ enum FeeStatus: String, Codable {
 /// No-Show Shield block, it never touches the world-readable booking record.
 enum CoverRole: String, Codable {
     case none        // no cover involved
+    case requested   // OOS owner asked for cover; no replacer awarded yet — persisted so the OOS row survives app re-open
     case handedOff   // this instructor reported OOS; a replacer is covering the session
     case covering    // this instructor is covering someone else's session
 }
