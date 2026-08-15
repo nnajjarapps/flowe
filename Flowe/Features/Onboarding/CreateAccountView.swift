@@ -40,7 +40,9 @@ struct CreateAccountView: View {
                 TermsAcceptanceView(isAgreed: $agreedToTerms)
 
                 SignInWithAppleButton(.signUp) { request in
-                    request.requestedScopes = [.fullName, .email]
+                    // Name only — Flowe does not collect email (backend stores "never email"), so we don't
+                    // request the scope. Keeps the App Privacy label / manifest honest (no Email Address).
+                    request.requestedScopes = [.fullName]
                 } onCompletion: { result in
                     handleApple(result)
                 }
