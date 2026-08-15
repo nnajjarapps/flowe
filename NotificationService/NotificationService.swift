@@ -30,10 +30,13 @@ final class NotificationService: UNNotificationServiceExtension {
         let userInfo = request.content.userInfo
 
         // On-device key-path confirmation: dump the raw payload so the real `ck -> qry -> af` path can
-        // be verified in Console (subsystem com.flowepilates.app.NotificationService). Marked .public
-        // so it isn't redacted — this is a test push; there is no secret here (the DM text stays E2E
-        // ciphertext and is never in this payload). Remove or drop to .debug once the path is confirmed.
-        nseLog.info("NSE didReceive userInfo: \(String(describing: userInfo), privacy: .public)")
+        // be verified in Console (subsystem com.flowepilates.app.NotificationService). DEBUG-ONLY: this
+        // carries push metadata (senderID/conversationID/senderName in clear), so it must never reach a
+        // shipping build's device logs — it is compiled out of Release entirely. (The DM text itself is
+        // E2E ciphertext and is never present in this payload regardless of build.)
+        #if DEBUG
+        nseLog.debug("NSE didReceive userInfo: \(String(describing: userInfo), privacy: .public)")
+        #endif
 
         // --- Parse the CloudKit query-notification payload (ck -> qry -> af). ---
         // NOTE: verify this key path on-device by logging `userInfo` once; if Apple changes it the
@@ -57,7 +60,10 @@ final class NotificationService: UNNotificationServiceExtension {
         let senderName = AvatarCache.name(senderID: senderID)
             ?? (af["senderName"] as? String).flatMap { $0.isEmpty ? nil : $0 }
             ?? "Flowe"
-        nseLog.info("NSE gate: DM matched — sender=\(senderName, privacy: .public) convo=\(conversationID, privacy: .public)")
+        // DEBUG-ONLY: sender name + conversation id are PII — never log them at .public in a shipping build.
+        #if DEBUG
+        nseLog.debug("NSE gate: DM matched — sender=\(senderName, privacy: .public) convo=\(conversationID, privacy: .public)")
+        #endif
 
         // Avatar: cached JPEG written by the app into the App Group, else a brand monogram.
         // NEVER fetch CloudKit here (guaranteed timeout risk) and NEVER decrypt.
