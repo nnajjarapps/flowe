@@ -89,13 +89,21 @@ struct PaywallView: View {
 
     // MARK: Tier card
 
+    /// The concrete perks each tier unlocks beyond its tagline, shown as check bullets so the paywall
+    /// makes the per-tier value explicit: Visible → community events + out-of-studio cover; Boost → the
+    /// Visible superset + the recruiting Opportunities marketplace. `LocalizedStringKey` so they localize.
+    private static func features(for tier: SubscriptionTier) -> [LocalizedStringKey] {
+        switch tier {
+        case .visible: return ["Post community events", "Request cover when you're out of studio"]
+        case .boost:   return ["Everything in Visible", "Post recruiting opportunities"]
+        }
+    }
+
     private func tierCard(_ tier: SubscriptionTier) -> some View {
         let product = subscription.product(for: tier)
         let isCurrent = subscription.tier == tier
         // Show the trial for new Visible subscribers; if a product is loaded, respect its eligibility.
         let showTrial = tier == .visible && !isCurrent && (product == nil || trialEligible)
-        // Boost includes visibility — call it out so the value is clear.
-        let includesVisible = tier == .boost
 
         return VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -118,8 +126,10 @@ struct PaywallView: View {
                     .font(FloweFont.sans(12, .medium))
                     .foregroundStyle(Color.flowePinkDeep)
             }
-            if includesVisible {
-                Label("Everything in Visible, plus featured placement", systemImage: "checkmark.seal")
+            // Per-tier feature bullets — make each subscription's concrete unlocks explicit (replaces the
+            // single Boost-only "featured placement" line). Accurate to what the tiers actually gate.
+            ForEach(Self.features(for: tier), id: \.self) { feature in
+                Label(feature, systemImage: "checkmark.seal")
                     .font(FloweFont.sans(12))
                     .foregroundStyle(Color.floweMuted)
             }
