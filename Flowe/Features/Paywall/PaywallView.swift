@@ -128,7 +128,8 @@ struct PaywallView: View {
             }
             // Per-tier feature bullets — make each subscription's concrete unlocks explicit (replaces the
             // single Boost-only "featured placement" line). Accurate to what the tiers actually gate.
-            ForEach(Self.features(for: tier), id: \.self) { feature in
+            // Enumerate for a stable Int id — LocalizedStringKey isn't Hashable, so `id: \.self` won't compile.
+            ForEach(Array(Self.features(for: tier).enumerated()), id: \.offset) { _, feature in
                 Label(feature, systemImage: "checkmark.seal")
                     .font(FloweFont.sans(12))
                     .foregroundStyle(Color.floweMuted)
