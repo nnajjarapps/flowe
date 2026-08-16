@@ -119,6 +119,19 @@ final class AccountDeletionService {
         ) else { return false }
         ids += myLessonTypes
 
+        // Flowe Education records I authored — my public programs + video exercises (and their video/thumb
+        // CKAssets, removed with the record), keyed by ownerID exactly like my lesson types.
+        guard let myPrograms = await recordIDs(
+            ofType: ProgramService.recordType,
+            matching: NSPredicate(format: "ownerID == %@", ownerID)
+        ) else { return false }
+        ids += myPrograms
+        guard let myExercises = await recordIDs(
+            ofType: ExerciseService.recordType,
+            matching: NSPredicate(format: "ownerID == %@", ownerID)
+        ) else { return false }
+        ids += myExercises
+
         // Flowe Pro records I created: opportunities I posted, applications I sent, and the decisions I
         // made as a poster. (An application carries the poster's id too, but the APPLICANT is its creator.)
         guard let myOpportunities = await recordIDs(
