@@ -108,7 +108,7 @@ struct EventDetailView: View {
         }
         // The organizer's full instructor profile, not the booking sheet directly. No distance fix in
         // the community tab, so the profile omits the teaching-area distance.
-        .sheet(isPresented: $showOrganizer) {
+        .fullScreenCover(isPresented: $showOrganizer) {
             if let listing = organizerListing {
                 StudentInstructorProfileView(instructor: listing) { showOrganizer = false }
             }

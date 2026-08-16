@@ -197,7 +197,7 @@ struct ProfileView: View {
         // Rebook destination — the instructor's full bookable profile, same as a booking card's
         // "Book again" (BookingCard deliberately opens the profile, not the sheet, so the student
         // picks the slot/time).
-        .sheet(item: $rebookTeacher) { teacher in
+        .fullScreenCover(item: $rebookTeacher) { teacher in
             StudentInstructorProfileView(instructor: teacher) { rebookTeacher = nil }
         }
         .sheet(item: $selectedFriend) { PracticeFriendSheet(peer: $0) }

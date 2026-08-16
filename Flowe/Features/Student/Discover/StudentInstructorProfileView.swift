@@ -41,6 +41,12 @@ struct StudentInstructorProfileView: View {
     @State private var showGuestSignIn = false
     @State private var offerings: [RemoteOffering] = []
     @State private var buyingOffering: RemoteOffering?
+    /// The full-screen profile's active tab. Classes (booking) is the default landing.
+    @State private var tab: ProfileTab = .classes
+    private enum ProfileTab: String, CaseIterable, Identifiable {
+        case classes = "Classes", library = "Library", reviews = "Reviews", about = "About"
+        var id: String { rawValue }
+    }
 
     /// App Store 5.1.1(v): a guest may VIEW this profile but any account action (book, save, join,
     /// report, block) prompts sign-in instead of running. After signing in, `AppRouter` swaps into the
@@ -89,14 +95,12 @@ struct StudentInstructorProfileView: View {
                         .padding(.top, -24)   // overlap the hero's lower edge
                     statTrio
                         .padding(.top, 20)
-                    sections
-                        .padding(.top, 24)
-                    reviewsSection
-                        .padding(.top, 24)
-                    recommendationsSection
-                        .padding(.top, 24)
-                    communitySection
-                        .padding(.top, 24)
+                    tabBar
+                        .padding(.top, 20)
+                        .padding(.horizontal, 20)
+                    tabContent
+                        .padding(.top, 22)
+                        .animation(FloweMotion.gentle, value: tab)
                 }
                 .padding(.bottom, 24)
             }
@@ -129,6 +133,8 @@ struct StudentInstructorProfileView: View {
             // capacity/details/photos, not just the denormalised name cache. Same non-pruning pattern
             // as reviews: a student viewing this profile fetches all of one instructor's types.
             await data.syncLessonTypes(for: instructor)
+            // Flowe Education — the instructor's open video library, shown in the Library tab.
+            await data.syncEducation(for: instructor)
         }
         .sheet(item: $selectedFriend) { PracticeFriendSheet(peer: $0) }
         .task {
@@ -415,51 +421,38 @@ struct StudentInstructorProfileView: View {
         .padding(.horizontal, 20)
     }
 
-    // MARK: - Sections
+    // MARK: - Tabs
 
-    /// Every section is conditional — an empty field yields no empty block, so a sparse listing still
-    /// reads as a finished screen rather than a form with holes in it.
-    private var sections: some View {
+    /// Instagram-style segmented tab bar over the pinned identity header.
+    private var tabBar: some View {
+        Picker("", selection: $tab) {
+            ForEach(ProfileTab.allCases) { Text(localizedTag: $0.rawValue).tag($0) }
+        }
+        .pickerStyle(.segmented)
+        .onChange(of: tab) { _, _ in Haptic.selection() }
+    }
+
+    @ViewBuilder private var tabContent: some View {
+        switch tab {
+        case .classes: classesTab
+        case .library:
+            StudentLibrarySection(instructor: instructor)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 20)
+        case .reviews: reviewsTab
+        case .about:   aboutTab
+        }
+    }
+
+    // MARK: - Tab content
+    //
+    // Every section stays conditional — an empty field yields no empty block, so a sparse tab still reads
+    // as a finished screen. reviews/recommendations/community self-pad; the rest rely on the tab's padding.
+
+    /// Booking-related: packages, the OFFERS menu, and availability.
+    private var classesTab: some View {
         VStack(alignment: .leading, spacing: 20) {
-            if let bio = instructor.bio, !bio.isEmpty {
-                section("ABOUT") {
-                    Text(bio)
-                        .font(FloweFont.sans(15))
-                        .foregroundStyle(Color.floweInk)
-                        .lineSpacing(4)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-
-            brandStoryBlock
-
-            if !instructor.specialties.isEmpty {
-                section("SPECIALTIES") {
-                    FlowLayout(spacing: 6) {
-                        // Raw user strings — passed through, never localized.
-                        ForEach(instructor.specialties, id: \.self) { SpecialtyTag(text: $0) }
-                    }
-                }
-            }
-
-            // Flowe Pro: the instructor's work history, same pink-dot timeline as their own profile.
-            let experience = instructor.experience
-            if !experience.isEmpty {
-                section("EXPERIENCE") {
-                    VStack(alignment: .leading, spacing: 12) {
-                        ForEach(experience) { entry in
-                            experienceRow(entry)
-                        }
-                    }
-                }
-            }
-
-            // Rich, instructor-authored lesson types via the single resolver — owned rows when the
-            // instructor has authored any, else the denormalised name cache as name-only cards. The
-            // section stays conditional: a genuinely empty resolver omits it, an honest empty state
-            // rather than a backfilled default.
             packagesSection
-
             let types = data.lessonTypes(for: instructor)
             if !types.isEmpty {
                 section("OFFERS") {
@@ -470,14 +463,59 @@ struct StudentInstructorProfileView: View {
                     }
                 }
             }
-
-            studioLocation
             availability
-            certificationBlock
-            paymentBlock
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 20)
+    }
+
+    private var reviewsTab: some View {
+        VStack(spacing: 24) {
+            reviewsSection
+            recommendationsSection
+        }
+    }
+
+    /// The instructor's story — bio, brand story, specialties, experience, studio, certs, payment — plus
+    /// the community circle (which self-pads, so it sits outside the padded block).
+    private var aboutTab: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: 20) {
+                if let bio = instructor.bio, !bio.isEmpty {
+                    section("ABOUT") {
+                        Text(bio)
+                            .font(FloweFont.sans(15))
+                            .foregroundStyle(Color.floweInk)
+                            .lineSpacing(4)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                brandStoryBlock
+                if !instructor.specialties.isEmpty {
+                    section("SPECIALTIES") {
+                        FlowLayout(spacing: 6) {
+                            // Raw user strings — passed through, never localized.
+                            ForEach(instructor.specialties, id: \.self) { SpecialtyTag(text: $0) }
+                        }
+                    }
+                }
+                // Flowe Pro: the instructor's work history, same pink-dot timeline as their own profile.
+                let experience = instructor.experience
+                if !experience.isEmpty {
+                    section("EXPERIENCE") {
+                        VStack(alignment: .leading, spacing: 12) {
+                            ForEach(experience) { entry in experienceRow(entry) }
+                        }
+                    }
+                }
+                studioLocation
+                certificationBlock
+                paymentBlock
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 20)
+            communitySection
+        }
     }
 
     /// A titled block. Collapses to nothing when its content is empty (a `@ViewBuilder` `if` yields an

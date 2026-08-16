@@ -258,7 +258,7 @@ struct DiscoverView: View {
         .background(Color.flowWhite)
         // The rich student-facing profile — not the booking sheet directly. It presents BookingSheet
         // (at the day picker) on top of itself when the student taps Book.
-        .sheet(item: $selected) { row in
+        .fullScreenCover(item: $selected) { row in
             StudentInstructorProfileView(instructor: row.instructor,
                                          distanceMetres: row.distanceMetres) { selected = nil }
         }

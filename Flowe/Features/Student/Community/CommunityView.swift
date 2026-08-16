@@ -56,7 +56,7 @@ struct CommunityView: View {
         .sheet(isPresented: $showCompose) {
             ComposePostSheet()
         }
-        .sheet(item: $selectedInstructor) { ins in
+        .fullScreenCover(item: $selectedInstructor) { ins in
             StudentInstructorProfileView(instructor: ins) { selectedInstructor = nil }
         }
     }

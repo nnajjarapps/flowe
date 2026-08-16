@@ -105,7 +105,7 @@ struct StudentTabView: View {
             selectedTab = 0                            // land on Discover for context
             deepLinkedInstructor = await data.loadInstructor(ownerID: id)
         }
-        .sheet(item: $deepLinkedInstructor) { instructor in
+        .fullScreenCover(item: $deepLinkedInstructor) { instructor in
             StudentInstructorProfileView(instructor: instructor) { deepLinkedInstructor = nil }
         }
     }
