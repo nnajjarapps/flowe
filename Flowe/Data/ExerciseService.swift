@@ -203,16 +203,14 @@ final class ExerciseService {
         record["durationSeconds"] = durationSeconds
         record["createdAt"] = createdAt
         record["updatedAt"] = Date()
-        // Preserve-if-nil: only overwrite an asset when a fresh one is staged, so a metadata-only edit
-        // never re-uploads or blanks the clip. `durationSeconds` travels with a new video.
-        if let thumbStaged {
-            record["thumbnail"] = CKAsset(fileURL: thumbStaged)
-            record["hasThumbnail"] = 1
-        }
+        // Thumbnail rides on the @Model and is re-sent on every edit — overwrite (like LessonType.highlight).
+        record["thumbnail"] = thumbStaged.map { CKAsset(fileURL: $0) }
+        record["hasThumbnail"] = thumbStaged == nil ? 0 : 1
+        // Video is NOT retained on the @Model — PRESERVE-IF-NIL: only overwrite when a fresh clip is staged,
+        // so a metadata-only edit / retry (video nil) keeps the existing public asset instead of blanking it.
         if let videoStaged {
             record["video"] = CKAsset(fileURL: videoStaged)
             record["hasVideo"] = 1
-            record["durationSeconds"] = durationSeconds
         }
     }
 

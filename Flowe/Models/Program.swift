@@ -47,6 +47,12 @@ final class Program {
     var pendingUpload: Bool = false
     var pendingDelete: Bool = false
 
+    /// The stable cross-device key a child `VideoExercise.programID` references. Equals the delivered
+    /// `remoteID`; before delivery it is the DETERMINISTIC recordName (which the upsert will produce), so
+    /// it is safe to use immediately. A student's merged copy mints a fresh `localID` but keeps the same
+    /// `remoteID`, so grouping must key off THIS, never `localID`.
+    var recordKey: String { remoteID ?? "program-\(localID.uuidString)" }
+
     init(
         localID: UUID = UUID(),
         remoteID: String? = nil,

@@ -47,6 +47,10 @@ final class MockDataStore {
     /// viewing. Kept as `@Model` rows (not `ResolvedLessonType`) because the editor mutates them and
     /// the sync merges into them; views consume the flattened `lessonTypes(for:)` resolver instead.
     private(set) var lessonTypes: [LessonType] = []
+    /// Flowe Education — authored programs + video exercises (the signed-in instructor's own, or, when a
+    /// student views an instructor, theirs merged from the public store). Both ordered by `order`.
+    private(set) var programs: [Program] = []
+    private(set) var videoExercises: [VideoExercise] = []
     /// Cached career-marketplace opportunities (Flowe Pro — see [[FlowePro]]). Local cache of a public
     /// record, like `instructors`; fetched via a future OpportunityService, seeded for now.
     private(set) var opportunities: [Opportunity] = []
@@ -71,6 +75,8 @@ final class MockDataStore {
     private let eventService = EventService()
     private let packageService = PackageService()
     private let lessonTypeService = LessonTypeService()
+    private let programService = ProgramService()
+    private let exerciseService = ExerciseService()
     private let coverageService = CoverageService()
     private let opportunityService = OpportunityService()
     private let recommendationService = RecommendationService()
@@ -159,6 +165,12 @@ final class MockDataStore {
         // exact sequence the instructor arranged.
         lessonTypes = (try? context.fetch(
             FetchDescriptor<LessonType>(sortBy: [SortDescriptor(\.order, order: .forward)])
+        )) ?? []
+        programs = (try? context.fetch(
+            FetchDescriptor<Program>(sortBy: [SortDescriptor(\.order, order: .forward)])
+        )) ?? []
+        videoExercises = (try? context.fetch(
+            FetchDescriptor<VideoExercise>(sortBy: [SortDescriptor(\.order, order: .forward)])
         )) ?? []
         opportunities = (try? context.fetch(
             FetchDescriptor<Opportunity>(sortBy: [SortDescriptor(\.createdAt, order: .reverse)])
@@ -4185,6 +4197,264 @@ final class MockDataStore {
             type.highlight = data
         }
         save()
+    }
+
+    // MARK: - Flowe Education (programs + video exercises)
+    //
+    // Same lifecycle as lesson types (pending-up-front, deterministic upsert, last-writer-wins merge,
+    // asset-fetch split), for TWO public record types. The only twist: an exercise's video is NOT held on
+    // the @Model (a non-asset field on the private mirror is capped at 1MB), so the picked clip rides the
+    // one-shot upload transiently and students fetch it on demand. Education does NOT feed the catalog
+    // listing, so there is no `rederiveSessionTypeCache`/`publishMyListing` here.
+
+    /// The signed-in instructor's own programs, in display order.
+    func ownedPrograms(for instructor: Instructor) -> [Program] {
+        guard let owner = instructor.ownerID else { return [] }
+        return programs.filter { $0.ownerID == owner && !$0.pendingDelete }.sorted { $0.order < $1.order }
+    }
+
+    /// The signed-in instructor's own exercises under one program, in display order.
+    func ownedExercises(for instructor: Instructor, programID: String) -> [VideoExercise] {
+        guard let owner = instructor.ownerID else { return [] }
+        return videoExercises.filter { $0.ownerID == owner && $0.programID == programID && !$0.pendingDelete }
+            .sorted { $0.order < $1.order }
+    }
+
+    // MARK: Programs
+
+    func addProgram(title: String, summary: String, cover: Data?) {
+        guard let owner = currentUserID, let me = currentInstructor else { return }
+        let program = Program(
+            ownerID: owner, title: title, summary: summary,
+            order: (ownedPrograms(for: me).map(\.order).max() ?? -1) + 1,
+            cover: cover, hasCover: false, pendingUpload: true
+        )
+        context.insert(program)
+        guard !isPreview else { program.pendingUpload = false; save(); return }
+        save()
+        Task { await uploadProgram(program) }
+    }
+
+    func updateProgram(_ program: Program, title: String, summary: String, cover: Data?) {
+        guard program.ownerID == currentUserID else { return }
+        program.title = title
+        program.summary = summary
+        program.cover = cover
+        program.updatedAt = Date()
+        program.pendingUpload = true
+        guard !isPreview else { program.pendingUpload = false; save(); return }
+        save()
+        Task { await uploadProgram(program) }
+    }
+
+    /// Delete a program AND its exercises, locally and from the shared store.
+    func deleteProgram(_ program: Program) {
+        guard program.ownerID == currentUserID, let me = currentInstructor else { return }
+        let children = ownedExercises(for: me, programID: program.recordKey)
+        guard !isPreview else {
+            for child in children { context.delete(child) }
+            context.delete(program)
+            save()
+            return
+        }
+        program.pendingDelete = true
+        for child in children { child.pendingDelete = true }
+        save()
+        Task {
+            for child in children where child.remoteID != nil {
+                if await exerciseService.delete(id: child.remoteID!) { context.delete(child) }
+            }
+            if let remoteID = program.remoteID, await programService.delete(id: remoteID) { context.delete(program) }
+            save()
+        }
+    }
+
+    private func uploadProgram(_ program: Program) async {
+        guard let owner = program.ownerID else { return }
+        let remoteID = await programService.upsert(
+            localID: program.localID, ownerID: owner, title: program.title,
+            summary: program.summary, order: program.order, createdAt: program.createdAt, cover: program.cover
+        )
+        program.remoteID = remoteID
+        program.hasCover = remoteID != nil && program.cover != nil
+        program.pendingUpload = remoteID == nil
+        save()
+        if program.pendingDelete, let remoteID {
+            if await programService.delete(id: remoteID) { context.delete(program) }
+            save()
+        }
+    }
+
+    // MARK: Exercises
+
+    func addExercise(programID: String, title: String, coachingNotes: String, prescription: String,
+                     focus: String, level: String, durationSeconds: Int, thumbnail: Data?, video: Data?) {
+        guard let owner = currentUserID, let me = currentInstructor else { return }
+        let exercise = VideoExercise(
+            ownerID: owner, programID: programID, title: title, coachingNotes: coachingNotes,
+            prescription: prescription, focus: focus, level: level,
+            order: (ownedExercises(for: me, programID: programID).map(\.order).max() ?? -1) + 1,
+            durationSeconds: durationSeconds, thumbnail: thumbnail, hasThumbnail: false, hasVideo: false, pendingUpload: true
+        )
+        context.insert(exercise)
+        guard !isPreview else { exercise.pendingUpload = false; save(); return }
+        save()
+        // The picked clip isn't retained on the @Model — carry it into the one-shot upload only.
+        Task { await uploadExercise(exercise, video: video) }
+    }
+
+    func updateExercise(_ exercise: VideoExercise, title: String, coachingNotes: String, prescription: String,
+                        focus: String, level: String, durationSeconds: Int, thumbnail: Data?, video: Data?) {
+        guard exercise.ownerID == currentUserID else { return }
+        exercise.title = title
+        exercise.coachingNotes = coachingNotes
+        exercise.prescription = prescription
+        exercise.focus = focus
+        exercise.level = level
+        exercise.durationSeconds = durationSeconds
+        exercise.thumbnail = thumbnail
+        exercise.updatedAt = Date()
+        exercise.pendingUpload = true
+        guard !isPreview else { exercise.pendingUpload = false; save(); return }
+        save()
+        Task { await uploadExercise(exercise, video: video) }
+    }
+
+    func deleteExercise(_ exercise: VideoExercise) {
+        guard exercise.ownerID == currentUserID else { return }
+        guard !isPreview else { context.delete(exercise); save(); return }
+        exercise.pendingDelete = true
+        save()
+        guard let remoteID = exercise.remoteID else { return }
+        Task {
+            if await exerciseService.delete(id: remoteID) { context.delete(exercise) }
+            save()
+        }
+    }
+
+    /// `video` is a freshly picked clip, or nil on a metadata-only edit / retry: it isn't stored on the
+    /// @Model (1MB private-DB cap), so it rides this one-shot upload only. A retry with no fresh clip keeps
+    /// the existing public asset (the service is preserve-if-nil for video).
+    private func uploadExercise(_ exercise: VideoExercise, video: Data? = nil) async {
+        guard let owner = exercise.ownerID else { return }
+        let remoteID = await exerciseService.upsert(
+            localID: exercise.localID, ownerID: owner, programID: exercise.programID,
+            title: exercise.title, coachingNotes: exercise.coachingNotes, prescription: exercise.prescription,
+            focus: exercise.focus, level: exercise.level, order: exercise.order,
+            durationSeconds: exercise.durationSeconds, createdAt: exercise.createdAt,
+            thumbnail: exercise.thumbnail, video: video
+        )
+        exercise.remoteID = remoteID
+        exercise.hasThumbnail = remoteID != nil && exercise.thumbnail != nil
+        if remoteID != nil, video != nil { exercise.hasVideo = true }
+        exercise.pendingUpload = remoteID == nil
+        save()
+        if exercise.pendingDelete, let remoteID {
+            if await exerciseService.delete(id: remoteID) { context.delete(exercise) }
+            save()
+        }
+    }
+
+    /// Fetch one exercise's clip for playback — a temp file URL for `AVPlayer` (see `ExerciseService`).
+    func exerciseVideoURL(_ exercise: VideoExercise) async -> URL? {
+        guard let remoteID = exercise.remoteID else { return nil }
+        return await exerciseService.fetchVideoURL(id: remoteID)
+    }
+
+    // MARK: Education sync
+
+    /// Pull one instructor's programs + exercises from the shared store (student view or the owner's own
+    /// device), flushing the owner's queued writes first, then any missing cover/thumbnail assets.
+    func syncEducation(for instructor: Instructor) async {
+        guard !isPreview, let owner = instructor.ownerID else { return }
+        if owner == currentUserID { await flushPendingEducationWrites() }
+        mergePrograms(await programService.fetch(ownerID: owner))
+        mergeExercises(await exerciseService.fetch(ownerID: owner))
+        await fetchMissingEducationAssets()
+    }
+
+    private func flushPendingEducationWrites() async {
+        for p in programs where p.pendingUpload && p.remoteID == nil && !p.pendingDelete { await uploadProgram(p) }
+        for e in videoExercises where e.pendingUpload && e.remoteID == nil && !e.pendingDelete { await uploadExercise(e) }
+        for p in programs where p.pendingDelete {
+            if let remoteID = p.remoteID, await programService.delete(id: remoteID) { context.delete(p) }
+        }
+        for e in videoExercises where e.pendingDelete {
+            if let remoteID = e.remoteID, await exerciseService.delete(id: remoteID) { context.delete(e) }
+        }
+        save()
+    }
+
+    private func mergePrograms(_ remote: [RemoteProgram]) {
+        guard !remote.isEmpty else { return }
+        let known = Set(programs.compactMap(\.remoteID)).union(programs.map { "program-\($0.localID.uuidString)" })
+        for entry in remote {
+            if let existing = programs.first(where: { $0.remoteID == entry.id || "program-\($0.localID.uuidString)" == entry.id }) {
+                if !existing.pendingUpload { applyProgram(entry, to: existing) }
+                if existing.remoteID == nil { existing.remoteID = entry.id }
+            } else if !known.contains(entry.id) {
+                let p = Program(remoteID: entry.id)
+                applyProgram(entry, to: p)
+                context.insert(p)
+            }
+        }
+        save()
+    }
+
+    private func applyProgram(_ r: RemoteProgram, to p: Program) {
+        p.ownerID = r.ownerID
+        p.title = r.title
+        p.summary = r.summary
+        p.order = r.order
+        p.hasCover = r.hasCover
+        p.createdAt = r.createdAt
+        p.updatedAt = r.updatedAt
+    }
+
+    private func mergeExercises(_ remote: [RemoteVideoExercise]) {
+        guard !remote.isEmpty else { return }
+        let known = Set(videoExercises.compactMap(\.remoteID)).union(videoExercises.map { "exercise-\($0.localID.uuidString)" })
+        for entry in remote {
+            if let existing = videoExercises.first(where: { $0.remoteID == entry.id || "exercise-\($0.localID.uuidString)" == entry.id }) {
+                if !existing.pendingUpload { applyExercise(entry, to: existing) }
+                if existing.remoteID == nil { existing.remoteID = entry.id }
+            } else if !known.contains(entry.id) {
+                let e = VideoExercise(remoteID: entry.id)
+                applyExercise(entry, to: e)
+                context.insert(e)
+            }
+        }
+        save()
+    }
+
+    private func applyExercise(_ r: RemoteVideoExercise, to e: VideoExercise) {
+        e.ownerID = r.ownerID
+        e.programID = r.programID
+        e.title = r.title
+        e.coachingNotes = r.coachingNotes
+        e.prescription = r.prescription
+        e.focus = r.focus
+        e.level = r.level
+        e.order = r.order
+        e.durationSeconds = r.durationSeconds
+        e.hasThumbnail = r.hasThumbnail
+        e.hasVideo = r.hasVideo
+        e.createdAt = r.createdAt
+        e.updatedAt = r.updatedAt
+    }
+
+    /// Download program covers + exercise thumbnails that exist but aren't cached yet (the list queries
+    /// deliberately omit assets). The video is never bulk-fetched — it loads on demand at playback.
+    private func fetchMissingEducationAssets() async {
+        let wantCovers = programs.filter { $0.hasCover && $0.cover == nil && !$0.pendingDelete }.compactMap(\.remoteID)
+        let covers = wantCovers.isEmpty ? [:] : await programService.fetchCovers(ids: wantCovers)
+        for p in programs { if let remoteID = p.remoteID, let data = covers[remoteID] { p.cover = data } }
+
+        let wantThumbs = videoExercises.filter { $0.hasThumbnail && $0.thumbnail == nil && !$0.pendingDelete }.compactMap(\.remoteID)
+        let thumbs = wantThumbs.isEmpty ? [:] : await exerciseService.fetchThumbnails(ids: wantThumbs)
+        for e in videoExercises { if let remoteID = e.remoteID, let data = thumbs[remoteID] { e.thumbnail = data } }
+
+        if !covers.isEmpty || !thumbs.isEmpty { save() }
     }
 
     // MARK: - Instructor identity & editing
