@@ -26903,6 +26903,646 @@
           }
         }
       }
+    },
+    "Program name" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اسم البرنامج"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "שם התוכנית"
+          }
+        }
+      }
+    },
+    "Summary" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ملخّص"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "תקציר"
+          }
+        }
+      }
+    },
+    "Cover photo" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "صورة الغلاف"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "תמונת שער"
+          }
+        }
+      }
+    },
+    "New program" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "برنامج جديد"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "תוכנית חדשה"
+          }
+        }
+      }
+    },
+    "Edit program" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تعديل البرنامج"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "עריכת תוכנית"
+          }
+        }
+      }
+    },
+    "Check your program" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "راجع برنامجك"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "בדקו את התוכנית"
+          }
+        }
+      }
+    },
+    "Optional. A line shown on the program header, so students know who it's for." : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اختياري. سطر يظهر أعلى البرنامج ليعرف الطلاب لمن هو."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "רשות. שורה שמופיעה בראש התוכנית כדי שתלמידים יידעו למי היא."
+          }
+        }
+      }
+    },
+    "Optional. One photo sets the tone of the program card." : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اختياري. صورة واحدة تحدّد طابع بطاقة البرنامج."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "רשות. תמונה אחת קובעת את אופי כרטיס התוכנית."
+          }
+        }
+      }
+    },
+    "Video" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "فيديو"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "וידאו"
+          }
+        }
+      }
+    },
+    "Record it first, then pick it here. This is public in your library — students watch it directly." : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "سجّله أولاً ثم اختره هنا. إنه عام في مكتبتك — يشاهده الطلاب مباشرةً."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "צלמו אותו קודם, ואז בחרו אותו כאן. הוא גלוי בספרייה — תלמידים צופים בו ישירות."
+          }
+        }
+      }
+    },
+    "Exercise name" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اسم التمرين"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "שם התרגיל"
+          }
+        }
+      }
+    },
+    "Coaching notes" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ملاحظات تدريبية"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הערות אימון"
+          }
+        }
+      }
+    },
+    "Prescription" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "خطة الأداء"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הנחיות ביצוע"
+          }
+        }
+      }
+    },
+    "Sets, reps, tempo — however you cue it. Optional." : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "المجموعات والتكرارات والإيقاع — كما تصفها. اختياري."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "סטים, חזרות, קצב — איך שנוח לכם. רשות."
+          }
+        }
+      }
+    },
+    "Focus & level" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "التركيز والمستوى"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מיקוד ורמה"
+          }
+        }
+      }
+    },
+    "Comma-separated focus tags, shown as chips on the card." : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "وسوم التركيز مفصولة بفواصل، تظهر كوسوم على البطاقة."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "תגיות מיקוד מופרדות בפסיקים, שמוצגות כתגיות על הכרטיס."
+          }
+        }
+      }
+    },
+    "Level" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "المستوى"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "רמה"
+          }
+        }
+      }
+    },
+    "Beginner" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مبتدئ"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מתחיל"
+          }
+        }
+      }
+    },
+    "Intermediate" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "متوسّط"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "בינוני"
+          }
+        }
+      }
+    },
+    "Advanced" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "متقدّم"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מתקדם"
+          }
+        }
+      }
+    },
+    "Add video" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إضافة فيديو"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הוספת וידאו"
+          }
+        }
+      }
+    },
+    "Replace video" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "استبدال الفيديو"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "החלפת וידאו"
+          }
+        }
+      }
+    },
+    "Add exercise" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إضافة تمرين"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הוספת תרגיל"
+          }
+        }
+      }
+    },
+    "Edit exercise" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تعديل التمرين"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "עריכת תרגיל"
+          }
+        }
+      }
+    },
+    "Check your exercise" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "راجع تمرينك"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "בדקו את התרגיל"
+          }
+        }
+      }
+    },
+    "Education" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "التعليم"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "לימוד"
+          }
+        }
+      }
+    },
+    "Build your training library" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ابنِ مكتبتك التدريبية"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "בנו את ספריית האימון שלכם"
+          }
+        }
+      }
+    },
+    "Group short video exercises into programs your students can follow along with." : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اجمع تمارين الفيديو القصيرة في برامج يتابعها طلابك."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "אגדו תרגילי וידאו קצרים לתוכניות שהתלמידים יכולים להתאמן לפיהן."
+          }
+        }
+      }
+    },
+    "Add your first exercise — a short clip with coaching notes." : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "أضف تمرينك الأول — مقطع قصير مع ملاحظات تدريبية."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הוסיפו את התרגיל הראשון — קליפ קצר עם הערות אימון."
+          }
+        }
+      }
+    },
+    "Manage exercise" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إدارة التمرين"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ניהול תרגיל"
+          }
+        }
+      }
+    },
+    "Manage" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إدارة"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ניהול"
+          }
+        }
+      }
+    },
+    "Delete program and its exercises" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "حذف البرنامج وتمارينه"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מחיקת התוכנית והתרגילים שלה"
+          }
+        }
+      }
+    },
+    "Every exercise in this program is removed too. This can't be undone." : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ستُحذف كل تمارين هذا البرنامج أيضاً. لا يمكن التراجع عن ذلك."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "כל התרגילים בתוכנית יימחקו גם הם. אי אפשר לבטל את הפעולה."
+          }
+        }
+      }
+    },
+    "Uploading" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "جارٍ الرفع"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מעלה"
+          }
+        }
+      }
+    },
+    "Share a video training library" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "شارك مكتبة تدريب بالفيديو"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "שתפו ספריית אימון בווידאו"
+          }
+        }
+      }
+    },
+    "No library yet" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لا توجد مكتبة بعد"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "אין עדיין ספרייה"
+          }
+        }
+      }
+    },
+    "Couldn't load this video. Check your connection and try again." : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تعذّر تحميل هذا الفيديو. تحقّق من اتصالك وحاول مجدداً."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "לא ניתן לטעון את הווידאו. בדקו את החיבור ונסו שוב."
+          }
+        }
+      }
+    },
+    "Classes" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الحصص"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "שיעורים"
+          }
+        }
+      }
+    },
+    "Library" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "المكتبة"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ספרייה"
+          }
+        }
+      }
+    },
+    "About" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "نبذة"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "אודות"
+          }
+        }
+      }
     }
   },
   "version" : "1.1"
