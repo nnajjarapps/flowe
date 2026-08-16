@@ -171,6 +171,62 @@ DEFINE SCHEMA
         GRANT READ TO "_world"
     );
 
+    RECORD TYPE CD_Program (
+        CD_cover          BYTES QUERYABLE SORTABLE,
+        CD_createdAt      TIMESTAMP QUERYABLE SORTABLE,
+        CD_entityName     STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_hasCover       INT64 QUERYABLE SORTABLE,
+        CD_localID        STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_order          INT64 QUERYABLE SORTABLE,
+        CD_ownerID        STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_pendingDelete  INT64 QUERYABLE SORTABLE,
+        CD_pendingUpload  INT64 QUERYABLE SORTABLE,
+        CD_remoteID       STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_summary        STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_title          STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_updatedAt      TIMESTAMP QUERYABLE SORTABLE,
+        "___createTime"   TIMESTAMP,
+        "___createdBy"    REFERENCE,
+        "___etag"         STRING,
+        "___modTime"      TIMESTAMP,
+        "___modifiedBy"   REFERENCE,
+        "___recordID"     REFERENCE QUERYABLE,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );
+
+    RECORD TYPE CD_VideoExercise (
+        CD_coachingNotes   STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_createdAt       TIMESTAMP QUERYABLE SORTABLE,
+        CD_durationSeconds INT64 QUERYABLE SORTABLE,
+        CD_entityName      STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_focus           STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_hasThumbnail    INT64 QUERYABLE SORTABLE,
+        CD_hasVideo        INT64 QUERYABLE SORTABLE,
+        CD_level           STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_localID         STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_order           INT64 QUERYABLE SORTABLE,
+        CD_ownerID         STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_pendingDelete   INT64 QUERYABLE SORTABLE,
+        CD_pendingUpload   INT64 QUERYABLE SORTABLE,
+        CD_prescription    STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_programID       STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_remoteID        STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_thumbnail       BYTES QUERYABLE SORTABLE,
+        CD_title           STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_updatedAt       TIMESTAMP QUERYABLE SORTABLE,
+        "___createTime"    TIMESTAMP,
+        "___createdBy"     REFERENCE,
+        "___etag"          STRING,
+        "___modTime"       TIMESTAMP,
+        "___modifiedBy"    REFERENCE,
+        "___recordID"      REFERENCE QUERYABLE,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );
+
     RECORD TYPE CD_Message (
         CD_conversationID STRING QUERYABLE SEARCHABLE SORTABLE,
         CD_entityName     STRING QUERYABLE SEARCHABLE SORTABLE,
@@ -578,6 +634,53 @@ DEFINE SCHEMA
         ownerID         STRING QUERYABLE SEARCHABLE SORTABLE,
         price           INT64 QUERYABLE SORTABLE,
         updatedAt       TIMESTAMP QUERYABLE SORTABLE,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );
+
+    RECORD TYPE Program (
+        "___createTime" TIMESTAMP,
+        "___createdBy"  REFERENCE,
+        "___etag"       STRING,
+        "___modTime"    TIMESTAMP,
+        "___modifiedBy" REFERENCE,
+        "___recordID"   REFERENCE QUERYABLE,
+        cover           ASSET,
+        createdAt       TIMESTAMP QUERYABLE SORTABLE,
+        hasCover        INT64,
+        order           INT64 QUERYABLE SORTABLE,
+        ownerID         STRING QUERYABLE SEARCHABLE SORTABLE,
+        summary         STRING,
+        title           STRING QUERYABLE SEARCHABLE SORTABLE,
+        updatedAt       TIMESTAMP QUERYABLE SORTABLE,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
+    );
+
+    RECORD TYPE VideoExercise (
+        "___createTime" TIMESTAMP,
+        "___createdBy"  REFERENCE,
+        "___etag"       STRING,
+        "___modTime"    TIMESTAMP,
+        "___modifiedBy" REFERENCE,
+        "___recordID"   REFERENCE QUERYABLE,
+        coachingNotes   STRING,
+        createdAt       TIMESTAMP QUERYABLE SORTABLE,
+        durationSeconds INT64,
+        focus           STRING,
+        hasThumbnail    INT64,
+        hasVideo        INT64,
+        level           STRING,
+        order           INT64 QUERYABLE SORTABLE,
+        ownerID         STRING QUERYABLE SEARCHABLE SORTABLE,
+        prescription    STRING,
+        programID       STRING QUERYABLE SEARCHABLE SORTABLE,
+        thumbnail       ASSET,
+        title           STRING QUERYABLE SEARCHABLE SORTABLE,
+        updatedAt       TIMESTAMP QUERYABLE SORTABLE,
+        video           ASSET,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud",
         GRANT READ TO "_world"

@@ -32,7 +32,7 @@ enum FloweModelContainer {
             "UserData",
             schema: Schema([FeedPost.self, PostComment.self, Booking.self, Message.self,
                             BlockedUser.self, Review.self, CommunityEvent.self, LessonType.self,
-                            ClientNote.self]),
+                            ClientNote.self, Program.self, VideoExercise.self]),
             isStoredInMemoryOnly: inMemory,
             cloudKitDatabase: userDataCloudKitDatabase(inMemory: inMemory)
         )
@@ -40,7 +40,7 @@ enum FloweModelContainer {
         do {
             return try ModelContainer(
                 for: Instructor.self, StudentProfile.self, Opportunity.self, OpportunityApplication.self, ApplicationDecision.self, InstructorRecommendation.self, FeedPost.self, PostComment.self, Booking.self, Message.self,
-                     BlockedUser.self, Review.self, CommunityEvent.self, LessonType.self, ClientNote.self,
+                     BlockedUser.self, Review.self, CommunityEvent.self, LessonType.self, ClientNote.self, Program.self, VideoExercise.self,
                 configurations: reference, userData
             )
         } catch {

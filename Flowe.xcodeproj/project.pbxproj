@@ -118,6 +118,10 @@
 		E3457EB253E484670841834A /* EventService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6D520220F189277F969F983 /* EventService.swift */; };
 		D198EC49666711875E8BD7DF /* LessonType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33B2A5B491EB5AD21E1D53D5 /* LessonType.swift */; };
 		BCF7948F3B7D3F74C9AC67FF /* LessonTypeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07602D852806E083473292A0 /* LessonTypeService.swift */; };
+		F10ED00000000000000000A2 /* Program.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10ED00000000000000000A1 /* Program.swift */; };
+		F10ED00000000000000000B2 /* VideoExercise.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10ED00000000000000000B1 /* VideoExercise.swift */; };
+		F10ED00000000000000000C2 /* ProgramService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10ED00000000000000000C1 /* ProgramService.swift */; };
+		F10ED00000000000000000D2 /* ExerciseService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10ED00000000000000000D1 /* ExerciseService.swift */; };
 		F1E2D3C4B5A6978869574635 /* ComposeLessonTypeSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6354473869A5B4C3D2E1F0A9 /* ComposeLessonTypeSheet.swift */; };
 		FEEDFACE000000000000AF01 /* OutOfStudioView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEEDFACE000000000000AF02 /* OutOfStudioView.swift */; };
 		AAE895D3AA0E84243D96DC8A /* FlowLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = E055796162D11DF1E7B8D52D /* FlowLayout.swift */; };
@@ -390,6 +394,10 @@
 		A6D520220F189277F969F983 /* EventService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventService.swift; sourceTree = "<group>"; };
 		33B2A5B491EB5AD21E1D53D5 /* LessonType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LessonType.swift; sourceTree = "<group>"; };
 		07602D852806E083473292A0 /* LessonTypeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LessonTypeService.swift; sourceTree = "<group>"; };
+		F10ED00000000000000000A1 /* Program.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Program.swift; sourceTree = "<group>"; };
+		F10ED00000000000000000B1 /* VideoExercise.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoExercise.swift; sourceTree = "<group>"; };
+		F10ED00000000000000000C1 /* ProgramService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgramService.swift; sourceTree = "<group>"; };
+		F10ED00000000000000000D1 /* ExerciseService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExerciseService.swift; sourceTree = "<group>"; };
 		6354473869A5B4C3D2E1F0A9 /* ComposeLessonTypeSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposeLessonTypeSheet.swift; sourceTree = "<group>"; };
 		FEEDFACE000000000000AF02 /* OutOfStudioView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutOfStudioView.swift; sourceTree = "<group>"; };
 		D02BBF683FC16C7795428F78 /* InstructorCalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstructorCalendarView.swift; sourceTree = "<group>"; };
@@ -480,6 +488,8 @@
 				0FF0A11700000000000F0001 /* Opportunity.swift */,
 				FF02000000000000000REC01 /* InstructorRecommendation.swift */,
 				33B2A5B491EB5AD21E1D53D5 /* LessonType.swift */,
+				F10ED00000000000000000A1 /* Program.swift */,
+				F10ED00000000000000000B1 /* VideoExercise.swift */,
 				EB36077D528099D817B27E2B /* Message.swift */,
 				3527B77F7FB3E5D2CD7D74EE /* PostComment.swift */,
 				6A165701631D2B42B1FD295B /* Review.swift */,
@@ -521,6 +531,8 @@
 				5C9867A521AD55E8C878C940 /* KeychainStore.swift */,
 				489CC61A3C045B16825417BC /* LocationService.swift */,
 				07602D852806E083473292A0 /* LessonTypeService.swift */,
+				F10ED00000000000000000C1 /* ProgramService.swift */,
+				F10ED00000000000000000D1 /* ExerciseService.swift */,
 				0AEA61C0D5A07FA6156A5B5F /* MessagingService.swift */,
 				FEEDFACE000000000000AE02 /* CoverageService.swift */,
 				0FF0A11700000000000F0003 /* OpportunityService.swift */,
@@ -1159,6 +1171,10 @@
 				E3457EB253E484670841834A /* EventService.swift in Sources */,
 				D198EC49666711875E8BD7DF /* LessonType.swift in Sources */,
 				BCF7948F3B7D3F74C9AC67FF /* LessonTypeService.swift in Sources */,
+				F10ED00000000000000000A2 /* Program.swift in Sources */,
+				F10ED00000000000000000B2 /* VideoExercise.swift in Sources */,
+				F10ED00000000000000000C2 /* ProgramService.swift in Sources */,
+				F10ED00000000000000000D2 /* ExerciseService.swift in Sources */,
 				F1E2D3C4B5A6978869574635 /* ComposeLessonTypeSheet.swift in Sources */,
 				FEEDFACE000000000000AF01 /* OutOfStudioView.swift in Sources */,
 				1C47F28F1536D627C6E96E25 /* CommunityView.swift in Sources */,
