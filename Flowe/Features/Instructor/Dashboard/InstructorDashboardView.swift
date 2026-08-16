@@ -23,6 +23,7 @@ struct InstructorDashboardView: View {
     @State private var showComposeOpportunity = false
     @State private var showPackages = false
     @State private var showStudents = false
+    @State private var showLibrary = false
 
     /// The No-Show Shield card surfaces only when there's something to act on — a session to judge,
     /// a fee to reconcile, or a risky upcoming booking worth a nudge.
@@ -133,6 +134,8 @@ struct InstructorDashboardView: View {
                 // Your client book — folded here from its former tab (the iPhone tab bar holds only 5),
                 // so the roster stays one tap away.
                 studentsCard
+
+                libraryCard
 
                 if ownerCoverageSignal {
                     ownerCoverageCard
@@ -280,6 +283,7 @@ struct InstructorDashboardView: View {
         .sheet(isPresented: $showShield) { NavigationStack { NoShowShieldView() } }
         .sheet(isPresented: $showPackages) { PackagesManagerView() }
         .sheet(isPresented: $showStudents) { StudentsListView() }
+        .sheet(isPresented: $showLibrary) { LibraryManagerView() }
         .sheet(isPresented: $showCoveragePicker) { CoveragePickerView() }
         .sheet(isPresented: $showCoverageInbox) { CoverageInboxView() }
         .sheet(item: $selectedEvent) { event in
@@ -354,6 +358,38 @@ struct InstructorDashboardView: View {
         if pending > 0 { return "^[\(pending) request](inflect: true) to review" }
         if !data.myOfferings.isEmpty { return "^[\(data.myOfferings.count) package](inflect: true) on offer" }
         return "Sell prepaid class packages"
+    }
+
+    /// Flowe Education entry — the instructor's video training library. Cloned from `packagesCard`;
+    /// opens `LibraryManagerView` (which brings its own NavigationStack).
+    private var libraryCard: some View {
+        Button { showLibrary = true } label: {
+            HStack(spacing: FlowSpacing.md) {
+                Image(systemName: "play.rectangle.on.rectangle.fill")
+                    .font(.system(size: 22))
+                    .foregroundStyle(Color.flowePinkDeep)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Education")
+                        .font(FloweFont.serif(16))
+                        .foregroundStyle(Color.floweInk)
+                    Text(librarySubtitle)
+                        .font(FloweFont.sans(12))
+                        .foregroundStyle(Color.floweMuted)
+                }
+                Spacer()
+                Image(systemName: "chevron.right").foregroundStyle(Color.floweMuted)
+            }
+            .padding(FlowSpacing.lg)
+            .floweCard(cornerRadius: 18)
+        }
+        .flowePressable()
+        .accessibilityIdentifier("dashboard.library")
+    }
+
+    private var librarySubtitle: LocalizedStringKey {
+        let count = data.currentInstructor.map { data.ownedPrograms(for: $0).count } ?? 0
+        if count > 0 { return "^[\(count) program](inflect: true) in your library" }
+        return "Share a video training library"
     }
 
     /// Client book entry — folded here from its former tab so the instructor shell stays at 5 tabs.

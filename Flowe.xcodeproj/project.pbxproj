@@ -123,6 +123,7 @@
 		F10ED00000000000000000C2 /* ProgramService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10ED00000000000000000C1 /* ProgramService.swift */; };
 		F10ED00000000000000000D2 /* ExerciseService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10ED00000000000000000D1 /* ExerciseService.swift */; };
 		F1E2D3C4B5A6978869574635 /* ComposeLessonTypeSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6354473869A5B4C3D2E1F0A9 /* ComposeLessonTypeSheet.swift */; };
+		F10ED0000000000000000012 /* LibraryManagerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10ED0000000000000000011 /* LibraryManagerView.swift */; };
 		F10ED00000000000000000E2 /* ComposeProgramSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10ED00000000000000000E1 /* ComposeProgramSheet.swift */; };
 		F10ED00000000000000000F2 /* ComposeExerciseSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10ED00000000000000000F1 /* ComposeExerciseSheet.swift */; };
 		FEEDFACE000000000000AF01 /* OutOfStudioView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEEDFACE000000000000AF02 /* OutOfStudioView.swift */; };
@@ -401,6 +402,7 @@
 		F10ED00000000000000000C1 /* ProgramService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgramService.swift; sourceTree = "<group>"; };
 		F10ED00000000000000000D1 /* ExerciseService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExerciseService.swift; sourceTree = "<group>"; };
 		6354473869A5B4C3D2E1F0A9 /* ComposeLessonTypeSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposeLessonTypeSheet.swift; sourceTree = "<group>"; };
+		F10ED0000000000000000011 /* LibraryManagerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryManagerView.swift; sourceTree = "<group>"; };
 		F10ED00000000000000000E1 /* ComposeProgramSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposeProgramSheet.swift; sourceTree = "<group>"; };
 		F10ED00000000000000000F1 /* ComposeExerciseSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposeExerciseSheet.swift; sourceTree = "<group>"; };
 		FEEDFACE000000000000AF02 /* OutOfStudioView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutOfStudioView.swift; sourceTree = "<group>"; };
@@ -704,6 +706,7 @@
 				FEEDFACE000000000000BE02 /* StudioSetupWizard.swift */,
 				C6FD9EE5DA26FD915263821D /* EditProfileView.swift */,
 				6354473869A5B4C3D2E1F0A9 /* ComposeLessonTypeSheet.swift */,
+				F10ED0000000000000000011 /* LibraryManagerView.swift */,
 				F10ED00000000000000000E1 /* ComposeProgramSheet.swift */,
 				F10ED00000000000000000F1 /* ComposeExerciseSheet.swift */,
 				FEEDFACE000000000000AF02 /* OutOfStudioView.swift */,
@@ -1182,6 +1185,7 @@
 				F10ED00000000000000000C2 /* ProgramService.swift in Sources */,
 				F10ED00000000000000000D2 /* ExerciseService.swift in Sources */,
 				F1E2D3C4B5A6978869574635 /* ComposeLessonTypeSheet.swift in Sources */,
+				F10ED0000000000000000012 /* LibraryManagerView.swift in Sources */,
 				F10ED00000000000000000E2 /* ComposeProgramSheet.swift in Sources */,
 				F10ED00000000000000000F2 /* ComposeExerciseSheet.swift in Sources */,
 				FEEDFACE000000000000AF01 /* OutOfStudioView.swift in Sources */,
