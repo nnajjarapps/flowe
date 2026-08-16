@@ -12,13 +12,11 @@ struct BookingCard: View {
     /// SwiftUI trap — the later one shadows the earlier, so "Book again" set its state but never
     /// presented while a review sheet also existed on the row. One item-driven sheet, one route.
     private enum Route: Identifiable {
-        case bookAgain(Instructor)
         case review
         case classmates
         case detail
         var id: String {
             switch self {
-            case .bookAgain(let ins): return "book-\(ins.legacyId)"
             case .review:             return "review"
             case .classmates:         return "classmates"
             case .detail:             return "detail"
@@ -40,6 +38,8 @@ struct BookingCard: View {
         isRecurring && !isWaitlisted
     }
     @State private var route: Route?
+    /// "Book again" opens the full-screen profile via its OWN cover, kept off the sheet route.
+    @State private var bookAgainInstructor: Instructor?
     @State private var cancelKind: CancelKind?
 
     private var instructor: Instructor? { data.instructor(id: booking.instructorId) }
@@ -74,8 +74,6 @@ struct BookingCard: View {
         // distance here — there is no location fix in the bookings tab — so the profile omits it.
         .sheet(item: $route) { route in
             switch route {
-            case .bookAgain(let ins):
-                StudentInstructorProfileView(instructor: ins) { self.route = nil }
             case .review:
                 ReviewSheet(booking: booking)
             case .classmates:
@@ -83,6 +81,11 @@ struct BookingCard: View {
             case .detail:
                 BookingDetailView(booking: booking)
             }
+        }
+        // A .sheet and a .fullScreenCover are different presentation types, so they coexist — unlike two
+        // .sheets, which shadow (see the Route comment above). "Book again" gets the full-screen profile.
+        .fullScreenCover(item: $bookAgainInstructor) { ins in
+            StudentInstructorProfileView(instructor: ins) { bookAgainInstructor = nil }
         }
         .confirmationDialog(cancelTitle,
                             isPresented: cancelDialogBinding, titleVisibility: .visible) {
@@ -227,7 +230,7 @@ struct BookingCard: View {
                     }
 
                     Button {
-                        if let instructor { route = .bookAgain(instructor) }
+                        if let instructor { bookAgainInstructor = instructor }
                     } label: {
                         Text("Book again")
                             .font(FloweFont.sans(11))
@@ -287,17 +290,16 @@ private struct BookingDetailView: View {
     /// One item-driven sheet, one route — the same single-presentation discipline the card uses.
     private enum Route: Identifiable {
         case review
-        case bookAgain(Instructor)
         case classmates
         var id: String {
             switch self {
             case .review:             return "review"
-            case .bookAgain(let ins): return "book-\(ins.legacyId)"
             case .classmates:         return "classmates"
             }
         }
     }
     @State private var route: Route?
+    @State private var bookAgainInstructor: Instructor?
 
     private var instructor: Instructor? { data.instructor(id: booking.instructorId) }
 
@@ -335,11 +337,12 @@ private struct BookingDetailView: View {
                 switch r {
                 case .review:
                     ReviewSheet(booking: booking)
-                case .bookAgain(let ins):
-                    StudentInstructorProfileView(instructor: ins) { self.route = nil }
                 case .classmates:
                     ClassmatesSheet(booking: booking)
                 }
+            }
+            .fullScreenCover(item: $bookAgainInstructor) { ins in
+                StudentInstructorProfileView(instructor: ins) { bookAgainInstructor = nil }
             }
         }
     }
@@ -410,7 +413,7 @@ private struct BookingDetailView: View {
                     .accessibilityIdentifier("bookingDetail.review")
                 }
                 secondaryButton("Book again", id: "bookingDetail.bookAgain") {
-                    if let instructor { route = .bookAgain(instructor) }
+                    if let instructor { bookAgainInstructor = instructor }
                 }
             }
             if data.isGroupBooking(booking), booking.status != .cancelled {

@@ -11,6 +11,7 @@
 		FF0000000000000000000013 /* EnumRawValueTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000012 /* EnumRawValueTests.swift */; };
 		FF0000000000000000000015 /* ContentFilterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000014 /* ContentFilterTests.swift */; };
 		FF000000000000000000DEC2 /* PackageDecodeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000DEC1 /* PackageDecodeTests.swift */; };
+		F10ED0000000000000000032 /* EducationDecodeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10ED0000000000000000031 /* EducationDecodeTests.swift */; };
 		FF000000000000000000DEC4 /* BookingDecodeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000DEC3 /* BookingDecodeTests.swift */; };
 		FF000000000000000000DEC6 /* BookingTimingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000DEC5 /* BookingTimingTests.swift */; };
 		FF000000000000000000DEC8 /* CurrencyFormattingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000DEC7 /* CurrencyFormattingTests.swift */; };
@@ -250,6 +251,7 @@
 		FF0000000000000000000012 /* EnumRawValueTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnumRawValueTests.swift; sourceTree = "<group>"; };
 		FF0000000000000000000014 /* ContentFilterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentFilterTests.swift; sourceTree = "<group>"; };
 		FF000000000000000000DEC1 /* PackageDecodeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PackageDecodeTests.swift; sourceTree = "<group>"; };
+		F10ED0000000000000000031 /* EducationDecodeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EducationDecodeTests.swift; sourceTree = "<group>"; };
 		FF000000000000000000DEC3 /* BookingDecodeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookingDecodeTests.swift; sourceTree = "<group>"; };
 		FF000000000000000000DEC5 /* BookingTimingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookingTimingTests.swift; sourceTree = "<group>"; };
 		FF000000000000000000DEC7 /* CurrencyFormattingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CurrencyFormattingTests.swift; sourceTree = "<group>"; };
@@ -863,6 +865,7 @@
 				FF0000000000000000000012 /* EnumRawValueTests.swift */,
 				FF0000000000000000000014 /* ContentFilterTests.swift */,
 				FF000000000000000000DEC1 /* PackageDecodeTests.swift */,
+				F10ED0000000000000000031 /* EducationDecodeTests.swift */,
 				FF000000000000000000DEC3 /* BookingDecodeTests.swift */,
 				FF000000000000000000DEC5 /* BookingTimingTests.swift */,
 				FF000000000000000000DEC7 /* CurrencyFormattingTests.swift */,
@@ -1114,6 +1117,7 @@
 				FF0000000000000000000013 /* EnumRawValueTests.swift in Sources */,
 				FF0000000000000000000015 /* ContentFilterTests.swift in Sources */,
 				FF000000000000000000DEC2 /* PackageDecodeTests.swift in Sources */,
+				F10ED0000000000000000032 /* EducationDecodeTests.swift in Sources */,
 				FF000000000000000000DEC4 /* BookingDecodeTests.swift in Sources */,
 				FF000000000000000000DEC6 /* BookingTimingTests.swift in Sources */,
 				FF000000000000000000DEC8 /* CurrencyFormattingTests.swift in Sources */,
