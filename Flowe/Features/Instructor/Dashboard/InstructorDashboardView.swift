@@ -22,6 +22,7 @@ struct InstructorDashboardView: View {
     @State private var manageOpportunity: Opportunity?
     @State private var showComposeOpportunity = false
     @State private var showPackages = false
+    @State private var showFinance = false
     @State private var showStudents = false
     @State private var showLibrary = false
 
@@ -130,6 +131,8 @@ struct InstructorDashboardView: View {
                 shieldCard
 
                 packagesCard
+
+                financeCard
 
                 // Your client book — folded here from its former tab (the iPhone tab bar holds only 5),
                 // so the roster stays one tap away.
@@ -282,6 +285,7 @@ struct InstructorDashboardView: View {
         .sheet(isPresented: $showComposeEvent) { ComposeEventSheet() }
         .sheet(isPresented: $showShield) { NavigationStack { NoShowShieldView() } }
         .sheet(isPresented: $showPackages) { PackagesManagerView() }
+        .sheet(isPresented: $showFinance) { FinanceCenterView() }
         .sheet(isPresented: $showStudents) { StudentsListView() }
         .sheet(isPresented: $showLibrary) { LibraryManagerView() }
         .sheet(isPresented: $showCoveragePicker) { CoveragePickerView() }
@@ -323,6 +327,32 @@ struct InstructorDashboardView: View {
 
     /// Class-packages entry — always present (a new instructor needs to discover it), with the pending
     /// purchase-request count as a badge. Cloned from `shieldCard`.
+    private var financeCard: some View {
+        Button { showFinance = true } label: {
+            HStack(spacing: FlowSpacing.md) {
+                Image(systemName: "chart.pie.fill")
+                    .font(.system(size: 22))
+                    .foregroundStyle(Color.flowePinkDeep)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Finance center")
+                        .font(FloweFont.serif(16))
+                        .foregroundStyle(Color.floweInk)
+                    Text("Revenue, packages & fees")
+                        .font(FloweFont.sans(12))
+                        .foregroundStyle(Color.floweMuted)
+                }
+                Spacer()
+                Image(systemName: "chevron.right").foregroundStyle(Color.floweMuted)
+            }
+            .padding(16)
+            .background(Color.floweCardBg)
+            .clipShape(RoundedRectangle(cornerRadius: 18))
+            .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.floweBorder, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .flowePressable()
+    }
+
     private var packagesCard: some View {
         Button { showPackages = true } label: {
             HStack(spacing: FlowSpacing.md) {

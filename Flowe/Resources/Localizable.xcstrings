@@ -27863,6 +27863,518 @@
           }
         }
       }
+    },
+    "Finance center" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مركز المالية"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מרכז פיננסי"
+          }
+        }
+      }
+    },
+    "Finance" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "المالية"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "פיננסים"
+          }
+        }
+      }
+    },
+    "Revenue, packages & fees" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الإيرادات والباقات والرسوم"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הכנסות, חבילות ועמלות"
+          }
+        }
+      }
+    },
+    "Tracked revenue" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الإيرادات المتتبَّعة"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הכנסה במעקב"
+          }
+        }
+      }
+    },
+    "Tracked — students pay you directly" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "متتبَّع — يدفع لك الطلاب مباشرةً"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "במעקב — התלמידים משלמים לך ישירות"
+          }
+        }
+      }
+    },
+    "Owed to you" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مستحق لك"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "חייבים לך"
+          }
+        }
+      }
+    },
+    "Credit liability" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "التزام الأرصدة"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "התחייבות קרדיטים"
+          }
+        }
+      }
+    },
+    "Cover pay" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "أجر التغطية"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "תשלום החלפה"
+          }
+        }
+      }
+    },
+    "packages + fees in" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الباقات + الرسوم الواردة"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "חבילות + עמלות שנכנסו"
+          }
+        }
+      }
+    },
+    "unpaid no-show fees" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "رسوم عدم حضور غير مدفوعة"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "עמלות אי-הופעה שלא שולמו"
+          }
+        }
+      }
+    },
+    "with credit tracking" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مع تتبّع الأرصدة"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "עם מעקב קרדיטים"
+          }
+        }
+      }
+    },
+    "prepaid, unredeemed" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مدفوعة مسبقًا وغير مستخدمة"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "שולמו מראש, לא נוצלו"
+          }
+        }
+      }
+    },
+    "coverage ledger" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "سجل التغطية"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "יומן החלפות"
+          }
+        }
+      }
+    },
+    "Where it comes from" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "من أين تأتي"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מהיכן זה מגיע"
+          }
+        }
+      }
+    },
+    "Fees" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الرسوم"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "עמלות"
+          }
+        }
+      }
+    },
+    "Cover" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "التغطية"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "החלפה"
+          }
+        }
+      }
+    },
+    "Sell your first class package to see it here." : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "بِع أول باقة حصص لتظهر هنا."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מכרו את חבילת השיעורים הראשונה כדי לראות אותה כאן."
+          }
+        }
+      }
+    },
+    "Per-student credit balances & liability light up with credit tracking." : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تظهر أرصدة الطلاب والالتزامات مع تتبّع الأرصدة."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "יתרות הקרדיט של כל תלמיד וההתחייבות יופיעו עם מעקב הקרדיטים."
+          }
+        }
+      }
+    },
+    "NO-SHOW SHIELD" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "درع عدم الحضور"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מגן אי-הופעה"
+          }
+        }
+      }
+    },
+    "TOP CLIENTS" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "أفضل العملاء"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "לקוחות מובילים"
+          }
+        }
+      }
+    },
+    "AT A GLANCE" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لمحة سريعة"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "במבט חטוף"
+          }
+        }
+      }
+    },
+    "Owed" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مستحق"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "חוב"
+          }
+        }
+      }
+    },
+    "Waived" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مُعفى"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "בוטל"
+          }
+        }
+      }
+    },
+    "Avg / session" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "متوسط لكل جلسة"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ממוצע למפגש"
+          }
+        }
+      }
+    },
+    "Avg / client" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "متوسط لكل عميل"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ממוצע ללקוח"
+          }
+        }
+      }
+    },
+    "Package attach rate" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "معدل إرفاق الباقات"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "שיעור צירוף חבילות"
+          }
+        }
+      }
+    },
+    "No-show rate" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "معدل عدم الحضور"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "שיעור אי-הופעה"
+          }
+        }
+      }
+    },
+    "Export statement" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تصدير كشف"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ייצוא דוח"
+          }
+        }
+      }
+    },
+    "No finance activity yet" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لا يوجد نشاط مالي بعد"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "עדיין אין פעילות פיננסית"
+          }
+        }
+      }
+    },
+    "Completed sessions, package sales and fees show up here." : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تظهر هنا الجلسات المكتملة ومبيعات الباقات والرسوم."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מפגשים שהושלמו, מכירות חבילות ועמלות מופיעים כאן."
+          }
+        }
+      }
+    },
+    "Quarter" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ربع"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "רבעון"
+          }
+        }
+      }
+    },
+    "Year" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "سنة"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "שנה"
+          }
+        }
+      }
     }
   },
   "version" : "1.1"

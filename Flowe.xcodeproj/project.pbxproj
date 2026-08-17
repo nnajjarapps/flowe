@@ -134,6 +134,7 @@
 		AB05550DCEF4EEF50E9E57E9 /* InstructorTabsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B36038D7F8CF809375873BCC /* InstructorTabsUITests.swift */; };
 		B029AD2888183B7786C5B22F /* Fraunces-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 9AC3550079CA887E6CF28838 /* Fraunces-Regular.ttf */; };
 		B1588F941847D026226D4A2A /* InstructorDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06C30D7FCF06A724C45BDF53 /* InstructorDashboardView.swift */; };
+		FE00000000000000000000A2 /* FinanceCenterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE00000000000000000000A1 /* FinanceCenterView.swift */; };
 		B19662C03EF9724511AD914B /* SessionRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB831E5B6127A2464D0E1D52 /* SessionRow.swift */; };
 		B2772AA111B3545CE74AF333 /* ReviewSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAA5704A3D6399EDE5117C06 /* ReviewSheet.swift */; };
 		B28966B0FF121BF2B8D568C8 /* DMMono-Light.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 914A7ECE05F8E495EF765D01 /* DMMono-Light.ttf */; };
@@ -265,6 +266,7 @@
 		02CDF14067779CC6520621BC /* CreateAccountView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateAccountView.swift; sourceTree = "<group>"; };
 		0536329342321C3BB8A28D94 /* MessageBubble.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageBubble.swift; sourceTree = "<group>"; };
 		06C30D7FCF06A724C45BDF53 /* InstructorDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstructorDashboardView.swift; sourceTree = "<group>"; };
+		FE00000000000000000000A1 /* FinanceCenterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinanceCenterView.swift; sourceTree = "<group>"; };
 		06D1617BBCF38F203A11C316 /* FloweConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloweConstants.swift; sourceTree = "<group>"; };
 		077B3B4C3600ECE4CE0E1861 /* UnsplashImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnsplashImage.swift; sourceTree = "<group>"; };
 		08B690A006F7E8352F3A828D /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
@@ -908,6 +910,7 @@
 			isa = PBXGroup;
 			children = (
 				06C30D7FCF06A724C45BDF53 /* InstructorDashboardView.swift */,
+				FE00000000000000000000A1 /* FinanceCenterView.swift */,
 				0FF0A11700000000000F0002 /* OpportunityDetailView.swift */,
 				1CE171D2ABA3957094B2DD59 /* QuickActionsGrid.swift */,
 				FEEDFACE000000000000AD02 /* NoShowShieldView.swift */,
@@ -1263,6 +1266,7 @@
 				FEEDFACE000000000000FF21 /* StudentProfileView.swift in Sources */,
 				FEEDFACE000000000000CC21 /* ClientNoteEditorView.swift in Sources */,
 				B1588F941847D026226D4A2A /* InstructorDashboardView.swift in Sources */,
+				FE00000000000000000000A2 /* FinanceCenterView.swift in Sources */,
 				3C21FE2BC3DA2E3AA770048F /* InstructorProfileView.swift in Sources */,
 				986ABAA1BDFD64361E931FD2 /* InstructorRouter.swift in Sources */,
 				FC96FF052010A41027421DDF /* InstructorSettingsView.swift in Sources */,
