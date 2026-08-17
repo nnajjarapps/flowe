@@ -132,6 +132,7 @@ struct GradientButton: View {
     var body: some View {
         Button {
             guard !isLoading else { return }
+            Haptic.tap()
             action()
         } label: {
             ZStack {
@@ -202,10 +203,25 @@ enum Haptic {
         g.selectionChanged()
     }
 
-    /// Success notification — for a completed, meaningful action.
+    /// Success notification — for a completed, meaningful action (booking confirmed, request sent,
+    /// review posted, package purchased).
     static func success() {
         let g = UINotificationFeedbackGenerator()
         g.notificationOccurred(.success)
+    }
+
+    /// Warning notification — for a consequential/destructive confirmation (cancel a session, delete,
+    /// block, end a series). More "careful" than a selection tick, softer than an error.
+    static func warning() {
+        let g = UINotificationFeedbackGenerator()
+        g.notificationOccurred(.warning)
+    }
+
+    /// Error notification — for a FAILED action only (a booking that didn't go through, a sign-in
+    /// failure, a blocked submit). The one clearly-negative pattern; never for a normal tap.
+    static func error() {
+        let g = UINotificationFeedbackGenerator()
+        g.notificationOccurred(.error)
     }
 }
 

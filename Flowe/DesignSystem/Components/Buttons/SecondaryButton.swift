@@ -5,7 +5,7 @@ struct SecondaryButton: View {
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
+        Button(action: { Haptic.tap(); action() }) {
             Text(title)
                 .flowFont(.titleMedium)
                 .foregroundStyle(Color.flowePinkDeep)

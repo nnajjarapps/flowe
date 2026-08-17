@@ -9,7 +9,7 @@ struct IconButton: View {
     var backgroundColor: Color = .flowSoftBeige
 
     var body: some View {
-        let button = Button(action: action) {
+        let button = Button(action: { Haptic.tap(); action() }) {
             Image(systemName: systemName)
                 .font(.system(size: 18, weight: .medium))
                 .foregroundStyle(foregroundColor)
