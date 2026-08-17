@@ -16,6 +16,10 @@ struct SettingsView: View {
 
     private var isInstructor: Bool { session.authState == .instructor }
 
+    private var appVersion: String {
+        (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String).map { "v\($0)" } ?? ""
+    }
+
     var body: some View {
         @Bindable var settings = settings
         NavigationStack {
@@ -45,7 +49,7 @@ struct SettingsView: View {
                     .tint(Color.floweInk)
                 }
 
-                Section("Safety") {
+                Section("Privacy & Safety") {
                     Button {
                         showBlocked = true
                     } label: {
@@ -61,16 +65,18 @@ struct SettingsView: View {
                     .accessibilityIdentifier("settings.blockedUsers")
                 }
 
-                // Both roles need a support + privacy path; these open the documents bundled in the
-                // app (LegalDocumentView), not an external site.
                 Section("Support") {
                     Button { legalDoc = .support } label: {
                         Label("Help & Support", systemImage: "questionmark.circle")
                     }
                     .tint(Color.floweInk)
                     .accessibilityIdentifier("settings.help")
+                }
+
+                // Legal / policy documents bundled in the app (LegalDocumentView), not an external site.
+                Section("About") {
                     Button { legalDoc = .privacy } label: {
-                        Label("Privacy Policy", systemImage: "hand.raised")
+                        Label("Privacy Policy", systemImage: "lock.shield")
                     }
                     .tint(Color.floweInk)
                     .accessibilityIdentifier("settings.privacy")
@@ -79,13 +85,19 @@ struct SettingsView: View {
                     }
                     .tint(Color.floweInk)
                     .accessibilityIdentifier("settings.guidelines")
+                    HStack {
+                        Label("Version", systemImage: "info.circle")
+                        Spacer()
+                        Text(verbatim: appVersion).foregroundStyle(Color.floweMuted)
+                    }
                 }
 
                 // One Apple ID acts as ONE role at a time, but the account can deliberately switch. The
                 // change is account-wide (updates the shared claim), so every signed-in device follows —
                 // this is the sanctioned alternative to signing a second device in as the other role,
-                // which would corrupt the shared private database. See AccountRoleService.
-                Section("Account type") {
+                // which would corrupt the shared private database. See AccountRoleService. Destructive
+                // actions (log out / delete) sit at the bottom, per iOS convention.
+                Section("Account") {
                     Button {
                         showSwitchRole = true
                     } label: {
@@ -99,9 +111,7 @@ struct SettingsView: View {
                     .tint(Color.floweInk)
                     .disabled(switching)
                     .accessibilityIdentifier("settings.switchRole")
-                }
 
-                Section {
                     Button(role: .destructive) {
                         session.logout()
                     } label: {
