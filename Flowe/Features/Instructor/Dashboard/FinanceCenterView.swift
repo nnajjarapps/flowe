@@ -1,4 +1,6 @@
 import SwiftUI
+import CoreTransferable
+import UniformTypeIdentifiers
 
 // MARK: - Model
 //
@@ -142,6 +144,90 @@ extension MockDataStore {
     }
 }
 
+// MARK: - CSV export
+//
+// A shareable statement of everything the window shows. Amounts are raw integers
+// (account currency) so the file opens spreadsheet-ready. Sections are laid out as
+// blank-line-separated blocks with their own header row — the common statement CSV
+// shape that Numbers/Excel/Sheets all import cleanly.
+
+struct FinanceCSV: Transferable {
+    let data: Data
+    let name: String
+    static var transferRepresentation: some TransferRepresentation {
+        DataRepresentation(exportedContentType: .commaSeparatedText) { $0.data }
+            .suggestedFileName { $0.name }
+    }
+}
+
+func financeStatementCSV(_ s: FinanceSummary, period: FinancePeriod, now: Date = Date()) -> Data {
+    func esc(_ f: String) -> String {
+        (f.contains(",") || f.contains("\"") || f.contains("\n"))
+            ? "\"" + f.replacingOccurrences(of: "\"", with: "\"\"") + "\""
+            : f
+    }
+    var lines: [String] = []
+    func row(_ cols: String...) { lines.append(cols.map(esc).joined(separator: ",")) }
+    func rowA(_ cols: [String]) { lines.append(cols.map(esc).joined(separator: ",")) }
+    func opt(_ v: Int?) -> String { v.map(String.init) ?? "" }
+
+    let df = DateFormatter(); df.dateStyle = .medium; df.timeStyle = .short
+
+    row("Flowe finance statement")
+    row("Period", period.rawValue)
+    row("Generated", df.string(from: now))
+    row("Note", "Amounts are in your account currency and tracked (students settle off-app).")
+    lines.append("")
+
+    row("Summary", "Amount")
+    row("Tracked revenue", String(s.trackedRevenue))
+    row("Collected", String(s.collected))
+    row("Owed to you", String(s.owedToYou))
+    row("Cover pay", String(s.coverPay))
+    row("Credit liability", opt(s.creditLiability))
+    row("Trend vs previous period (%)", opt(s.trendPct))
+    lines.append("")
+
+    row("Revenue mix", "Amount")
+    row("Sessions", String(s.mixSessions))
+    row("Packages", String(s.mixPackages))
+    row("Fees", String(s.mixFees))
+    row("Cover", String(s.mixCover))
+    lines.append("")
+
+    if !s.offerings.isEmpty {
+        row("Packages — offering", "Price", "Sold", "Revenue")
+        for o in s.offerings { rowA([o.title, String(o.price), String(o.sold), String(o.revenue)]) }
+        lines.append("")
+    }
+
+    row("No-Show Shield", "Amount")
+    row("Owed", String(s.feesOwed))
+    row("Collected", String(s.feesCollected))
+    row("Waived", String(s.feesWaived))
+    lines.append("")
+
+    if !s.balances.isEmpty {
+        row("Student balances", "Remaining", "Total", "Value", "Expires in (days)")
+        for b in s.balances { rowA([b.name, String(b.remaining), String(b.total), String(b.value), opt(b.expiresInDays)]) }
+        lines.append("")
+    }
+
+    if !s.topClients.isEmpty {
+        row("Top clients", "Sessions", "Spend")
+        for c in s.topClients { rowA([c.name, String(c.sessions), String(c.spend)]) }
+        lines.append("")
+    }
+
+    row("KPIs", "Value")
+    row("Avg per session", String(s.avgPerSession))
+    row("Avg per client", String(s.avgPerClient))
+    row("Package attach (%)", String(s.packageAttachPct))
+    row("No-show rate (%)", String(s.noShowRatePct))
+
+    return Data(lines.joined(separator: "\r\n").utf8)
+}
+
 // MARK: - View
 
 struct FinanceCenterView: View {
@@ -172,8 +258,7 @@ struct FinanceCenterView: View {
                     shieldCard(s)
                     if !s.topClients.isEmpty { topClients(s) }
                     kpis(s)
-                    exportButton
-                    if s.isEmpty { emptyHint }
+                    if s.isEmpty { emptyHint } else { exportShare(s) }
                 }
                 .padding(16)
             }
@@ -414,10 +499,12 @@ struct FinanceCenterView: View {
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.floweBorder, lineWidth: 1))
     }
 
-    private var exportButton: some View {
-        Button {
-            Haptic.tap()
-        } label: {
+    private func exportShare(_ s: FinanceSummary) -> some View {
+        ShareLink(
+            item: FinanceCSV(data: financeStatementCSV(s, period: period),
+                             name: "Flowe-Finance-\(period.rawValue)"),
+            preview: SharePreview("Flowe finance statement (\(period.rawValue))")
+        ) {
             HStack(spacing: 8) {
                 Image(systemName: "square.and.arrow.up")
                 Text("Export statement")
@@ -427,6 +514,7 @@ struct FinanceCenterView: View {
             .background(Color.floweInk).clipShape(RoundedRectangle(cornerRadius: 16))
         }
         .buttonStyle(.plain)
+        .simultaneousGesture(TapGesture().onEnded { Haptic.tap() })
     }
 
     private var emptyHint: some View {
