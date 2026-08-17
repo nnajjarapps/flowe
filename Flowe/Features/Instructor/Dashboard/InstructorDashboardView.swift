@@ -538,6 +538,8 @@ struct InstructorDashboardView: View {
 
             Spacer()
 
+            ActivityBellButton(isInstructor: true)
+
             AvatarView(id: data.currentInstructor?.img ?? "", photo: data.currentInstructor?.photo, size: 46, ring: true)
         }
     }

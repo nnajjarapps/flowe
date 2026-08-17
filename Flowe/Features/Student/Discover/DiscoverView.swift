@@ -13,7 +13,6 @@ struct DiscoverView: View {
     @State private var search = ""
     @State private var filter = "All"
     @State private var retakeQuiz = false
-    @State private var showNotifications = false
     @State private var showGuestSignIn = false   // 5.1.1(v): a guest tapping an account action
     @State private var showOpportunities = false
     /// Natural-language search interpretation in flight (Flowe Intelligence).
@@ -270,7 +269,6 @@ struct DiscoverView: View {
                 retakeQuiz = false
             }
         }
-        .sheet(isPresented: $showNotifications) { NotificationSettingsView() }
         .sheet(isPresented: $showGuestSignIn) { GuestSignInSheet() }
         .sheet(isPresented: $showOpportunities) { StudentOpportunitiesView() }
         // Keep the open feed fresh so the banner's show/hide (gated on there being something to browse)
@@ -359,19 +357,7 @@ struct DiscoverView: View {
             // Both are hidden until sign-in.
             if !session.isGuest {
                 viewToggle
-                Button {
-                    showNotifications = true
-                } label: {
-                    Image(systemName: "bell")
-                        .font(.system(size: 16))
-                        .foregroundStyle(Color.floweInk)
-                        .frame(width: 36, height: 36)
-                        .background(Color.floweCardBg)
-                        .clipShape(Circle())
-                        .overlay(Circle().stroke(Color.floweBorder, lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Notifications")
+                ActivityBellButton(isInstructor: false)
             }
         }
     }

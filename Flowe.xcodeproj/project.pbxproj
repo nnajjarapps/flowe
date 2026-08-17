@@ -99,6 +99,8 @@
 		8CD6F7076188FCB80948E77E /* OnboardingUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23BC35F24816C68247C04B36 /* OnboardingUITests.swift */; };
 		8CD86B4F2A0C8A3F1544DCDE /* Message.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB36077D528099D817B27E2B /* Message.swift */; };
 		8F005CECFE7C6E453C28CD31 /* NotificationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB385017BADE1E22104629B2 /* NotificationSettingsView.swift */; };
+		FA00000000000000000000A3 /* ActivityCenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA00000000000000000000A2 /* ActivityCenter.swift */; };
+		FA00000000000000000000A5 /* NotificationCenterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA00000000000000000000A4 /* NotificationCenterView.swift */; };
 		90660FA320B2EEA8A91CEC1A /* PushService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8089C1D2681596AF48101FD3 /* PushService.swift */; };
 		9088BE8675CAE227464F994B /* StudentTabsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DBB42D00526892D939DC9F1 /* StudentTabsUITests.swift */; };
 		94FA958AC3A40CC2D5011435 /* AppSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = D095FAA6B074F1AF2221AE6A /* AppSession.swift */; };
@@ -447,6 +449,8 @@
 		F8FDF5E6BF0F2C754325BF04 /* FeedPost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedPost.swift; sourceTree = "<group>"; };
 		F99415EA7AD89182BC95C311 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		FB385017BADE1E22104629B2 /* NotificationSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationSettingsView.swift; sourceTree = "<group>"; };
+		FA00000000000000000000A2 /* ActivityCenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityCenter.swift; sourceTree = "<group>"; };
+		FA00000000000000000000A4 /* NotificationCenterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationCenterView.swift; sourceTree = "<group>"; };
 		FB831E5B6127A2464D0E1D52 /* SessionRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionRow.swift; sourceTree = "<group>"; };
 		13C14F3AB2E44A9DAFBD5EA9 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
 		2CEF7FD5EE4145918D7034EA /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -611,8 +615,18 @@
 				F55DD1E282DAE733901E1836 /* Messages */,
 				75F7CE8594571957C23918CF /* Moderation */,
 				4FA4BB420C875E3C7671DE1A /* Settings */,
+				FA00000000000000000000A1 /* Activity */,
 			);
 			path = Shared;
+			sourceTree = "<group>";
+		};
+		FA00000000000000000000A1 /* Activity */ = {
+			isa = PBXGroup;
+			children = (
+				FA00000000000000000000A2 /* ActivityCenter.swift */,
+				FA00000000000000000000A4 /* NotificationCenterView.swift */,
+			);
+			path = Activity;
 			sourceTree = "<group>";
 		};
 		4DD511629605BE9AC2F40F7B /* Products */ = {
@@ -1270,6 +1284,8 @@
 				0F346C6CD319E875C3D3EAF4 /* MockDataStore.swift in Sources */,
 				24A9D9345D589AA3843DF653 /* NewMessageSheet.swift in Sources */,
 				8F005CECFE7C6E453C28CD31 /* NotificationSettingsView.swift in Sources */,
+				FA00000000000000000000A3 /* ActivityCenter.swift in Sources */,
+				FA00000000000000000000A5 /* NotificationCenterView.swift in Sources */,
 				59337B263035088E6520BD42 /* OnboardingFlowView.swift in Sources */,
 				FEEDFACE000000000000EE31 /* StudentQuizView.swift in Sources */,
 				14250FA88FC8450E613B0377 /* PaywallView.swift in Sources */,
