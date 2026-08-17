@@ -3,6 +3,16 @@ import SwiftUI
 import UIKit
 import UserNotifications
 
+/// Extract the instructor `ownerID` from a Flowe share link `…/i/<ownerID>` — host/prefix agnostic,
+/// so it also matches the GitHub project-pages `/flowe-support/i/<id>` shape. Shared by BOTH
+/// universal-link seams in `FloweApp`.
+private func floweInstructorID(from url: URL?) -> String? {
+    guard let parts = url?.pathComponents,
+          let idx = parts.firstIndex(of: "i"), idx + 1 < parts.count else { return nil }
+    let id = parts[idx + 1]
+    return id.isEmpty ? nil : id
+}
+
 /// SwiftUI has no entry point for remote notifications, so the push pipeline needs a UIKit delegate.
 ///
 /// It holds no state of its own — every callback decodes the payload into a plain `PushTopic` and
@@ -125,18 +135,20 @@ struct FlowApp: App {
                 .environment(settings)
                 .environment(subscription)
                 .environment(PushService.shared)
-                // A tapped Universal Link lands here. SwiftUI's `onOpenURL` fires on both cold-start
-                // and warm foreground; the UIKit delegate is push-only (implements no
-                // `continueUserActivity`), so this is the single supported seam. Parsed inline —
-                // robust to both `/i/<id>` and the GitHub project-pages `/flowe-support/i/<id>` shape —
-                // then stashed on the session (not a view) so it survives `AppRouter` swapping
-                // Onboarding/Quiz → tabs; `StudentTabView` consumes it. Mirrors `PushService.pendingTopic`.
+                // A scanned/tapped Universal Link (…/flowe-support/i/<ownerID>) lands here. CRITICAL:
+                // with a `UIApplicationDelegateAdaptor` present (Flowe has one for push), iOS delivers a
+                // universal link as a BROWSING `NSUserActivity` — it does NOT arrive through `onOpenURL`,
+                // which in this setup only catches custom URL schemes. Handling ONLY `onOpenURL` was the
+                // bug: the QR opened the app but the instructor id was never delivered, so the profile
+                // never showed (for every scanner — student or instructor). The real seam is
+                // `onContinueUserActivity(NSUserActivityTypeBrowsingWeb)` (fires cold-start AND warm);
+                // `onOpenURL` stays as belt-and-suspenders. The id is stashed on the session (not a view)
+                // so it survives `AppRouter` swapping Onboarding/Quiz → tabs; `StudentTabView` consumes it.
+                .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
+                    if let id = floweInstructorID(from: activity.webpageURL) { session.pendingInstructorID = id }
+                }
                 .onOpenURL { url in
-                    let parts = url.pathComponents
-                    guard let idx = parts.firstIndex(of: "i"), idx + 1 < parts.count else { return }
-                    let id = parts[idx + 1]
-                    guard !id.isEmpty else { return }
-                    session.pendingInstructorID = id
+                    if let id = floweInstructorID(from: url) { session.pendingInstructorID = id }
                 }
                 .modelContainer(container)
                 .environment(\.locale, settings.locale)
