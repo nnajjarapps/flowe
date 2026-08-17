@@ -102,6 +102,16 @@ extension MockDataStore {
         s.collected = s.mixPackages + s.feesCollected
         s.owedToYou = s.feesOwed
 
+        // Phase B — per-student credit balances (from /credits/clients) → liability + the balances list.
+        if !studentBalances.isEmpty {
+            s.creditLiability = studentBalances.reduce(0) { $0 + $1.value }
+            s.balances = studentBalances.map { b in
+                let days = b.nextExpiry.map { max(0, cal.dateComponents([.day], from: now, to: $0).day ?? 0) }
+                return FinanceBalance(id: b.studentID, name: b.studentName, remaining: b.remaining,
+                                      total: b.granted, value: b.value, expiresInDays: days)
+            }
+        }
+
         // Trend vs the previous full period.
         let prevTotal = sessionRevenue(prevStart, start)
             + approved.filter { within($0.createdAt, prevStart, start) }.reduce(0) { $0 + $1.price }
@@ -170,6 +180,7 @@ struct FinanceCenterView: View {
             .background(Color.flowWhite)
             .navigationTitle("Finance")
             .navigationBarTitleDisplayMode(.inline)
+            .task { await data.syncStudentBalances() }
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }.tint(Color.flowePinkDeep).fontWeight(.semibold)
@@ -292,14 +303,37 @@ struct FinanceCenterView: View {
                 }
             }
         }
-        // Phase B: per-student balances + credit liability land once the backend exposes remaining credits.
-        HStack(spacing: 8) {
-            Image(systemName: "hourglass").font(.system(size: 11)).foregroundStyle(liab)
-            Text("Per-student credit balances & liability light up with credit tracking.")
-                .font(FloweFont.sans(11)).foregroundStyle(Color.floweMuted)
+        // Per-student credit balances (Phase B). Falls back to a hint until /credits/clients is deployed.
+        if s.balances.isEmpty {
+            HStack(spacing: 8) {
+                Image(systemName: "hourglass").font(.system(size: 11)).foregroundStyle(liab)
+                Text("Per-student credit balances & liability light up with credit tracking.")
+                    .font(FloweFont.sans(11)).foregroundStyle(Color.floweMuted)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 4)
+        } else {
+            SectionHeader(text: "STUDENT BALANCES")
+            panel {
+                VStack(spacing: 0) {
+                    ForEach(Array(s.balances.enumerated()), id: \.element.id) { i, b in
+                        HStack(spacing: 12) {
+                            CreditRing(remaining: b.remaining, total: max(b.total, 1), size: 38, style: .compact)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(b.name.isEmpty ? "Client" : b.name).font(FloweFont.sans(13, .medium)).foregroundStyle(Color.floweInk)
+                                if let d = b.expiresInDays, d <= 14 {
+                                    Text(verbatim: "Expires in \(d)d").font(FloweFont.sans(10, .medium)).foregroundStyle(warn)
+                                }
+                            }
+                            Spacer()
+                            Text(money(b.value)).font(FloweFont.sans(13, .medium)).foregroundStyle(Color.floweInk)
+                        }
+                        .padding(.vertical, 10)
+                        if i < s.balances.count - 1 { Divider().overlay(Color.floweBorder) }
+                    }
+                }
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 4)
     }
 
     private func shieldCard(_ s: FinanceSummary) -> some View {

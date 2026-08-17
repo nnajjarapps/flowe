@@ -33,6 +33,18 @@ struct RemotePurchase: Identifiable, Equatable {
     let respondedAt: Date?
 }
 
+/// One of an instructor's students and the credits they still hold (Finance Center, Phase B). `value`
+/// is the ₪ worth of the unredeemed credits (Σ remaining × per-credit price), computed server-side.
+struct InstructorClientBalance: Identifiable {
+    let studentID: String
+    let studentName: String
+    let remaining: Int
+    let granted: Int
+    let value: Int
+    let nextExpiry: Date?
+    var id: String { studentID }
+}
+
 /// One non-empty credit lot in a per-instructor balance (drives the "6 of 10" ring denominator).
 struct CreditLot: Identifiable, Equatable {
     let id: String
@@ -198,6 +210,16 @@ final class PackageService {
     }
 
     /// The student's whole wallet — every instructor they hold credits with (for the wallet carousel).
+    /// All of the instructor's clients + their remaining credits and ₪ value (Finance Center Phase B).
+    /// nil until `GET /credits/clients` is deployed — Finance degrades to "—" for liability.
+    func fetchClientBalances() async -> [InstructorClientBalance]? {
+        do {
+            let data = try await backend.authorized("/credits/clients")
+            struct Resp: Decodable { let clients: [WireClientBalance] }
+            return try JSONDecoder.pkgSnake.decode(Resp.self, from: data).clients.map(\.remote)
+        } catch { return nil }
+    }
+
     func fetchWallet() async -> [InstructorBalance]? {
         do {
             let data = try await backend.authorized("/balances")
@@ -265,6 +287,21 @@ private struct WireBalance: Decodable {
     func balance(instructorID: String) -> CreditBalance {
         CreditBalance(instructorID: instructorID, balance: balance,
                       nextExpiry: nextExpiry.map(Date.init(pkgMs:)), lots: lots.map(\.lot))
+    }
+}
+
+private struct WireClientBalance: Decodable {
+    let studentId: String
+    let studentName: String?
+    let remaining: Int
+    let granted: Int
+    let value: Double?
+    let nextExpiry: Double?    // ms epoch
+    var remote: InstructorClientBalance {
+        InstructorClientBalance(studentID: studentId, studentName: studentName ?? "",
+                                remaining: remaining, granted: granted,
+                                value: Int((value ?? 0).rounded()),
+                                nextExpiry: nextExpiry.map(Date.init(pkgMs:)))
     }
 }
 

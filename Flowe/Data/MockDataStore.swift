@@ -5279,6 +5279,10 @@ final class MockDataStore {
     /// Per-instructor credit detail (balance + lots) the student has fetched, keyed by instructorID —
     /// drives the "6 of 10" ring on the profile and in the booking sheet.
     private(set) var creditDetail: [String: CreditBalance] = [:]
+    /// The instructor's clients and the credits they still hold (remaining/granted/₪value/expiry).
+    /// Powers Finance Center's credit-liability + per-student balances (Phase B); empty until the
+    /// `/credits/clients` endpoint is deployed.
+    private(set) var studentBalances: [InstructorClientBalance] = []
 
     /// Pending package-purchase requests — the instructor dashboard signal card + the approval inbox badge.
     var pendingPurchaseCards: [RemotePurchase] { incomingPurchases.filter { $0.status == .pending } }
@@ -5306,7 +5310,15 @@ final class MockDataStore {
             // before any booking, so purchasers aren't warmed by syncBookings.
             await fetchAuthorProfiles(Set(purchases.map { $0.studentID }))
         }
+        await syncStudentBalances()
         packagesPhase = .loaded
+    }
+
+    /// Refresh the instructor's per-student credit balances (Finance Center Phase B). A nil fetch keeps
+    /// the cache; empty/undeployed just leaves credit-liability showing "—".
+    func syncStudentBalances() async {
+        guard !isPreview, currentUserID != nil else { return }
+        if let balances = await packageService.fetchClientBalances() { studentBalances = balances }
     }
 
     @discardableResult

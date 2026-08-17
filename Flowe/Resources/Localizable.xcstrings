@@ -28375,6 +28375,22 @@
           }
         }
       }
+    },
+    "STUDENT BALANCES" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "أرصدة الطلاب"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "יתרות התלמידים"
+          }
+        }
+      }
     }
   },
   "version" : "1.1"
