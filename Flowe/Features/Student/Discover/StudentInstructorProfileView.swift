@@ -107,7 +107,7 @@ struct StudentInstructorProfileView: View {
             .ignoresSafeArea(edges: .top)
             .background(Color.flowWhite)
             .navigationBarHidden(true)
-            .safeAreaInset(edge: .bottom) { actionRail }
+            .safeAreaInset(edge: .bottom) { if canBook { actionRail } }
         }
         .presentationDragIndicator(.hidden)   // the hero owns a custom xmark; no grabber over the photo
         .accessibilityIdentifier("instructor.profile")
@@ -561,7 +561,11 @@ struct StudentInstructorProfileView: View {
     }
 
     @ViewBuilder private func buyFooter(_ o: RemoteOffering) -> some View {
-        if data.hasPendingPurchase(offeringID: o.id) {
+        // Instructors (and the instructor viewing their own profile) can SEE packages but can't buy —
+        // purchasing is a student→instructor action, the same rule as booking.
+        if !canBook {
+            EmptyView()
+        } else if data.hasPendingPurchase(offeringID: o.id) {
             Text("Requested · awaiting approval")
                 .font(FloweFont.sans(13, .medium)).foregroundStyle(Color.floweMuted)
                 .frame(maxWidth: .infinity).padding(.vertical, 12)
@@ -982,6 +986,14 @@ struct StudentInstructorProfileView: View {
     }
 
     // MARK: - Action rail
+
+    /// The viewer may book only if they're a STUDENT (a guest still sees the CTA → prompted to sign in)
+    /// and not the instructor themselves. The community is SYMMETRIC, so an instructor can open this
+    /// profile from the stories strip — they must NOT get a "Book a session" CTA (booking is
+    /// student→instructor only). Also blocks an instructor booking themselves via their own circle.
+    private var canBook: Bool {
+        session.authState != .instructor && instructor.ownerID != session.ownerID
+    }
 
     /// Booking is always available for a visible listing — no unavailable state — so this is a real
     /// CTA, never a disabled plate.
