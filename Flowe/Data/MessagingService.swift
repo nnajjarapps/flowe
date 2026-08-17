@@ -11,6 +11,7 @@ struct RemoteMessage {
     let recipientName: String
     let text: String
     let sentAt: Date
+    let deleted: Bool
 
     init?(record: CKRecord) {
         guard let conversationID = record["conversationID"] as? String,
@@ -25,6 +26,7 @@ struct RemoteMessage {
         senderName = record["senderName"] as? String ?? ""
         recipientName = record["recipientName"] as? String ?? ""
         sentAt = record["sentAt"] as? Date ?? .distantPast
+        deleted = ((record["deleted"] as? Int) ?? 0) == 1
     }
 }
 
@@ -126,6 +128,24 @@ final class MessagingService {
     func delete(remoteID: String) async {
         #if CLOUDKIT_ENABLED
         _ = try? await database.deleteRecord(withID: CKRecord.ID(recordName: remoteID))
+        #endif
+    }
+
+    /// "Delete for everyone" — a SOFT delete: keep the record but flag `deleted` and blank the
+    /// ciphertext, so the recipient's next sync flips their copy to a tombstone. A hard delete would
+    /// just make the row vanish with no "message was deleted" marker. Only the sender can do this
+    /// (public DB grants write to `_creator`). Fetch-then-mutate with one serverRecordChanged retry.
+    func deleteForEveryone(remoteID: String) async {
+        #if CLOUDKIT_ENABLED
+        func apply() async throws {
+            let record = try await database.record(for: CKRecord.ID(recordName: remoteID))
+            record["deleted"] = 1
+            record["text"] = ""          // strip the ciphertext — the content is gone for good
+            _ = try await database.save(record)
+        }
+        do { try await apply() }
+        catch let error as CKError where error.code == .serverRecordChanged { try? await apply() }
+        catch { /* offline / not mine — best-effort; the local tombstone still shows on this device */ }
         #endif
     }
 

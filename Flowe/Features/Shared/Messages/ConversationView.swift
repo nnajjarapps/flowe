@@ -22,6 +22,24 @@ struct ConversationView: View {
 
     /// The partner's presence line for the header: "Active now" (active < 5 min) or "Last seen …". nil
     /// when the backend didn't permit us to see it (they hid it / reciprocity / never active).
+    /// A "deleted for everyone" tombstone, aligned like a real bubble: "You deleted this message" for
+    /// the sender, "This message was deleted" for the recipient.
+    @ViewBuilder private func deletedRow(mine: Bool) -> some View {
+        HStack(spacing: 0) {
+            if mine { Spacer(minLength: 48) }
+            HStack(spacing: 6) {
+                Image(systemName: "slash.circle").font(.system(size: 12))
+                Text(mine ? "You deleted this message" : "This message was deleted")
+                    .font(FloweFont.sans(14)).italic()
+            }
+            .foregroundStyle(Color.floweMuted)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(Color.floweCardBg, in: RoundedRectangle(cornerRadius: 16))
+            if !mine { Spacer(minLength: 48) }
+        }
+    }
+
     private var presenceLine: (text: String, online: Bool)? {
         guard let seen = data.lastSeen(ownerID: counterpart.id) else { return nil }
         if Date().timeIntervalSince(seen) < 300 { return (String(localized: "Active now"), true) }
@@ -45,19 +63,33 @@ struct ConversationView: View {
                             ForEach(groupedByDay, id: \.day) { group in
                                 dateStamp(group.day)
                                 ForEach(group.messages) { message in
-                                    MessageBubble(
-                                        isOutgoing: message.senderID == data.currentUserID,
-                                        text: message.displayText,
-                                        time: message.pendingUpload
-                                            ? "Sending…"
-                                            : Self.timeLabel(message.sentAt)
-                                    )
-                                    .id(message.persistentModelID)
-                                    .contextMenu {
-                                        Button(role: .destructive) {
-                                            data.deleteMessage(message)
-                                        } label: {
-                                            Label("Delete", systemImage: "trash")
+                                    if message.deleted {
+                                        deletedRow(mine: message.senderID == data.currentUserID)
+                                            .id(message.persistentModelID)
+                                            .contextMenu {
+                                                Button(role: .destructive) { data.deleteForMe(message) } label: {
+                                                    Label("Delete for me", systemImage: "trash")
+                                                }
+                                            }
+                                    } else {
+                                        MessageBubble(
+                                            isOutgoing: message.senderID == data.currentUserID,
+                                            text: message.displayText,
+                                            time: message.pendingUpload
+                                                ? "Sending…"
+                                                : Self.timeLabel(message.sentAt)
+                                        )
+                                        .id(message.persistentModelID)
+                                        .contextMenu {
+                                            // "Delete for everyone" only for my own message, within 24h (WhatsApp rule).
+                                            if message.canDeleteForEveryone(currentUserID: data.currentUserID) {
+                                                Button(role: .destructive) { data.deleteForEveryone(message) } label: {
+                                                    Label("Delete for everyone", systemImage: "trash")
+                                                }
+                                            }
+                                            Button(role: .destructive) { data.deleteForMe(message) } label: {
+                                                Label("Delete for me", systemImage: "trash")
+                                            }
                                         }
                                     }
                                 }

@@ -45,6 +45,15 @@ final class FloweBackendClient {
     private var apnsTokenHex: String?
     /// Retains the in-flight Apple re-auth helper for the duration of the request.
     private var reauth: AppleReauth?
+    /// In-flight interactive re-auth, so concurrent callers share ONE Apple prompt (never two sheets).
+    private var reauthTask: Task<Bool, Never>?
+    /// In-flight silent refresh, so a burst of authorized() calls after the 1h session expires shares
+    /// ONE `/auth/refresh` — the backend rotates the refresh token per use, so a stampede would have all
+    /// but the first send a stale token → 401 "revoked" → wiped session → needless Sign-in-with-Apple.
+    private var refreshTask: Task<Bool, Never>?
+    /// Interactive recovery from a pull-to-refresh is attempted at most once per launch — otherwise a
+    /// genuinely session-less user is prompted on every single refresh. Reset only by a fresh launch.
+    private var didAttemptInteractiveRecovery = false
 
     /// The debug two-party harness injects an ownerID with no real Apple credential; skip the backend
     /// entirely there so those launches don't 401 against live JWKS verification.
@@ -110,12 +119,22 @@ final class FloweBackendClient {
     func ensureInteractiveSession() async -> Bool {
         guard !isDebugInjected else { return false }
         if await ensureSessionSilently() { return true }
-        let helper = AppleReauth()
-        reauth = helper
-        defer { reauth = nil }
-        guard let token = try? await helper.identityToken() else { return false }
-        await bootstrap(identityToken: token)
-        return KeychainStore.get(sessionKey) != nil
+        // SINGLE-FLIGHT: concurrent callers (a booking write racing a background sync, two writes at
+        // once) must share ONE Apple prompt — otherwise each presents its own sheet and the user sees
+        // "Sign in with Apple" twice in a row. The first arrival owns the reauth; the rest await it.
+        if let inFlight = reauthTask { return await inFlight.value }
+        let task = Task { @MainActor () -> Bool in
+            let helper = AppleReauth()
+            reauth = helper
+            defer { reauth = nil }
+            guard let token = try? await helper.identityToken() else { return false }
+            await bootstrap(identityToken: token)
+            return KeychainStore.get(sessionKey) != nil
+        }
+        reauthTask = task
+        let ok = await task.value
+        reauthTask = nil
+        return ok
     }
 
     /// Recover a backend session for someone signed in to the app who has NO backend session — they
@@ -128,30 +147,51 @@ final class FloweBackendClient {
     /// session exists afterward.
     @discardableResult
     func recoverSessionIfNeeded() async -> Bool {
-        await ensureInteractiveSession()
+        // Silent-first: a live session or a working refresh token recovers with NO prompt (the common
+        // case). Escalate to an interactive Apple prompt AT MOST ONCE per launch — the calendar and
+        // booking screens call this from EVERY pull-to-refresh, so without this guard a genuinely
+        // session-less user was prompted on every single refresh. After one attempt, refreshes recover
+        // silently only (a deliberate booking WRITE can still prompt via `ensureInteractiveSession`).
+        if await ensureSessionSilently() { return true }
+        guard !didAttemptInteractiveRecovery else { return false }
+        didAttemptInteractiveRecovery = true
+        return await ensureInteractiveSession()
     }
 
     /// Refresh the short session token. On a DEFINITIVE 401 (refresh token revoked/expired) wipe BOTH
     /// tokens so `hasSession` drops and the app re-auths cleanly; on transport/5xx keep them (offline
     /// is recoverable). Stores the rotated refresh token the backend returns.
     private func refreshSession() async -> Bool {
-        guard let refresh = KeychainStore.get(refreshKey) else { return false }
-        struct Req: Encodable { let refreshToken: String; let deviceId: String }
-        do {
-            let data = try await rawSend("/auth/refresh", method: "POST",
-                                         jsonBody: try JSONEncoder().encode(Req(refreshToken: refresh, deviceId: deviceID)),
-                                         bearer: nil)
-            struct Resp: Decodable { let sessionToken: String; let refreshToken: String? }
-            let resp = try JSONDecoder().decode(Resp.self, from: data)
-            KeychainStore.set(resp.sessionToken, for: sessionKey)
-            if let rotated = resp.refreshToken { KeychainStore.set(rotated, for: refreshKey) }
-            return true
-        } catch BackendError.http(401) {
-            wipeTokens()   // the refresh token is dead — don't leave a permanently wedged session
-            return false
-        } catch {
-            return false   // transient — keep tokens for the next attempt
+        // SINGLE-FLIGHT (the "stay signed in like WhatsApp" fix): after the 1h session token expires, a
+        // screen refresh fans out MANY authorized() calls at once — each would call refreshSession with
+        // the SAME refresh token. The backend ROTATES the token per use, so the first call invalidates
+        // it and the rest send a stale token → 401 "revoked" → wipeTokens() → an interactive Apple
+        // prompt. Sharing ONE refresh (concurrent callers await it) keeps the 90-day session alive
+        // silently; only a GENUINELY revoked token (the single call fails) wipes and forces re-auth.
+        if let inFlight = refreshTask { return await inFlight.value }
+        let task = Task { @MainActor () -> Bool in
+            guard let refresh = KeychainStore.get(refreshKey) else { return false }
+            struct Req: Encodable { let refreshToken: String; let deviceId: String }
+            do {
+                let data = try await rawSend("/auth/refresh", method: "POST",
+                                             jsonBody: try JSONEncoder().encode(Req(refreshToken: refresh, deviceId: deviceID)),
+                                             bearer: nil)
+                struct Resp: Decodable { let sessionToken: String; let refreshToken: String? }
+                let resp = try JSONDecoder().decode(Resp.self, from: data)
+                KeychainStore.set(resp.sessionToken, for: sessionKey)
+                if let rotated = resp.refreshToken { KeychainStore.set(rotated, for: refreshKey) }
+                return true
+            } catch BackendError.http(401) {
+                wipeTokens()   // the refresh token is genuinely dead — don't leave a wedged session
+                return false
+            } catch {
+                return false   // transient — keep tokens for the next attempt
+            }
         }
+        refreshTask = task
+        let ok = await task.value
+        refreshTask = nil
+        return ok
     }
 
     // MARK: - Authorized requests (the seam BookingService uses)

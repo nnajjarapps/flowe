@@ -29,6 +29,10 @@ final class Message {
     var isRead: Bool = false
     /// The message has not reached the shared store yet; retried on the next sync.
     var pendingUpload: Bool = false
+    /// "Deleted for everyone" tombstone — the row is KEPT but rendered as "You deleted a message" /
+    /// "This message was deleted" on BOTH sides. Only the sender can set it, only within 24h of `sentAt`.
+    /// A plain "delete for me" removes the row locally instead and never touches this flag.
+    var deleted: Bool = false
 
     init(
         remoteID: String? = nil,
@@ -61,6 +65,16 @@ final class Message {
     /// keeps re-decrypting it every sync, so this resolves to the real text as soon as the key lands.
     var displayText: String {
         MessageCrypto.isSealed(text) ? MessageCrypto.sealedPlaceholder : text
+    }
+
+    /// The window in which a sender may still "delete for everyone" (WhatsApp-style).
+    static let deleteForEveryoneWindow: TimeInterval = 24 * 60 * 60
+
+    /// Whether this user may still delete THIS message for everyone: it must be their own message, not
+    /// already deleted, and within 24h of when it was sent.
+    func canDeleteForEveryone(currentUserID: String?) -> Bool {
+        senderID == currentUserID && !deleted
+            && Date().timeIntervalSince(sentAt) < Self.deleteForEveryoneWindow
     }
 
     /// Stable id for a pair of participants, independent of who is sending — sorting the two

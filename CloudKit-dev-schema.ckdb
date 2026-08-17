@@ -53,8 +53,16 @@ DEFINE SCHEMA
     );
 
     RECORD TYPE CD_ClientNote (
+        CD_conditions       STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_emergencyContact STRING QUERYABLE SEARCHABLE SORTABLE,
         CD_entityName       STRING QUERYABLE SEARCHABLE SORTABLE,
         CD_flagged          INT64 QUERYABLE SORTABLE,
+        CD_goals            STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_hasInjury        INT64 QUERYABLE SORTABLE,
+        CD_injuryNote       STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_isPregnant       INT64 QUERYABLE SORTABLE,
+        CD_notes            STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_pregnancyNote    STRING QUERYABLE SEARCHABLE SORTABLE,
         CD_sealed           STRING,
         CD_studentID        STRING QUERYABLE SEARCHABLE SORTABLE,
         CD_updatedAt        TIMESTAMP QUERYABLE SORTABLE,
@@ -229,6 +237,7 @@ DEFINE SCHEMA
 
     RECORD TYPE CD_Message (
         CD_conversationID STRING QUERYABLE SEARCHABLE SORTABLE,
+        CD_deleted        INT64 QUERYABLE SORTABLE,
         CD_entityName     STRING QUERYABLE SEARCHABLE SORTABLE,
         CD_isRead         INT64 QUERYABLE SORTABLE,
         CD_localID        STRING,
@@ -333,6 +342,7 @@ DEFINE SCHEMA
         "___modifiedBy" REFERENCE,
         "___recordID"   REFERENCE QUERYABLE,
         conversationID  STRING QUERYABLE SEARCHABLE SORTABLE,
+        deleted         INT64,
         recipientID     STRING QUERYABLE SEARCHABLE SORTABLE,
         recipientName   STRING QUERYABLE SEARCHABLE SORTABLE,
         senderID        STRING QUERYABLE SEARCHABLE SORTABLE,

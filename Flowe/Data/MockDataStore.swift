@@ -750,6 +750,11 @@ final class MockDataStore {
     /// toward the student: they keep the credit rather than lose it to a partial write).
     private func upload(_ booking: Booking, instructorID: String, studentID: String,
                         useCredit: Bool = false, creditClassDate: String? = nil) async {
+        // Idempotency key: assign a stable client id on the FIRST attempt and REUSE it on every retry,
+        // so a re-sent one-off (an auth retry, or a flush after a lost response) collapses to ONE row
+        // via the backend's ON CONFLICT(id) DO NOTHING — this is the duplicate-booking-request fix.
+        // Mirrors the series path, which is already idempotent through its deterministic recordName.
+        if booking.remoteID == nil { booking.remoteID = "bk-\(UUID().uuidString)" }
         let result = await bookingService.create(
             instructorID: instructorID,
             studentID: studentID,
@@ -758,10 +763,12 @@ final class MockDataStore {
             time: booking.time,
             type: booking.type,
             duration: booking.duration,
+            recordName: booking.remoteID,          // deterministic → a retry never creates a second row
             useCredit: useCredit,
             creditClassDate: creditClassDate
         )
-        booking.remoteID = result?.id
+        // NEVER nil the id back out on failure — the retry must re-send the SAME key to dedupe.
+        if let id = result?.id { booking.remoteID = id }
         booking.pendingUpload = result == nil
         save()
         // A credit was requested and the booking landed → refresh the per-instructor balance + wallet so
@@ -946,7 +953,10 @@ final class MockDataStore {
     /// Re-send anything that never reached the server — a booking made offline, or a decision
     /// taken while the network was down.
     private func flushPendingWrites() async {
-        for booking in bookings where booking.pendingUpload && booking.remoteID == nil {
+        // One-offs now carry a client idempotency key (bk-<uuid>) from their first upload attempt, so
+        // retry them by `pendingUpload` (not `remoteID == nil`) — re-sending the same key can't create a
+        // duplicate. Series occurrences are excluded here (they retry via the deterministic path below).
+        for booking in bookings where booking.pendingUpload && !booking.isRecurring {
             guard let instructorID = booking.instructorOwnerID,
                   let studentID = booking.studentID else { continue }
             await upload(booking, instructorID: instructorID, studentID: studentID)
@@ -1717,15 +1727,25 @@ final class MockDataStore {
         return (loadBlockWindows()[sender] ?? []).contains { $0.count == 2 && t >= $0[0] && t <= $0[1] }
     }
 
-    func deleteMessage(_ message: Message) {
-        let mine = message.senderID == currentUserID
-        let remoteID = message.remoteID
-        if let remoteID { markMessageDeleted(remoteID) }
+    /// "Delete for me" — hide the message on THIS device only; the counterpart keeps their copy. The id
+    /// is tombstoned so a later sync can't resurrect it. No server write.
+    func deleteForMe(_ message: Message) {
+        if let remoteID = message.remoteID { markMessageDeleted(remoteID) }
         context.delete(message)
         save()
-        if mine, let remoteID, !isPreview {
-            Task { await messagingService.delete(remoteID: remoteID) }
-        }
+    }
+
+    /// "Delete for everyone" — sender-only, within 24h. KEEP the row but flip it to a tombstone (both
+    /// sides show "deleted") and soft-delete the shared record so the counterpart's sync picks it up.
+    /// Guarded, so a stale menu can't delete an out-of-window or not-mine message.
+    func deleteForEveryone(_ message: Message) {
+        guard message.canDeleteForEveryone(currentUserID: currentUserID),
+              let remoteID = message.remoteID else { return }
+        message.deleted = true
+        message.text = ""
+        save()
+        guard !isPreview else { return }
+        Task { await messagingService.deleteForEveryone(remoteID: remoteID) }
     }
 
     /// Delete a whole conversation from this device's inbox. Each message is tombstoned so a later
@@ -1905,8 +1925,18 @@ final class MockDataStore {
         var known = Set(messages.compactMap {
             $0.remoteID ?? ($0.senderID == me ? $0.recordName : nil)
         })
-        var inserted = false
-        for (entry, plaintext) in decrypted where !known.contains(entry.id) {
+        var changed = false
+        for (entry, plaintext) in decrypted {
+            if known.contains(entry.id) {
+                // Existing row: pick up a "delete for everyone" flip the counterpart just made — the
+                // merge otherwise only INSERTS, so without this the recipient never sees the tombstone.
+                if entry.deleted, let local = messages.first(where: { $0.remoteID == entry.id }), !local.deleted {
+                    local.deleted = true
+                    local.text = ""
+                    changed = true
+                }
+                continue
+            }
             known.insert(entry.id)   // also dedup an id that appears twice within this one batch
             // A message from someone this user has BLOCKED — or sent DURING a past block window, even if
             // it only syncs in now that they're unblocked — must never be STORED, or it surfaces the
@@ -1916,21 +1946,24 @@ final class MockDataStore {
                 markMessageDeleted(entry.id)
                 continue
             }
-            context.insert(Message(
+            let message = Message(
                 remoteID: entry.id,
                 conversationID: entry.conversationID,
                 senderID: entry.senderID,
                 senderName: entry.senderName,
                 recipientID: entry.recipientID,
                 recipientName: entry.recipientName,
-                text: plaintext,
+                // A message deleted-for-everyone before we ever fetched it lands straight as a tombstone.
+                text: entry.deleted ? "" : plaintext,
                 sentAt: entry.sentAt,
                 // Anything I sent is implicitly read; anything received starts unread.
                 isRead: entry.senderID == me
-            ))
-            inserted = true
+            )
+            message.deleted = entry.deleted
+            context.insert(message)
+            changed = true
         }
-        if inserted { save() }
+        if changed { save() }
         // Self-heal any message still holding sealed ciphertext now that we may have the key (a fresh
         // fetch this cycle, or the sender's key having propagated since it first synced). Runs after
         // EVERY merge so a stuck message resolves on the next sync instead of being lost forever.
