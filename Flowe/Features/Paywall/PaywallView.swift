@@ -39,7 +39,12 @@ struct PaywallView: View {
                     Button("Done") { dismiss() }.tint(Color.floweMuted)
                 }
             }
-            .task {
+            // Re-check once `products` actually finishes loading, not just on first appear —
+            // SubscriptionService.init() kicks off loadProducts() as its own detached Task, so this
+            // view can appear (and check eligibility against a still-empty product list) before that
+            // finishes. A plain one-shot `.task` would then get stuck reporting false forever; keying
+            // on whether products are still empty re-runs it the moment they populate.
+            .task(id: subscription.products.isEmpty) {
                 trialEligible = await subscription.introOfferAvailable(for: .visible)
             }
             .sheet(isPresented: $showPrivacy) {
