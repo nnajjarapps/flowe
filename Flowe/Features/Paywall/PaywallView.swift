@@ -121,8 +121,7 @@ struct PaywallView: View {
             }
 
             if showTrial {
-                Label(product.map { "1 month free, then \($0.displayPrice)/month" } ?? "1 month free",
-                      systemImage: "gift")
+                Label(Self.trialLabel(for: product), systemImage: "gift")
                     .font(FloweFont.sans(12, .medium))
                     .foregroundStyle(Color.flowePinkDeep)
             }
@@ -161,6 +160,25 @@ struct PaywallView: View {
             RoundedRectangle(cornerRadius: 16)
                 .stroke(tier == .boost ? Color.flowePinkDeep.opacity(0.5) : Color.clear, lineWidth: 1.5)
         )
+    }
+
+    /// Reads the trial length straight from StoreKit's `introductoryOffer.period` instead of hardcoding
+    /// a guess — App Store Connect is the source of truth for how long the trial actually is, and this
+    /// keeps the on-screen copy from ever silently drifting out of sync with it again.
+    private static func trialLabel(for product: Product?) -> String {
+        guard let product, let offer = product.subscription?.introductoryOffer, offer.paymentMode == .freeTrial else {
+            return "Free trial"
+        }
+        let n = offer.period.value
+        let unit: String
+        switch offer.period.unit {
+        case .day:   unit = n == 1 ? "day" : "days"
+        case .week:  unit = n == 1 ? "week" : "weeks"
+        case .month: unit = n == 1 ? "month" : "months"
+        case .year:  unit = n == 1 ? "year" : "years"
+        @unknown default: unit = "period"
+        }
+        return "\(n) \(unit) free, then \(product.displayPrice)/month"
     }
 
     private func buttonTitle(tier: SubscriptionTier, isCurrent: Bool, showTrial: Bool) -> String {

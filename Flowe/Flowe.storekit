@@ -29,7 +29,7 @@
           "introductoryOffer" : {
             "internalID" : "FLOWE-VISIBLE-TRIAL",
             "paymentMode" : "free",
-            "subscriptionPeriod" : "P1M"
+            "subscriptionPeriod" : "P1W"
           },
           "localizations" : [
             {
