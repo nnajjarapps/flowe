@@ -18,7 +18,7 @@ struct InstructorTabView: View {
 
     // Only 5 tabs: an iPhone bottom bar shows 5 before iOS collapses the rest into a "More" tab, which
     // would bury a primary destination. Students was folded into a Dashboard entry to stay within 5.
-    private let maxTab = 4   // tags 0…4 (Dashboard, Calendar, Messages, Profile, Community)
+    private let maxTab = 4   // tags 0…4 (Dashboard, Calendar, Messages, Community, Profile)
 
     /// Defensive Instagram-style swipe between tabs — see `StudentTabView` for the
     /// rationale. Rides as a `.simultaneousGesture`, acts only on a decisive END.
@@ -57,15 +57,15 @@ struct InstructorTabView: View {
                 .tabItem { Label("Messages", systemImage: "message") }.tag(2)
                 .badge(data.unreadMessageCount)
 
-            InstructorProfileView().floweAdaptiveColumn()
-                .tabItem { Label("Profile", systemImage: "person.circle") }.tag(3)
-
             // Instructors participate in the same community as students — the feed (post tips, like,
             // comment) and events (browse + join). The peer-only surfaces (class-mates / circles) remain
             // student-anchored. `CommunityView` is role-agnostic; `checkMilestones` no-ops for an
             // instructor (no StudentProfile → not community-visible).
             CommunityView().floweAdaptiveColumn()
-                .tabItem { Label("Community", systemImage: "person.3") }.tag(4)
+                .tabItem { Label("Community", systemImage: "person.3") }.tag(3)
+
+            InstructorProfileView().floweAdaptiveColumn()
+                .tabItem { Label("Profile", systemImage: "person.circle") }.tag(4)
         }
         .sidebarAdaptableIfAvailable()
         .tint(Color.flowePinkDeep)
@@ -87,9 +87,9 @@ struct InstructorTabView: View {
                 router.openMessages()
             case .reviews:
                 router.profileTab = .reviews
-                router.selectedTab = 3
+                router.selectedTab = 4
             case .community:
-                router.selectedTab = 4         // the instructor Community tab
+                router.selectedTab = 3         // the instructor Community tab
             case .coverage:
                 router.selectedTab = 0         // Dashboard — the coverage cards live there
             }

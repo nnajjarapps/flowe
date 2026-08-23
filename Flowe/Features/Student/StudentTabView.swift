@@ -37,13 +37,13 @@ struct StudentTabView: View {
             // guest can never reach an account write from here.
             Group {
                 if session.isGuest {
-                    GuestSignInWall(icon: "person.3", title: "Join the community",
-                                    message: "Sign in to see familiar faces, follow practice-friends, and join the discussion.")
+                    GuestSignInWall(icon: "person.circle", title: "Your profile",
+                                    message: "Sign in to set up your profile, save instructors, and manage your account.")
                 } else {
-                    CommunityView().floweAdaptiveColumn()
+                    ProfileView().floweAdaptiveColumn()
                 }
             }
-            .tabItem { Label("Community", systemImage: "person.3") }.tag(1)
+            .tabItem { Label("Profile", systemImage: "person.circle") }.tag(1)
 
             Group {
                 if session.isGuest {
@@ -69,13 +69,13 @@ struct StudentTabView: View {
 
             Group {
                 if session.isGuest {
-                    GuestSignInWall(icon: "person.circle", title: "Your profile",
-                                    message: "Sign in to set up your profile, save instructors, and manage your account.")
+                    GuestSignInWall(icon: "person.3", title: "Join the community",
+                                    message: "Sign in to see familiar faces, follow practice-friends, and join the discussion.")
                 } else {
-                    ProfileView().floweAdaptiveColumn()
+                    CommunityView().floweAdaptiveColumn()
                 }
             }
-            .tabItem { Label("Profile", systemImage: "person.circle") }.tag(4)
+            .tabItem { Label("Community", systemImage: "person.3") }.tag(4)
         }
         .sidebarAdaptableIfAvailable()
         .tint(Color.flowePinkDeep)
@@ -87,7 +87,7 @@ struct StudentTabView: View {
         .onChange(of: push.pendingTopic) { _, topic in
             guard let topic else { return }
             switch topic {
-            case .community: selectedTab = 1
+            case .community: selectedTab = 4
             case .bookings:  selectedTab = 2
             case .messages:  selectedTab = 3
             case .reviews:   break   // students receive no review notifications
