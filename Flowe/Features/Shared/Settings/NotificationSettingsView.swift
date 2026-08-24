@@ -30,6 +30,7 @@ struct NotificationSettingsView: View {
     @AppStorage(NotificationPreference.messages)  private var messages = true
     @AppStorage(NotificationPreference.reviews)   private var reviews = true
     @AppStorage(NotificationPreference.community) private var community = true
+    @AppStorage(NotificationPreference.events)    private var events = true
     @AppStorage(NotificationPreference.reminders) private var reminders = true
     @AppStorage(NotificationPreference.coverage)  private var coverage = true
     @AppStorage(NotificationPreference.presence)  private var presence = false   // "last seen" is opt-in
@@ -49,6 +50,7 @@ struct NotificationSettingsView: View {
                         toggle("Reviews", "star", $reviews, id: "notifications.reviews")
                     } else {
                         toggle("Community replies", "person.3", $community, id: "notifications.community")
+                        toggle("New events", "calendar.badge.plus", $events, id: "notifications.events")
                     }
                     // Both roles: an instructor is offered cover and told when a claim lands; a
                     // student is told when their session will be taught by someone else.
@@ -88,7 +90,7 @@ struct NotificationSettingsView: View {
             .task { await push.refreshAuthorizationStatus() }
             // One observer for all five: each change is applied the same way, and grouping them
             // keeps a toggle from ever being added without being wired up.
-            .onChange(of: [bookings, messages, reviews, community, reminders, coverage, presence]) { apply() }
+            .onChange(of: [bookings, messages, reviews, community, events, reminders, coverage, presence]) { apply() }
         }
     }
 

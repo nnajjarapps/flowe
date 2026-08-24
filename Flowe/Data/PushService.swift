@@ -28,6 +28,10 @@ enum NotificationPreference {
     static let messages  = "notif.messages"
     static let reviews   = "notif.reviews"
     static let community = "notif.community"
+    /// New community EVENTS. Deliberately its OWN toggle rather than folding into `community`: this is
+    /// the only broadcast notification in the app — it fires for every published event, not just ones
+    /// addressed to you — so a user must be able to mute it without also losing replies to their posts.
+    static let events    = "notif.events"
     static let reminders = "notif.reminders"
     static let coverage  = "notif.coverage"
     /// "Show when I'm active" (last seen). Gates the presence heartbeat + the server-enforced opt-out
@@ -41,7 +45,7 @@ enum NotificationPreference {
     /// implicitly at the `register(defaults:)` call site, which wants `[String: Any]`.
     static let defaults: [String: Bool] = [
         bookings: true, messages: true, reviews: true, community: true, reminders: true,
-        coverage: true, presence: false   // "last seen" is OPT-IN
+        coverage: true, events: true, presence: false   // "last seen" is OPT-IN
     ]
 
     /// Retired keys, removed on launch so a stale `true` can't linger in `UserDefaults`.
@@ -305,6 +309,30 @@ final class PushService {
                 options: [.firesOnRecordCreation],
                 titleKey: "push.community.reply.title", titleArgs: [],
                 bodyKey: "push.community.reply.body", bodyArgs: ["authorName"]
+            ))
+        }
+
+        // NEW COMMUNITY EVENTS — the app's only BROADCAST push. Every other subscription here targets a
+        // recipient field addressed to this user; an event is addressed to nobody, so this one fires on
+        // every published event instead. Two consequences worth knowing:
+        //  • Self-exclusion is the predicate's job. CloudKit happily fires a subscription for a record
+        //    the subscriber just created, and unlike the addressed subscriptions there's no recipient
+        //    field to make that impossible — hence the explicit `organizerID != ownerID`. `organizerID`
+        //    is QUERYABLE in the deployed schema, and `!=` against a constant is a supported CKQuery
+        //    comparison (unlike NOT/OR, which are not).
+        //  • Volume is the toggle's job. This is the one notification whose frequency scales with the
+        //    whole community rather than with the user's own activity, so it has its own preference
+        //    (`NotificationPreference.events`) and is muted independently of community replies.
+        if isEnabled(NotificationPreference.events) {
+            plans.append(Plan(
+                id: Self.subscriptionID(.community, "event", ownerID),
+                recordType: EventService.eventRecordType,
+                predicate: NSPredicate(format: "organizerID != %@", ownerID),
+                options: [.firesOnRecordCreation],
+                titleKey: "push.event.new.title", titleArgs: [],
+                // Args are RECORD FIELD NAMES; CloudKit substitutes them on the receiver's device
+                // against their own String Catalog. Both are non-empty on every published event.
+                bodyKey: "push.event.new.body", bodyArgs: ["organizerName", "title"]
             ))
         }
 

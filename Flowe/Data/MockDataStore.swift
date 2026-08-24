@@ -1065,6 +1065,9 @@ final class MockDataStore {
         var nextOrder = bookings.map(\.order).max() ?? 0
 
         for entry in remote {
+            // Keep the REAL request time before it's discarded — the Activity feed reads it so a
+            // booking row shows when it was actually requested, not when this device first saw it.
+            bookingRequestedAt[entry.id] = entry.createdAt
             let status = Self.status(for: entry, decisions: decisions)
             if let cached = bookings.first(where: { $0.remoteID == entry.id }) {
                 // Don't undo a local decision whose write hasn't landed yet — that would flip the row
@@ -5283,6 +5286,15 @@ final class MockDataStore {
     /// Powers Finance Center's credit-liability + per-student balances (Phase B); empty until the
     /// `/credits/clients` endpoint is deployed.
     private(set) var studentBalances: [InstructorClientBalance] = []
+
+    /// remoteID → when the booking was actually REQUESTED, harvested from `RemoteBooking.createdAt`
+    /// during `syncBookings`. The local `Booking` @Model deliberately does NOT persist this (adding a
+    /// stored property would add `CD_createdAt` to the CD_Booking CloudKit mirror and force a schema
+    /// deploy), and `booking.date`/`.time` are the SESSION's slot, not the request time. Without this
+    /// the Activity feed had no real date for booking rows and fell back to [[ActivityLedger]]'s
+    /// device-local first-seen stamp — so on a fresh install every pending request read as "now".
+    /// Memory-only is sufficient: `syncBookings` runs on launch and repopulates it from the server.
+    private(set) var bookingRequestedAt: [String: Date] = [:]
 
     /// Pending package-purchase requests — the instructor dashboard signal card + the approval inbox badge.
     var pendingPurchaseCards: [RemotePurchase] { incomingPurchases.filter { $0.status == .pending } }

@@ -90,9 +90,10 @@ enum ActivityKind: String {
 
 // MARK: - Activity item
 
-/// One row in the feed. `rawDate` is the real event time when the source persists one; when it is
-/// nil (e.g. a booking, whose timestamps are discarded at sync) the [[ActivityLedger]] supplies a
-/// first-observed-on-this-device date instead. `isActionable` marks rows backed by a real pending
+/// One row in the feed. `rawDate` is the real event time. Most sources persist one; BOOKINGS get
+/// theirs from `MockDataStore.bookingRequestedAt` (the server's `RemoteBooking.createdAt`, harvested
+/// at sync because the local `Booking` @Model doesn't store it). It is nil only for a row that has
+/// never synced, and there the [[ActivityLedger]]'s first-observed-on-this-device date is correct. `isActionable` marks rows backed by a real pending
 /// flag (a request, an unread message, an owed fee) — those stay unread until the flag clears,
 /// independent of the last-opened watermark.
 struct ActivityItem: Identifiable {
@@ -243,6 +244,13 @@ extension MockDataStore {
         b.remoteID ?? "\(b.legacyId)-\(b.date)-\(b.time)-\(b.studentID ?? "")"
     }
 
+    /// When this booking was actually REQUESTED, from the server's `createdAt` (see
+    /// `MockDataStore.bookingRequestedAt`). nil for a purely local row that has never synced — the
+    /// ledger's first-seen stamp is the correct fallback there, since it genuinely was created now.
+    private func requestedAt(_ b: Booking) -> Date? {
+        b.remoteID.flatMap { bookingRequestedAt[$0] }
+    }
+
     private func instructorBookingActivity() -> [ActivityItem] {
         var out: [ActivityItem] = []
         // Names live-resolve: booking.studentName is a frozen snapshot that reads "Member" for a
@@ -252,19 +260,19 @@ extension MockDataStore {
         }
         for b in pendingRequestCards {
             out.append(ActivityItem(
-                id: "req-\(stableKey(b))", kind: .bookingRequest, rawDate: nil,
+                id: "req-\(stableKey(b))", kind: .bookingRequest, rawDate: requestedAt(b),
                 actorName: actor(b), avatarID: "", avatarPhoto: studentPhoto(forOwnerID: b.studentID ?? ""),
                 detail: b.type, detail2: "\(b.date) · \(b.time)", isActionable: true))
         }
         for b in sessionsAwaitingAttendance {
             out.append(ActivityItem(
-                id: "att-\(stableKey(b))", kind: .attendanceNeeded, rawDate: nil,
+                id: "att-\(stableKey(b))", kind: .attendanceNeeded, rawDate: requestedAt(b),
                 actorName: actor(b), avatarID: "", avatarPhoto: studentPhoto(forOwnerID: b.studentID ?? ""),
                 detail: b.type, isActionable: true))
         }
         for b in owedFees {
             out.append(ActivityItem(
-                id: "fee-\(stableKey(b))", kind: .feeOwed, rawDate: nil,
+                id: "fee-\(stableKey(b))", kind: .feeOwed, rawDate: requestedAt(b),
                 actorName: actor(b), avatarID: "", avatarPhoto: studentPhoto(forOwnerID: b.studentID ?? ""),
                 detail: b.type, detail2: "₪\(b.feeAmount)", isActionable: true))
         }
@@ -278,12 +286,12 @@ extension MockDataStore {
             switch b.status {
             case .confirmed:
                 out.append(ActivityItem(
-                    id: "conf-\(stableKey(b))", kind: .bookingConfirmed, rawDate: nil,
+                    id: "conf-\(stableKey(b))", kind: .bookingConfirmed, rawDate: requestedAt(b),
                     actorName: ins?.name ?? "", avatarID: ins?.img ?? "", avatarPhoto: ins?.photo,
                     detail: b.type, detail2: "\(b.date) · \(b.time)"))
             case .cancelled:
                 out.append(ActivityItem(
-                    id: "canc-\(stableKey(b))", kind: .bookingCancelled, rawDate: nil,
+                    id: "canc-\(stableKey(b))", kind: .bookingCancelled, rawDate: requestedAt(b),
                     actorName: ins?.name ?? "", avatarID: ins?.img ?? "", avatarPhoto: ins?.photo,
                     detail: b.type, detail2: "\(b.date) · \(b.time)"))
             default:
