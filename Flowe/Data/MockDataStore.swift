@@ -109,7 +109,12 @@ final class MockDataStore {
 
     /// Wipes every locally-stored model — used when the signed-in user deletes their account (after the
     /// public-DB records are swept) so no stale data lingers in the on-device store.
-    private static func deleteAll(_ context: ModelContext) {
+    /// Returns false if the wipe did not commit. That MATTERS: these rows are the source SwiftData
+    /// re-uploads from, so a swallowed save failure means the private mirror zone gets deleted and then
+    /// immediately RE-CREATED from the surviving local rows — resurrecting exactly the data the user
+    /// asked to erase. The caller gates deletion success on this.
+    @discardableResult
+    private static func deleteAll(_ context: ModelContext) -> Bool {
         try? context.delete(model: Instructor.self)
         try? context.delete(model: StudentProfile.self)
         try? context.delete(model: FeedPost.self)
@@ -129,7 +134,12 @@ final class MockDataStore {
         try? context.delete(model: OpportunityApplication.self)
         try? context.delete(model: ApplicationDecision.self)
         try? context.delete(model: InstructorRecommendation.self)
-        try? context.save()
+        // Flowe Education. Both are in the SYNCED (UserData) config exactly like LessonType, so omitting
+        // them left a published library on the device — and in the private CloudKit mirror — after an
+        // account deletion, to resurface on a same-Apple-ID re-signup.
+        try? context.delete(model: Program.self)
+        try? context.delete(model: VideoExercise.self)
+        do { try context.save(); return true } catch { return false }
     }
 
     func refresh() {
@@ -2298,7 +2308,12 @@ final class MockDataStore {
         // Erase the local SwiftData store (both configs). For the private-mirrored types this alone is
         // NOT enough — SwiftData's batch delete may not tombstone to CloudKit — so the private mirror is
         // wiped server-side next.
-        Self.deleteAll(context)
+        // Gate on the wipe actually committing — see `deleteAll`. If local rows survive, the zone delete
+        // below is undone the moment SwiftData next syncs them back up.
+        guard Self.deleteAll(context) else {
+            refresh()
+            return false
+        }
         // Wipe the PRIVATE CloudKit mirror zone so nothing re-syncs DOWN on a same-Apple-ID re-signin
         // (the real "delete everything" guarantee for private data — bookings, lesson types, and the
         // private-only ClientNotes that have no public backstop). Gate deletion success on it: a real
