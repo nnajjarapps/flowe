@@ -134,6 +134,7 @@ final class FeedPost {
     var relativeTime: LocalizedStringResource {
         FeedPost.relativeTime(since: createdAt)
     }
+    
 
     /// Shared with `PostComment`, which shows the same stamp under a reply.
     ///

@@ -179,7 +179,8 @@ struct OutOfStudioView: View {
             HStack(spacing: 12) {
                 AvatarView(id: "", photo: data.studentPhoto(forOwnerID: booking.studentID ?? ""), size: 40)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(booking.studentName.isEmpty ? "Client" : booking.studentName)
+                    Text({ let n = data.displayIdentity(ownerID: booking.studentID, fallbackName: booking.studentName).name
+                          return n.isEmpty ? String(localized: "Client") : n }())
                         .font(FloweFont.serif(15))
                         .foregroundStyle(Color.floweInk)
                     (Text(booking.localizedDate(locale)) + Text(" · ") + Text(booking.localizedTime(locale)) + Text(" · ") + Text(localizedTag: booking.type))
@@ -630,7 +631,8 @@ struct CoverageInboxView: View {
                 // swap is confirmed rather than the "cover-…" placeholder.
                 AvatarView(id: "", photo: data.studentPhoto(forOwnerID: booking.studentID ?? ""), size: 36)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(booking.studentName.isEmpty ? "Client" : booking.studentName)
+                    Text({ let n = data.displayIdentity(ownerID: booking.studentID, fallbackName: booking.studentName).name
+                          return n.isEmpty ? String(localized: "Client") : n }())
                         .font(FloweFont.serif(15))
                         .foregroundStyle(Color.floweInk)
                     (Text(localizedTag: booking.type) + Text(" · ") + Text(booking.localizedDate(locale)) + Text(" · ") + Text(booking.localizedTime(locale)))

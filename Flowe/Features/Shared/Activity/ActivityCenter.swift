@@ -245,22 +245,27 @@ extension MockDataStore {
 
     private func instructorBookingActivity() -> [ActivityItem] {
         var out: [ActivityItem] = []
+        // Names live-resolve: booking.studentName is a frozen snapshot that reads "Member" for a
+        // student who booked before setting a name. Matches SessionRow/StudentsList/ReviewRow.
+        func actor(_ b: Booking) -> String {
+            displayIdentity(ownerID: b.studentID, fallbackName: b.studentName).name
+        }
         for b in pendingRequestCards {
             out.append(ActivityItem(
                 id: "req-\(stableKey(b))", kind: .bookingRequest, rawDate: nil,
-                actorName: b.studentName, avatarID: "", avatarPhoto: studentPhoto(forOwnerID: b.studentID ?? ""),
+                actorName: actor(b), avatarID: "", avatarPhoto: studentPhoto(forOwnerID: b.studentID ?? ""),
                 detail: b.type, detail2: "\(b.date) · \(b.time)", isActionable: true))
         }
         for b in sessionsAwaitingAttendance {
             out.append(ActivityItem(
                 id: "att-\(stableKey(b))", kind: .attendanceNeeded, rawDate: nil,
-                actorName: b.studentName, avatarID: "", avatarPhoto: studentPhoto(forOwnerID: b.studentID ?? ""),
+                actorName: actor(b), avatarID: "", avatarPhoto: studentPhoto(forOwnerID: b.studentID ?? ""),
                 detail: b.type, isActionable: true))
         }
         for b in owedFees {
             out.append(ActivityItem(
                 id: "fee-\(stableKey(b))", kind: .feeOwed, rawDate: nil,
-                actorName: b.studentName, avatarID: "", avatarPhoto: studentPhoto(forOwnerID: b.studentID ?? ""),
+                actorName: actor(b), avatarID: "", avatarPhoto: studentPhoto(forOwnerID: b.studentID ?? ""),
                 detail: b.type, detail2: "₪\(b.feeAmount)", isActionable: true))
         }
         return out
@@ -303,9 +308,12 @@ extension MockDataStore {
 
     private func reviewActivity() -> [ActivityItem] {
         myReviews.map { r in
-            ActivityItem(
+            // Live-resolve: r.studentName is the frozen review-time snapshot ("Member" for a student
+            // who reviewed before setting a name). Matches ReviewRow, which already resolves.
+            let who = displayIdentity(ownerID: r.studentID, fallbackName: r.studentName)
+            return ActivityItem(
                 id: "rev-\(r.bookingID)-\(r.studentID)", kind: .reviewReceived, rawDate: r.createdAt,
-                actorName: r.studentName, avatarID: "", avatarPhoto: nil, rating: r.rating)
+                actorName: who.name, avatarID: who.img, avatarPhoto: who.photo, rating: r.rating)
         }
     }
 
@@ -367,9 +375,10 @@ extension MockDataStore {
         // Join requests on my events.
         for event in myEvents {
             for req in pendingRequests(for: event) {
+                let who = displayIdentity(ownerID: req.studentID, fallbackName: req.studentName)
                 out.append(ActivityItem(
                     id: "evreq-\(event.remoteID ?? "")-\(req.studentID)", kind: .eventJoinRequest,
-                    rawDate: req.joinedAt, actorName: req.studentName, avatarID: "", avatarPhoto: nil,
+                    rawDate: req.joinedAt, actorName: who.name, avatarID: who.img, avatarPhoto: who.photo,
                     detail: event.title, isActionable: true))
             }
         }

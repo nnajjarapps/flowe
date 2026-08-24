@@ -285,9 +285,16 @@ struct EventDetailView: View {
     }
 
     private func requestRow(_ req: RemoteRegistration, acceptDisabled: Bool) -> some View {
-        HStack(spacing: 12) {
-            InitialAvatar(name: req.studentName, size: 40)
-            Text(req.studentName.isEmpty ? String(localized: "A student") : req.studentName)
+        // Live-resolve the requester: req.studentName is the frozen join-time snapshot, which reads
+        // "Member" for a student who requested before setting a name.
+        let name = data.displayIdentity(ownerID: req.studentID, fallbackName: req.studentName).name
+        return HStack(spacing: 12) {
+            if let photo = data.peerPhoto(forOwnerID: req.studentID) {
+                AvatarView(id: "", photo: photo, size: 40)
+            } else {
+                InitialAvatar(name: name, size: 40)
+            }
+            Text(name.isEmpty ? String(localized: "A student") : name)
                 .font(FloweFont.sans(14, .medium)).foregroundStyle(Color.floweInk).lineLimit(1)
             Spacer(minLength: 8)
             Button {
@@ -298,7 +305,7 @@ struct EventDetailView: View {
                     .background(Color.floweCancel.opacity(0.10), in: Circle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Decline \(req.studentName)")
+            .accessibilityLabel("Decline \(name)")
             Button {
                 Haptic.success(); data.respondToEventRequest(req, accepted: true)
             } label: {
@@ -309,7 +316,7 @@ struct EventDetailView: View {
             }
             .buttonStyle(.plain)
             .disabled(acceptDisabled)
-            .accessibilityLabel("Accept \(req.studentName)")
+            .accessibilityLabel("Accept \(name)")
         }
         .padding(12)
         .floweCard(cornerRadius: 14)
@@ -524,12 +531,14 @@ struct EventDetailView: View {
 
     private func attendeeChip(_ reg: RemoteRegistration) -> some View {
         let isMe = reg.studentID == data.currentUserID
-        let name = reg.studentName.split(separator: " ").first.map(String.init) ?? reg.studentName
+        // Live-resolve before taking the first name — reg.studentName is the frozen join-time snapshot.
+        let full = data.displayIdentity(ownerID: reg.studentID, fallbackName: reg.studentName).name
+        let name = full.split(separator: " ").first.map(String.init) ?? full
         return VStack(spacing: 6) {
             if let photo = data.peerPhoto(forOwnerID: reg.studentID) {
                 AvatarView(id: "", photo: photo, size: 52, ring: isMe)
             } else {
-                InitialAvatar(name: reg.studentName, size: 52)
+                InitialAvatar(name: full, size: 52)
             }
             Text(isMe ? String(localized: "You") : (name.isEmpty ? String(localized: "Someone") : name))
                 .font(FloweFont.sans(11, .medium))

@@ -290,7 +290,7 @@ struct CalendarSessionCard: View {
                                onMessage: {
                                    showStudent = false
                                    let id = session.studentID ?? ""
-                                   router.openConversation(with: Counterpart(id: id, name: session.studentName,
+                                   router.openConversation(with: Counterpart(id: id, name: data.displayIdentity(ownerID: id, fallbackName: session.studentName).name,
                                                                              photo: data.studentPhoto(forOwnerID: id)))
                                },
                                onClose: { showStudent = false })
@@ -428,7 +428,7 @@ struct CalendarGroupSessionCard: View {
                                onMessage: {
                                    let id = s.studentID ?? ""
                                    selectedStudent = nil
-                                   router.openConversation(with: Counterpart(id: id, name: s.studentName,
+                                   router.openConversation(with: Counterpart(id: id, name: data.displayIdentity(ownerID: id, fallbackName: s.studentName).name,
                                                                              photo: data.studentPhoto(forOwnerID: id)))
                                },
                                onClose: { selectedStudent = nil })
@@ -583,7 +583,7 @@ struct BookingRequestCard: View {
                                onMessage: {
                                    showStudent = false
                                    let id = request.studentID ?? ""
-                                   router.openConversation(with: Counterpart(id: id, name: request.studentName,
+                                   router.openConversation(with: Counterpart(id: id, name: data.displayIdentity(ownerID: id, fallbackName: request.studentName).name,
                                                                              photo: data.studentPhoto(forOwnerID: id)))
                                },
                                onClose: { showStudent = false })

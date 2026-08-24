@@ -828,11 +828,19 @@ struct PackagePurchaseRequestCard: View {
     @Environment(AppSettings.self) private var settings
     let purchase: RemotePurchase
     var studentPhoto: Data? = nil   // resolved by the caller — the card has no store to look it up
+    /// Live-resolved buyer name, same contract as `studentPhoto`: the caller looks it up via
+    /// `displayIdentity` because this card has no store. `purchase.studentName` is only a FROZEN
+    /// snapshot taken at request time, so it can read "Member" (the sign-in fallback for a student
+    /// who had not set a name yet) even after they set a real one — hence the live override.
+    var resolvedName: String? = nil
     var onApprove: () -> Void = {}
     var onDecline: () -> Void = {}
     @State private var deciding = false
 
-    private var name: String { purchase.studentName.isEmpty ? String(localized: "a student") : purchase.studentName }
+    private var name: String {
+        if let resolvedName, !resolvedName.isEmpty { return resolvedName }
+        return purchase.studentName.isEmpty ? String(localized: "a student") : purchase.studentName
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: FlowSpacing.md) {

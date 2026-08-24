@@ -274,6 +274,8 @@ struct PackageRequestsView: View {
                         PackagePurchaseRequestCard(
                             purchase: purchase,
                             studentPhoto: data.studentPhoto(forOwnerID: purchase.studentID),
+                            resolvedName: data.displayIdentity(ownerID: purchase.studentID,
+                                                              fallbackName: purchase.studentName).name,
                             onApprove: { Task { await data.decidePurchase(purchase, approved: true) } },
                             onDecline: { Task { await data.decidePurchase(purchase, approved: false) } }
                         )

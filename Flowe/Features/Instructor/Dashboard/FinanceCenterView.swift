@@ -109,7 +109,10 @@ extension MockDataStore {
             s.creditLiability = studentBalances.reduce(0) { $0 + $1.value }
             s.balances = studentBalances.map { b in
                 let days = b.nextExpiry.map { max(0, cal.dateComponents([.day], from: now, to: $0).day ?? 0) }
-                return FinanceBalance(id: b.studentID, name: b.studentName, remaining: b.remaining,
+                // Resolve the LIVE name — the backend's student_name is the frozen purchase-time
+                // snapshot, which reads "Member" for anyone who bought before setting a name.
+                let live = displayIdentity(ownerID: b.studentID, fallbackName: b.studentName).name
+                return FinanceBalance(id: b.studentID, name: live, remaining: b.remaining,
                                       total: b.granted, value: b.value, expiresInDays: days)
             }
         }
@@ -119,7 +122,8 @@ extension MockDataStore {
             + approved.filter { within($0.createdAt, prevStart, start) }.reduce(0) { $0 + $1.price }
         if prevTotal > 0 { s.trendPct = Int(((Double(s.trackedRevenue) - Double(prevTotal)) / Double(prevTotal) * 100).rounded()) }
 
-        // Top clients — lifetime spend from completed sessions.
+        // Top clients — lifetime spend from completed sessions. Names resolve live (booking.studentName
+        // is a frozen snapshot that can read "Member"), matching SessionRow/StudentsList/ReviewRow.
         var byClient: [String: (name: String, sessions: Int, spend: Int)] = [:]
         for b in completed {
             guard let id = b.studentID else { continue }
@@ -128,8 +132,11 @@ extension MockDataStore {
             if e.name.isEmpty { e.name = b.studentName }
             byClient[id] = e
         }
-        s.topClients = byClient.map { FinanceClient(id: $0.key, name: $0.value.name, sessions: $0.value.sessions, spend: $0.value.spend) }
-            .sorted { $0.spend > $1.spend }.prefix(3).map { $0 }
+        s.topClients = byClient.map { id, v in
+            FinanceClient(id: id, name: displayIdentity(ownerID: id, fallbackName: v.name).name,
+                          sessions: v.sessions, spend: v.spend)
+        }
+        .sorted { $0.spend > $1.spend }.prefix(3).map { $0 }
 
         // KPIs.
         let completedInPeriod = completed.filter { within($0.sessionStart(now: now), start, now) }
