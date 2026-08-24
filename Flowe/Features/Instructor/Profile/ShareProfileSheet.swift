@@ -190,6 +190,10 @@ struct ShareProfileSheet: View {
         guard storyImage == nil, let me = data.currentInstructor else { return }
         let renderer = ImageRenderer(content: BrandStoryCard(instructor: me, qr: Self.qr(from: url.absoluteString)))
         renderer.scale = 3   // 360×640 base → 1080×1920, a crisp story image
+        // Pin the proposal to the card's own size so the output is ALWAYS 9:16 (1080×1920) and can never
+        // be driven by the content's intrinsic size — belt-and-braces alongside the backdrop's frame.
+        renderer.proposedSize = ProposedViewSize(width: BrandStoryCard.cardWidth,
+                                                 height: BrandStoryCard.cardHeight)
         storyImage = renderer.uiImage
     }
 
@@ -238,6 +242,11 @@ private struct BrandStoryCard: View {
     let instructor: Instructor
     let qr: UIImage?
 
+    /// 9:16 base — `ImageRenderer` scales ×3 to a 1080×1920 story image. Referenced by BOTH the card
+    /// frame and the backdrop so the two can never drift apart (see `backdrop` for why that matters).
+    static let cardWidth: CGFloat = 360
+    static let cardHeight: CGFloat = 640
+
     private var tint: Color { Color(hexString: instructor.brandColor) ?? Color.flowePinkDeep }
 
     var body: some View {
@@ -258,14 +267,25 @@ private struct BrandStoryCard: View {
             }
             .padding(24)
         }
-        .frame(width: 360, height: 640)
+        .frame(width: Self.cardWidth, height: Self.cardHeight)
         .clipShape(RoundedRectangle(cornerRadius: 28))
     }
 
     @ViewBuilder
     private var backdrop: some View {
         if let cover = instructor.coverPhoto, let ui = UIImage(data: cover) {
-            Image(uiImage: ui).resizable().scaledToFill()
+            // MUST carry an explicit frame + .clipped(). `scaledToFill()` on its own reports a size
+            // derived from the SOURCE PHOTO's dimensions, not the 360×640 card — so a large cover photo
+            // blew the ZStack's layout width far past 360. The outer `.frame` then centred that oversized
+            // content and clipped it, but the left-aligned name/CTA had already been laid out in the
+            // oversized space, so their left half fell outside the visible window: shared stories showed
+            // only the TAIL of each string ("…Club", "…we" from "Book me on Flowe"). Pinning the image to
+            // the card size keeps the ZStack's layout driven by the card, not by the user's photo.
+            Image(uiImage: ui)
+                .resizable()
+                .scaledToFill()
+                .frame(width: Self.cardWidth, height: Self.cardHeight)
+                .clipped()
         } else {
             LinearGradient(colors: [tint.opacity(0.95), tint.opacity(0.5)],
                            startPoint: .topLeading, endPoint: .bottomTrailing)
