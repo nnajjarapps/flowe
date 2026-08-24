@@ -428,7 +428,22 @@ final class PushService {
         }
         // Swallowed like every other CloudKit call in Flowe: no iCloud account, no network, or a
         // schema that hasn't been deployed must degrade to "no notifications", never to an error.
-        _ = try? await database.modifySubscriptions(saving: toSave, deleting: toDelete)
+        do {
+            _ = try await database.modifySubscriptions(saving: toSave, deleting: toDelete)
+        } catch {
+            // The batch is ATOMIC — one unacceptable plan fails ALL of them, and because the error was
+            // historically swallowed the user would silently lose every notification type at once (DMs,
+            // community replies, coverage) with no signal. That is exactly what a predicate CloudKit
+            // won't accept for a *subscription* would do, so retry one-by-one: the proven plans still
+            // register and only the offending one is dropped. Deletes are re-attempted alone so a bad
+            // save can't strand a swept subscription either.
+            for subscription in toSave {
+                _ = try? await database.modifySubscriptions(saving: [subscription], deleting: [])
+            }
+            if !toDelete.isEmpty {
+                _ = try? await database.modifySubscriptions(saving: [], deleting: toDelete)
+            }
+        }
         UserDefaults.standard.set(true, forKey: Self.registeredKey)
         #endif
     }
