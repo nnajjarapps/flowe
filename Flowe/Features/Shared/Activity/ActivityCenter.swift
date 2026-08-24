@@ -90,10 +90,13 @@ enum ActivityKind: String {
 
 // MARK: - Activity item
 
-/// One row in the feed. `rawDate` is the real event time. Most sources persist one; BOOKINGS get
-/// theirs from `MockDataStore.bookingRequestedAt` (the server's `RemoteBooking.createdAt`, harvested
-/// at sync because the local `Booking` @Model doesn't store it). It is nil only for a row that has
-/// never synced, and there the [[ActivityLedger]]'s first-observed-on-this-device date is correct. `isActionable` marks rows backed by a real pending
+/// One row in the feed. `rawDate` is the time of the event the row ANNOUNCES — which for bookings is
+/// three different moments, not one: a request dates from `RemoteBooking.createdAt`, a confirmation
+/// from `RemoteDecision.respondedAt`, a cancellation from `RemoteBooking.modifiedAt`, and an
+/// attendance/fee obligation from the session's own end. All are harvested at sync (the local
+/// `Booking` @Model stores none of them) into `MockDataStore.bookingRequestedAt` / `bookingDecidedAt`
+/// / `bookingCancelledAt`. nil only for a row that has never synced, where [[ActivityLedger]]'s
+/// first-observed-on-this-device date IS the truth. `isActionable` marks rows backed by a real pending
 /// flag (a request, an unread message, an owed fee) — those stay unread until the flag clears,
 /// independent of the last-opened watermark.
 struct ActivityItem: Identifiable {
@@ -251,6 +254,25 @@ extension MockDataStore {
         b.remoteID.flatMap { bookingRequestedAt[$0] }
     }
 
+    /// When the instructor CONFIRMED it (`RemoteDecision.respondedAt`), falling back to the request
+    /// time. A "confirmed your session" row must date from the confirmation, not from the request —
+    /// those can be days apart, and dating it by the request makes a fresh confirmation look stale.
+    private func decidedAt(_ b: Booking) -> Date? {
+        b.remoteID.flatMap { bookingDecidedAt[$0] } ?? requestedAt(b)
+    }
+
+    /// When it was CANCELLED (`RemoteBooking.modifiedAt` / the backend's `cancelled_at`), falling back
+    /// to the decision then the request time.
+    private func cancelledAt(_ b: Booking) -> Date? {
+        b.remoteID.flatMap { bookingCancelledAt[$0] } ?? decidedAt(b)
+    }
+
+    /// When the OBLIGATION arose for a finished session — attendance to mark, or a fee owed. That is the
+    /// moment the session ended, not when it was booked, so these rows sort by when they became due.
+    private func sessionEndedAt(_ b: Booking) -> Date? {
+        b.sessionEnd() ?? requestedAt(b)
+    }
+
     private func instructorBookingActivity() -> [ActivityItem] {
         var out: [ActivityItem] = []
         // Names live-resolve: booking.studentName is a frozen snapshot that reads "Member" for a
@@ -266,13 +288,13 @@ extension MockDataStore {
         }
         for b in sessionsAwaitingAttendance {
             out.append(ActivityItem(
-                id: "att-\(stableKey(b))", kind: .attendanceNeeded, rawDate: requestedAt(b),
+                id: "att-\(stableKey(b))", kind: .attendanceNeeded, rawDate: sessionEndedAt(b),
                 actorName: actor(b), avatarID: "", avatarPhoto: studentPhoto(forOwnerID: b.studentID ?? ""),
                 detail: b.type, isActionable: true))
         }
         for b in owedFees {
             out.append(ActivityItem(
-                id: "fee-\(stableKey(b))", kind: .feeOwed, rawDate: requestedAt(b),
+                id: "fee-\(stableKey(b))", kind: .feeOwed, rawDate: sessionEndedAt(b),
                 actorName: actor(b), avatarID: "", avatarPhoto: studentPhoto(forOwnerID: b.studentID ?? ""),
                 detail: b.type, detail2: "₪\(b.feeAmount)", isActionable: true))
         }
@@ -286,12 +308,12 @@ extension MockDataStore {
             switch b.status {
             case .confirmed:
                 out.append(ActivityItem(
-                    id: "conf-\(stableKey(b))", kind: .bookingConfirmed, rawDate: requestedAt(b),
+                    id: "conf-\(stableKey(b))", kind: .bookingConfirmed, rawDate: decidedAt(b),
                     actorName: ins?.name ?? "", avatarID: ins?.img ?? "", avatarPhoto: ins?.photo,
                     detail: b.type, detail2: "\(b.date) · \(b.time)"))
             case .cancelled:
                 out.append(ActivityItem(
-                    id: "canc-\(stableKey(b))", kind: .bookingCancelled, rawDate: requestedAt(b),
+                    id: "canc-\(stableKey(b))", kind: .bookingCancelled, rawDate: cancelledAt(b),
                     actorName: ins?.name ?? "", avatarID: ins?.img ?? "", avatarPhoto: ins?.photo,
                     detail: b.type, detail2: "\(b.date) · \(b.time)"))
             default:

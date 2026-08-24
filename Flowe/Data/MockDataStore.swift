@@ -1065,9 +1065,17 @@ final class MockDataStore {
         var nextOrder = bookings.map(\.order).max() ?? 0
 
         for entry in remote {
-            // Keep the REAL request time before it's discarded — the Activity feed reads it so a
-            // booking row shows when it was actually requested, not when this device first saw it.
+            // Keep the REAL event times before they're discarded — the Activity feed reads these so a
+            // booking row shows when the thing it announces actually happened, not when this device
+            // first saw it. Request time, decision time and cancel time are three DIFFERENT moments.
             bookingRequestedAt[entry.id] = entry.createdAt
+            // A per-occurrence decision wins over the series-wide one, mirroring `status(for:decisions:)`.
+            let seriesKey = Booking.seriesID(fromRecordName: entry.id).map { "series-\($0)" }
+            if let decided = decisions[entry.id] ?? seriesKey.flatMap({ decisions[$0] }),
+               decided.respondedAt != .distantPast {
+                bookingDecidedAt[entry.id] = decided.respondedAt
+            }
+            if let cancelledAt = entry.modifiedAt { bookingCancelledAt[entry.id] = cancelledAt }
             let status = Self.status(for: entry, decisions: decisions)
             if let cached = bookings.first(where: { $0.remoteID == entry.id }) {
                 // Don't undo a local decision whose write hasn't landed yet — that would flip the row
@@ -5295,6 +5303,14 @@ final class MockDataStore {
     /// device-local first-seen stamp — so on a fresh install every pending request read as "now".
     /// Memory-only is sufficient: `syncBookings` runs on launch and repopulates it from the server.
     private(set) var bookingRequestedAt: [String: Date] = [:]
+
+    /// remoteID → when the instructor CONFIRMED/DECLINED it (`RemoteDecision.respondedAt`), and → when
+    /// it was CANCELLED (`RemoteBooking.modifiedAt`, i.e. the backend's `cancelled_at`). Kept apart from
+    /// `bookingRequestedAt` because an Activity row must show the time of the event it ANNOUNCES: a
+    /// "confirmed your session" row that renders the original request time is just as wrong as one that
+    /// renders "now". Same memory-only rationale as `bookingRequestedAt`.
+    private(set) var bookingDecidedAt: [String: Date] = [:]
+    private(set) var bookingCancelledAt: [String: Date] = [:]
 
     /// Pending package-purchase requests — the instructor dashboard signal card + the approval inbox badge.
     var pendingPurchaseCards: [RemotePurchase] { incomingPurchases.filter { $0.status == .pending } }
