@@ -107,8 +107,13 @@ struct PaywallView: View {
     private func tierCard(_ tier: SubscriptionTier) -> some View {
         let product = subscription.product(for: tier)
         let isCurrent = subscription.tier == tier
-        // Show the trial for new Visible subscribers; if a product is loaded, respect its eligibility.
-        let showTrial = tier == .visible && !isCurrent && (product == nil || trialEligible)
+        // Advertise a trial ONLY when one provably exists: a loaded product carrying a real free-trial
+        // introductory offer, and this Apple ID still eligible for it. Never optimistically — the old
+        // `product == nil ||` fallback promised a "Free trial" while products were still loading, and
+        // FOREVER if the StoreKit fetch failed (loadProducts swallows errors), which would advertise a
+        // trial that no longer exists at all now that the offer is removed in App Store Connect.
+        let trialOffer = Self.freeTrialOffer(product)
+        let showTrial = tier == .visible && !isCurrent && trialOffer != nil && trialEligible
 
         return VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -125,8 +130,8 @@ struct PaywallView: View {
                 }
             }
 
-            if showTrial {
-                Label(Self.trialLabel(for: product), systemImage: "gift")
+            if showTrial, let trialOffer, let product {
+                Label(Self.trialLabel(offer: trialOffer, product: product), systemImage: "gift")
                     .font(FloweFont.sans(12, .medium))
                     .foregroundStyle(Color.flowePinkDeep)
             }
@@ -167,13 +172,19 @@ struct PaywallView: View {
         )
     }
 
+    /// The product's introductory offer ONLY when it is a genuine free trial — nil when App Store
+    /// Connect has no intro offer configured (the current state), or configures a *discounted* intro
+    /// price (`.payAsYouGo` / `.payUpFront`), which must never be described as "free".
+    /// App Store Connect is the single source of truth; nothing about the trial is hardcoded here.
+    private static func freeTrialOffer(_ product: Product?) -> Product.SubscriptionOffer? {
+        guard let offer = product?.subscription?.introductoryOffer,
+              offer.paymentMode == .freeTrial else { return nil }
+        return offer
+    }
+
     /// Reads the trial length straight from StoreKit's `introductoryOffer.period` instead of hardcoding
-    /// a guess — App Store Connect is the source of truth for how long the trial actually is, and this
-    /// keeps the on-screen copy from ever silently drifting out of sync with it again.
-    private static func trialLabel(for product: Product?) -> String {
-        guard let product, let offer = product.subscription?.introductoryOffer, offer.paymentMode == .freeTrial else {
-            return "Free trial"
-        }
+    /// a guess, so the on-screen copy can never drift out of sync with App Store Connect.
+    private static func trialLabel(offer: Product.SubscriptionOffer, product: Product) -> String {
         let n = offer.period.value
         let unit: String
         switch offer.period.unit {

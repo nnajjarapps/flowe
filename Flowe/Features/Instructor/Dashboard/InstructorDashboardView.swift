@@ -517,7 +517,11 @@ struct InstructorDashboardView: View {
                     Text("Get discovered")
                         .font(FloweFont.serif(17))
                         .foregroundStyle(.white)
-                    Text("You're hidden from students. Start your free month.")
+                    // Deliberately promises NO trial: the free-month intro offer was removed in App
+                    // Store Connect, so any "start your free month" copy here would be false advertising
+                    // (Guideline 3.1.2(c)). The paywall itself shows a trial line only when StoreKit
+                    // reports a real one.
+                    Text("You're hidden from students until you subscribe.")
                         .font(FloweFont.sans(12))
                         .foregroundStyle(.white.opacity(0.9))
                 }

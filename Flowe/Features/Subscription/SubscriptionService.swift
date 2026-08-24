@@ -73,10 +73,14 @@ final class SubscriptionService {
         products.first { $0.id == tier.productID }
     }
 
-    /// Whether the Visible tier's 1-month free trial is still available to this Apple ID.
+    /// Whether a FREE TRIAL is configured for this tier in App Store Connect AND this Apple ID is still
+    /// eligible for it. False when no intro offer exists (the current Visible state — the offer was
+    /// removed in ASC) or when the configured offer is a discounted intro price rather than a free
+    /// trial. Trial length/existence is never assumed here; ASC is the source of truth.
     func introOfferAvailable(for tier: SubscriptionTier) async -> Bool {
         guard let sub = product(for: tier)?.subscription,
-              sub.introductoryOffer != nil else { return false }
+              let offer = sub.introductoryOffer,
+              offer.paymentMode == .freeTrial else { return false }
         return await sub.isEligibleForIntroOffer
     }
 

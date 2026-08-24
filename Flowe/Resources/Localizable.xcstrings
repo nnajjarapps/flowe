@@ -28403,6 +28403,35 @@
           }
         }
       }
+    },
+    "You're hidden from students until you subscribe." : {
+      "comment" : "Shown on the instructor dashboard when they are not subscribed and therefore hidden from the student feed.",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "أنت مخفي عن الطلاب حتى تشترك."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Estás oculto para los alumnos hasta que te suscribas."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vous êtes masqué aux élèves jusqu'à votre abonnement."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "אתה מוסתר ממתאמנים עד שתירשם למנוי."
+          }
+        }
+      }
     }
   },
   "version" : "1.1"
