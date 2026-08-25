@@ -2291,7 +2291,15 @@ final class MockDataStore {
     /// is far better than signing them out while their records stay world-readable — a half-deleted
     /// account is exactly what Guideline 5.1.1(v) is meant to prevent.
     func deleteAccount() async -> Bool {
-        if !isPreview, let me = currentUserID {
+        // A missing ownerID must FAIL, never silently skip. This was `if let me = currentUserID { … }`,
+        // so a nil id (session not yet hydrated, a transient sign-in state) skipped the ENTIRE public
+        // sweep and still went on to report a successful deletion — leaving the InstructorListing and
+        // every public LessonType alive in the shared store. To the user that reads exactly as "delete
+        // didn't remove my session types", and a same-Apple-ID re-signup then shows students the old
+        // profile, because the public records were never touched. You cannot delete an account whose
+        // identity you don't know: bail so the caller surfaces the failure and the user can retry.
+        if !isPreview {
+            guard let me = currentUserID, !me.isEmpty else { return false }
             guard await deletionService.deleteAllRecords(ownerID: me) else { return false }
         }
         // Release the user's public seat mutexes BEFORE the local Bookings are wiped: a booking's
