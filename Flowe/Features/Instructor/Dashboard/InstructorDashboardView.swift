@@ -121,8 +121,10 @@ struct InstructorDashboardView: View {
                 header
                 kpiRow
 
-                if !subscription.isVisible {
-                    visibilityBanner
+                // Gate on ACTUAL discoverability, not just the subscription: being paid-up is only
+                // one of the three conditions in `isEligible`.
+                if let blocker = data.myVisibilityBlocker {
+                    visibilityBanner(blocker)
                 }
 
                 // Always present, not signal-gated: a new instructor needs to DISCOVER the shield and
@@ -506,9 +508,22 @@ struct InstructorDashboardView: View {
         .accessibilityIdentifier("dashboard.coverInbox")
     }
 
-    /// Promo shown until the instructor subscribes — they're hidden from the feed until they do.
-    private var visibilityBanner: some View {
-        Button { showPaywall = true } label: {
+    /// Shown while the instructor is NOT discoverable, naming the ACTUAL reason. Previously this only
+    /// ever meant "not subscribed", so the two other ways to be invisible — no name, or no lesson type
+    /// with a price — were completely unsurfaced: the banner vanished the moment they paid and they had
+    /// no way to learn they still weren't in the feed.
+    private func visibilityBanner(_ blocker: MockDataStore.VisibilityBlocker) -> some View {
+        let subtitle: LocalizedStringKey = {
+            switch blocker {
+            case .notSubscribed:      return "You're hidden from students until you subscribe."
+            case .noName:             return "Add your name so students can find you."
+            case .noPricedLessonType: return "Add a price to a lesson type so students can find you."
+            }
+        }()
+        return Button {
+            // Subscription is the only blocker the paywall can fix; the rest are setup.
+            if case .notSubscribed = blocker { showPaywall = true } else { showStudioWizard = true }
+        } label: {
             HStack(spacing: FlowSpacing.md) {
                 Image(systemName: "sparkles")
                     .font(.system(size: 22))
@@ -521,7 +536,7 @@ struct InstructorDashboardView: View {
                     // Store Connect, so any "start your free month" copy here would be false advertising
                     // (Guideline 3.1.2(c)). The paywall itself shows a trial line only when StoreKit
                     // reports a real one.
-                    Text("You're hidden from students until you subscribe.")
+                    Text(subtitle)
                         .font(FloweFont.sans(12))
                         .foregroundStyle(.white.opacity(0.9))
                 }

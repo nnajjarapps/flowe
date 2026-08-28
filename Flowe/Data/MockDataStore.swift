@@ -285,6 +285,30 @@ final class MockDataStore {
     /// Warn this far before the TTL expires, so the instructor can just open the app and reset it.
     static let visibilityWarnAfter: TimeInterval = 23 * 24 * 3600
 
+    /// Why the signed-in instructor is NOT discoverable, or nil when they genuinely are.
+    ///
+    /// `isEligible` gates on THREE things — subscribed, has a PRICED lesson type, has a name — but the
+    /// dashboard used to surface only the first. So an instructor could pay, watch the "get discovered"
+    /// banner disappear, and still be invisible to every student because a lesson type had no price
+    /// (`ComposeLessonTypeSheet.canSave` requires only a name, so a ₪0 type saves fine). A paying
+    /// customer silently getting nothing, at the exact moment their expectation is highest.
+    ///
+    /// Derived LIVE from the owned lesson types rather than the `price` field, which is only
+    /// re-derived at publish time and can lag what the instructor just edited.
+    enum VisibilityBlocker {
+        case notSubscribed      // no active Visible/Boost entitlement
+        case noName             // listing has no name
+        case noPricedLessonType // has lesson types, but none with a price > 0
+    }
+
+    var myVisibilityBlocker: VisibilityBlocker? {
+        guard let me = currentInstructor else { return nil }
+        if me.visibility == .none { return .notSubscribed }
+        if me.name.trimmingCharacters(in: .whitespaces).isEmpty { return .noName }
+        if Instructor.startingPrice(from: ownedLessonTypes(for: me)) <= 0 { return .noPricedLessonType }
+        return nil
+    }
+
     private static func isEligible(_ ins: Instructor) -> Bool {
         // `ins.price > 0` now means "has at least one PRICED lesson type": `price` is the derived
         // cheapest lesson-type price (see `Instructor.startingPrice` + `publishMyListing`), so this line

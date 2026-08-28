@@ -28603,6 +28603,62 @@
           }
         }
       }
+    },
+    "Add your name so students can find you." : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "أضف اسمك ليتمكن الطلاب من العثور عليك."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הוסף את שמך כדי שמתאמנים יוכלו למצוא אותך."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Añade tu nombre para que los alumnos te encuentren."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajoutez votre nom pour que les élèves vous trouvent."
+          }
+        }
+      }
+    },
+    "Add a price to a lesson type so students can find you." : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "أضف سعرًا لأحد أنواع الدروس ليتمكن الطلاب من العثور عليك."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הוסף מחיר לסוג שיעור כדי שמתאמנים יוכלו למצוא אותך."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Añade un precio a un tipo de clase para que los alumnos te encuentren."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajoutez un tarif à un type de cours pour que les élèves vous trouvent."
+          }
+        }
+      }
     }
   },
   "version" : "1.1"
