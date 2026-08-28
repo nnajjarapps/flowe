@@ -107,6 +107,7 @@ final class PushService {
     /// bare prefix, not the versioned one, so subscriptions from older builds are cleaned up too.
     private static let idPrefix = "flowe."
     private static let reminderPrefix = "flowe.reminder."
+    private static let visibilityID = "flowe.visibility.checkin"
     /// Set once subscriptions exist, so a logged-out launch doesn't hit the network to tear down
     /// subscriptions that were never created.
     private static let registeredKey = "flowe.push.registered"
@@ -534,6 +535,39 @@ final class PushService {
     /// and a serverless app has nothing that could send them from the outside. Existing reminders
     /// are cleared first, so a cancelled or declined session stops reminding and re-running this
     /// can never stack duplicates.
+    /// Warn an instructor BEFORE the discoverability TTL drops their listing.
+    ///
+    /// The TTL is enforced in `MockDataStore.isEligible`, which runs on every STUDENT's device — so
+    /// when it bites, the instructor is given no signal whatsoever: they simply stop appearing and
+    /// conclude the product is broken. This is the only channel that reaches them, because the
+    /// failure mode is precisely "hasn't opened the app", which rules out any in-app banner.
+    /// A LOCAL notification needs no server and fires while the app is closed.
+    ///
+    /// Re-armed from `applyVisibility` on every check-in, so an instructor who uses Flowe normally
+    /// never sees it — it only reaches someone genuinely drifting toward invisibility.
+    func scheduleVisibilityCheckIn(isVisible: Bool) async {
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: [Self.visibilityID])
+        // Nothing to protect if they're not discoverable in the first place.
+        guard isVisible else { return }
+
+        let content = UNMutableNotificationContent()
+        content.title = NSString.localizedUserNotificationString(
+            forKey: "push.visibility.title", arguments: nil)
+        content.body = NSString.localizedUserNotificationString(
+            forKey: "push.visibility.body", arguments: nil)
+        content.sound = .default
+        content.userInfo = [PushTopic.userInfoKey: PushTopic.coverage.rawValue]
+
+        let request = UNNotificationRequest(
+            identifier: Self.visibilityID,
+            content: content,
+            trigger: UNTimeIntervalNotificationTrigger(
+                timeInterval: MockDataStore.visibilityWarnAfter, repeats: false)
+        )
+        try? await center.add(request)
+    }
+
     func scheduleSessionReminders() async {
         let center = UNUserNotificationCenter.current()
         let pending = await center.pendingNotificationRequests()

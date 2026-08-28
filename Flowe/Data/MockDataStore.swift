@@ -279,6 +279,12 @@ final class MockDataStore {
     /// Back-compat alias for the student feed.
     var publishedInstructors: [Instructor] { visibleInstructors }
 
+    /// How long a listing stays discoverable on a student's device without the owner's device
+    /// re-confirming the subscription. See `isEligible` for why this must exceed the 16-day grace.
+    static let visibilityTTL: TimeInterval = 30 * 24 * 3600
+    /// Warn this far before the TTL expires, so the instructor can just open the app and reset it.
+    static let visibilityWarnAfter: TimeInterval = 23 * 24 * 3600
+
     private static func isEligible(_ ins: Instructor) -> Bool {
         // `ins.price > 0` now means "has at least one PRICED lesson type": `price` is the derived
         // cheapest lesson-type price (see `Instructor.startingPrice` + `publishMyListing`), so this line
@@ -286,9 +292,18 @@ final class MockDataStore {
         // re-deriving `price` BEFORE the listing is published/evaluated — do not repoint it at
         // `lessonTypes(for:)`: this is static and remote instructors carry no cached LessonType rows.
         guard ins.visibility != .none, ins.price > 0, !ins.name.isEmpty else { return false }
-        // 7-day TTL backstop: a lapsed subscription on a device that never reopened stays hidden.
+        // Check-in backstop: a lapsed subscription on a device that never reopened stays hidden.
+        //
+        // MUST stay comfortably longer than Apple's BILLING GRACE PERIOD (16 days on this app's
+        // subscriptions). At the old 7 days the backstop was TIGHTER than the grace window, so an
+        // instructor whose payment was retrying — still entitled as far as Apple is concerned — could
+        // be dropped from Discover on day 8 for the sole reason that they hadn't opened the app.
+        // 30 days clears 16 with real headroom while still bounding a genuinely-lapsed listing to a
+        // month. Paired with `PushService.scheduleVisibilityCheckIn`, which warns them BEFORE it bites
+        // — this check runs on every STUDENT's device, so without that nudge the instructor gets no
+        // signal at all and simply concludes Flowe doesn't work.
         if let verified = ins.visibilityVerifiedAt {
-            return Date().timeIntervalSince(verified) < 7 * 24 * 3600
+            return Date().timeIntervalSince(verified) < Self.visibilityTTL
         }
         return true
     }
@@ -299,6 +314,8 @@ final class MockDataStore {
         guard let listing = instructors.first(where: { $0.ownerID == ownerID }) else { return }
         listing.visibility = level
         listing.visibilityVerifiedAt = Date()
+        // Re-arm the "you're about to go hidden" nudge from this fresh check-in.
+        Task { await PushService.shared.scheduleVisibilityCheckIn(isVisible: level != .none) }
         // Mark for republish BEFORE the network attempt (mirrors `publishMyListing`). A DOWNGRADE
         // to `.none` that fails to reach CloudKit — device offline, signed out of iCloud, or
         // throttled — would otherwise leave the PUBLIC listing stuck at visibility>0 (the instructor
