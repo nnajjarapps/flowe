@@ -327,8 +327,14 @@ extension MockDataStore {
 
     // MARK: Messages
 
+    /// Only threads whose LATEST message came from the counterpart.
+    ///
+    /// `conversations` is every thread I am party to — it filters `senderID == me || recipientID == me`
+    /// — so mapping it wholesale produced "<them> sent you a message" for a message *I* had just sent.
+    /// Every other builder here already filters by direction (`comments` uses `where !isMine(c)`);
+    /// this one did not.
     private func messageActivity() -> [ActivityItem] {
-        conversations.map { c in
+        conversations.filter(\.lastFromCounterpart).map { c in
             ActivityItem(
                 id: "msg-\(c.counterpart.id)", kind: .message, rawDate: c.lastSentAt,
                 actorName: c.counterpart.displayName, avatarID: c.counterpart.avatarID,

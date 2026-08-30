@@ -1676,7 +1676,8 @@ final class MockDataStore {
                 counterpart: counterpart,
                 lastMessage: latest.displayText,
                 lastSentAt: latest.sentAt,
-                unreadCount: thread.filter { $0.recipientID == me && !$0.isRead }.count
+                unreadCount: thread.filter { $0.recipientID == me && !$0.isRead }.count,
+                lastFromCounterpart: latest.senderID != me
             )
         }
         .sorted { $0.lastSentAt > $1.lastSentAt }

@@ -118,6 +118,13 @@ struct ConversationSummary: Identifiable {
     let lastMessage: String
     let lastSentAt: Date
     let unreadCount: Int
+    /// True when the latest message in the thread came FROM the counterpart rather than from me.
+    ///
+    /// The Activity feed needs this: a conversation exists in both directions, so a thread whose most
+    /// recent message I sent must not produce a "<them> sent you a message" row. Direction cannot be
+    /// inferred from `unreadCount` — my own sends are stored `isRead: true`, but so is a received
+    /// message I have already opened, and that one SHOULD still appear in Activity.
+    let lastFromCounterpart: Bool
 
     var id: String { counterpart.id }
     var hasUnread: Bool { unreadCount > 0 }
