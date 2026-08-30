@@ -196,13 +196,12 @@ struct ComposeLessonTypeSheet: View {
                         .accessibilityIdentifier("lessonType.create")
                 }
             }
-            .alert("Check your lesson type",
-                   isPresented: .init(get: { filterMessage != nil },
-                                      set: { if !$0 { filterMessage = nil } })) {
-                Button("OK", role: .cancel) { filterMessage = nil }
-            } message: {
-                Text(filterMessage ?? "")
-            }
+            .floweMessage(
+                isPresented: .init(get: { filterMessage != nil },
+                                   set: { if !$0 { filterMessage = nil } }),
+                title: "Check your lesson type",
+                detail: filterMessage
+            ) { filterMessage = nil }
         }
     }
 

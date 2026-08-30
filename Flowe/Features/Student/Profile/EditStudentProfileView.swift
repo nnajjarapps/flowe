@@ -73,13 +73,12 @@ struct EditStudentProfileView: View {
         }
         .onAppear(perform: load)
         .task(id: pickerItem) { await loadPickedPhoto() }
-        .alert("Check your profile",
-               isPresented: .init(get: { filterMessage != nil },
-                                  set: { if !$0 { filterMessage = nil } })) {
-            Button("OK", role: .cancel) { filterMessage = nil }
-        } message: {
-            Text(filterMessage ?? "")
-        }
+        .floweMessage(
+            isPresented: .init(get: { filterMessage != nil },
+                               set: { if !$0 { filterMessage = nil } }),
+            title: "Check your profile",
+            detail: filterMessage
+        ) { filterMessage = nil }
     }
 
     // MARK: - Photo

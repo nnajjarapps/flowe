@@ -106,13 +106,12 @@ struct ComposePackageOfferingSheet: View {
                         .disabled(!canSave || saving)
                 }
             }
-            .alert("Check your package",
-                   isPresented: .init(get: { filterMessage != nil },
-                                      set: { if !$0 { filterMessage = nil } })) {
-                Button("OK", role: .cancel) { filterMessage = nil }
-            } message: {
-                Text(filterMessage ?? "")
-            }
+            .floweMessage(
+                isPresented: .init(get: { filterMessage != nil },
+                                   set: { if !$0 { filterMessage = nil } }),
+                title: "Check your package",
+                detail: filterMessage
+            ) { filterMessage = nil }
         }
     }
 

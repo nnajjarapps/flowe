@@ -187,6 +187,7 @@
 		F360CCFF8BACA3777ED050BB /* Color+Flowe.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBBF0D4617C61C89A66EFC81 /* Color+Flowe.swift */; };
 		F582316F6833E1BD8CCF771E /* InstructorCalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D02BBF683FC16C7795428F78 /* InstructorCalendarView.swift */; };
 		F93612202282923224BD9201 /* FloweCommon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7381734E749647CBCF81D5DC /* FloweCommon.swift */; };
+		A1D0E9C74B2F81C3D5E60A22 /* FloweDialog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D0E9C74B2F81C3D5E60A11 /* FloweDialog.swift */; };
 		F9F588829CD0FF210899133A /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 08B690A006F7E8352F3A828D /* Localizable.xcstrings */; };
 		FEEDFACE000000000000AB01 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = FEEDFACE000000000000AB02 /* PrivacyInfo.xcprivacy */; };
 		FEEDFACE000000000000CC01 /* HelpSupport.html in Resources */ = {isa = PBXBuildFile; fileRef = FEEDFACE000000000000CC02 /* HelpSupport.html */; };
@@ -337,6 +338,7 @@
 		72D6B8E3948B89E8B171AF07 /* PostRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostRowView.swift; sourceTree = "<group>"; };
 		737B91E7269C6447C335D02B /* BookingSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookingSheet.swift; sourceTree = "<group>"; };
 		7381734E749647CBCF81D5DC /* FloweCommon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloweCommon.swift; sourceTree = "<group>"; };
+		A1D0E9C74B2F81C3D5E60A11 /* FloweDialog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloweDialog.swift; sourceTree = "<group>"; };
 		7577F6212A80C9C837232B63 /* FlowSpacing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowSpacing.swift; sourceTree = "<group>"; };
 		75EABC10430200F40133C4BA /* BookingFlowUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookingFlowUITests.swift; sourceTree = "<group>"; };
 		76B4EA7D7447F4834D4A1344 /* BookingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookingService.swift; sourceTree = "<group>"; };
@@ -669,6 +671,7 @@
 				8D324CCEA79663B5D1A47DE4 /* FilterChipsBar.swift */,
 				B5A1882EB901E61B7AF2A487 /* FloatingLabelField.swift */,
 				7381734E749647CBCF81D5DC /* FloweCommon.swift */,
+				A1D0E9C74B2F81C3D5E60A11 /* FloweDialog.swift */,
 				E055796162D11DF1E7B8D52D /* FlowLayout.swift */,
 				B264A9BA6AB860A28BAC86B9 /* RemoteImage.swift */,
 			);
@@ -1243,6 +1246,7 @@
 				2E323E24A128AF50FA6C98D0 /* FlowSpacing.swift in Sources */,
 				465EF3102ED2C70E02BBF647 /* FlowTypography.swift in Sources */,
 				F93612202282923224BD9201 /* FloweCommon.swift in Sources */,
+				A1D0E9C74B2F81C3D5E60A22 /* FloweDialog.swift in Sources */,
 				11CDDA2ABFDB2E6D4700B209 /* FloweConstants.swift in Sources */,
 				C4AD3CD466AEE186EDBD677A /* FloweModelContainer.swift in Sources */,
 				95B086C7C6364077E773C74F /* FloweWeek.swift in Sources */,

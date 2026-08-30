@@ -44,13 +44,11 @@ struct EventsListView: View {
         .sheet(item: $selected) { event in
             EventDetailView(event: event)
         }
-        .alert(joinAlertTitle,
-               isPresented: joinAlertPresented,
-               presenting: data.lastJoinOutcome) { _ in
-            Button("OK", role: .cancel) { data.lastJoinOutcome = nil }
-        } message: { outcome in
-            Text(joinAlertMessage(outcome))
-        }
+        .floweMessage(
+            isPresented: joinAlertPresented,
+            title: joinAlertTitle,
+            message: data.lastJoinOutcome.map(joinAlertMessage)
+        ) { data.lastJoinOutcome = nil }
     }
 
     // MARK: - Join outcome alert

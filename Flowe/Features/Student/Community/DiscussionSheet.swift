@@ -50,10 +50,12 @@ struct DiscussionSheet: View {
             }
             .task { await onSync() }
             .refreshable { await onSync() }
-            .alert("Check your message",
-                   isPresented: .init(get: { filterMessage != nil }, set: { if !$0 { filterMessage = nil } })) {
-                Button("OK", role: .cancel) { filterMessage = nil }
-            } message: { Text(filterMessage ?? "") }
+            .floweMessage(
+                isPresented: .init(get: { filterMessage != nil },
+                                   set: { if !$0 { filterMessage = nil } }),
+                title: "Check your message",
+                detail: filterMessage
+            ) { filterMessage = nil }
             .confirmationDialog("Block this person?",
                                 isPresented: .init(get: { blockTarget != nil }, set: { if !$0 { blockTarget = nil } }),
                                 titleVisibility: .visible, presenting: blockTarget) { t in

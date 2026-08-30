@@ -92,9 +92,11 @@ struct BookingSheet: View {
         // slots render Full instead of a stale slate that looks freely bookable.
         .onChange(of: step) { _, newValue in if newValue == 2 { Task { await loadOccupancy() } } }
         .onChange(of: day) { _, _ in if step == 2 { Task { await loadOccupancy() } } }
-        .alert(bookingAlertMessage, isPresented: $showBookingAlert) {
-            Button("OK", role: .cancel) {}
-        }
+        .floweDialog(
+            isPresented: $showBookingAlert,
+            titleText: Text(verbatim: bookingAlertMessage),
+            actions: [FloweDialogAction("OK", role: .cancel)]
+        )
         .sheet(isPresented: $showReport) {
             ReportSheet(
                 reportedID: instructor.ownerID ?? "",

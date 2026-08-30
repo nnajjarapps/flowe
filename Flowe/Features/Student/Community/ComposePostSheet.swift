@@ -106,13 +106,12 @@ struct ComposePostSheet: View {
             .onAppear {
                 if let first = instructors.first, instructorID.isEmpty { instructorID = first.id }
             }
-            .alert("Check your post",
-                   isPresented: .init(get: { filterMessage != nil },
-                                      set: { if !$0 { filterMessage = nil } })) {
-                Button("OK", role: .cancel) { filterMessage = nil }
-            } message: {
-                Text(filterMessage ?? "")
-            }
+            .floweMessage(
+                isPresented: .init(get: { filterMessage != nil },
+                                   set: { if !$0 { filterMessage = nil } }),
+                title: "Check your post",
+                detail: filterMessage
+            ) { filterMessage = nil }
             // Soft AI second pass: surfaces a concern but lets the author decide (the model can be wrong).
             .confirmationDialog("A quick check",
                                 isPresented: .init(get: { moderationConcern != nil },

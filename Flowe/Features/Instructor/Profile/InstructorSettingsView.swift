@@ -190,26 +190,28 @@ struct InstructorSettingsView: View {
             .sheet(isPresented: $showBlocked) { BlockedUsersView() }
             .sheet(item: $legalDoc) { LegalDocumentView(resource: $0.resource, title: $0.title) }
             .manageSubscriptionsSheet(isPresented: $showManageSubscriptions)
-            .confirmationDialog("Switch account type?",
-                                isPresented: $showSwitchRole, titleVisibility: .visible) {
-                Button(isInstructor ? "Become a student" : "Become an instructor") {
-                    switching = true
-                    Task {
-                        await session.switchRole()
-                        switching = false
-                        dismiss()
-                    }
-                }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("Your Flowe account acts as one role at a time. Switching changes it on all your devices — your data is kept and comes back if you switch again.")
-            }
-            .confirmationDialog("Log out of Flowe?", isPresented: $confirmLogout, titleVisibility: .visible) {
-                Button("Log Out", role: .destructive) {
+            .floweConfirm(
+                isPresented: $showSwitchRole,
+                title: "Switch account type?",
+                message: "Your Flowe account acts as one role at a time. Switching changes it on all your devices — your data is kept and comes back if you switch again.",
+                confirmTitle: isInstructor ? "Become a student" : "Become an instructor"
+            ) {
+                switching = true
+                Task {
+                    await session.switchRole()
+                    switching = false
                     dismiss()
-                    session.logout()
                 }
-                Button("Cancel", role: .cancel) {}
+            }
+            .floweConfirm(
+                isPresented: $confirmLogout,
+                title: "Log out of Flowe?",
+                message: "Your profile, students and sessions stay on your account — signing back in brings everything back.",
+                confirmTitle: "Log Out",
+                isDestructive: true
+            ) {
+                dismiss()
+                session.logout()
             }
         }
     }

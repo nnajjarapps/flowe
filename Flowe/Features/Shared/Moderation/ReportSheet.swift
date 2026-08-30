@@ -85,12 +85,12 @@ struct ReportSheet: View {
                         .disabled(isSending)
                 }
             }
-            .alert("Couldn't send your report", isPresented: $failed) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text("Check your connection and try again. "
-                     + (canBlock && alsoBlock ? "\(subject) has still been blocked." : ""))
-            }
+            .floweMessage(
+                isPresented: $failed,
+                title: "Couldn't send your report",
+                detail: "Check your connection and try again. "
+                    + (canBlock && alsoBlock ? "\(subject) has still been blocked." : "")
+            )
         }
     }
 

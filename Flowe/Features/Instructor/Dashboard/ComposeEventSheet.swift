@@ -149,13 +149,12 @@ struct ComposeEventSheet: View {
                         .accessibilityIdentifier("event.create")
                 }
             }
-            .alert("Check your event",
-                   isPresented: .init(get: { filterMessage != nil },
-                                      set: { if !$0 { filterMessage = nil } })) {
-                Button("OK", role: .cancel) { filterMessage = nil }
-            } message: {
-                Text(filterMessage ?? "")
-            }
+            .floweMessage(
+                isPresented: .init(get: { filterMessage != nil },
+                                   set: { if !$0 { filterMessage = nil } }),
+                title: "Check your event",
+                detail: filterMessage
+            ) { filterMessage = nil }
         }
     }
 

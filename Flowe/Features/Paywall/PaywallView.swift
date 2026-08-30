@@ -53,14 +53,14 @@ struct PaywallView: View {
             // Surface purchase failures — StoreKit errors, an unavailable product, or an
             // unverifiable receipt. Without this the spinner just reverts and the user is left
             // guessing whether anything happened.
-            .alert("Purchase failed", isPresented: Binding(
-                get: { subscription.purchaseError != nil },
-                set: { if !$0 { subscription.purchaseError = nil } }
-            )) {
-                Button("OK", role: .cancel) { subscription.purchaseError = nil }
-            } message: {
-                Text(subscription.purchaseError ?? "")
-            }
+            .floweMessage(
+                isPresented: Binding(
+                    get: { subscription.purchaseError != nil },
+                    set: { if !$0 { subscription.purchaseError = nil } }
+                ),
+                title: "Purchase failed",
+                detail: subscription.purchaseError
+            ) { subscription.purchaseError = nil }
         }
     }
 

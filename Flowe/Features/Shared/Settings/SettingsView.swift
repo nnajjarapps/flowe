@@ -12,6 +12,7 @@ struct SettingsView: View {
     @State private var showBlocked = false
     @State private var showSwitchRole = false
     @State private var switching = false
+    @State private var confirmLogout = false
     @State private var legalDoc: LegalDoc?
 
     private var isInstructor: Bool { session.authState == .instructor }
@@ -113,7 +114,7 @@ struct SettingsView: View {
                     .accessibilityIdentifier("settings.switchRole")
 
                     Button(role: .destructive) {
-                        session.logout()
+                        confirmLogout = true
                     } label: {
                         Text("Log out")
                     }
@@ -140,19 +141,27 @@ struct SettingsView: View {
             .sheet(isPresented: $showDeleteAccount) { DeleteAccountView() }
             .sheet(isPresented: $showBlocked) { BlockedUsersView() }
             .sheet(item: $legalDoc) { LegalDocumentView(resource: $0.resource, title: $0.title) }
-            .confirmationDialog("Switch account type?",
-                                isPresented: $showSwitchRole, titleVisibility: .visible) {
-                Button(isInstructor ? "Become a student" : "Become an instructor") {
-                    switching = true
-                    Task {
-                        await session.switchRole()
-                        switching = false
-                        dismiss()
-                    }
+            .floweConfirm(
+                isPresented: $showSwitchRole,
+                title: "Switch account type?",
+                message: "Your Flowe account acts as one role at a time. Switching changes it on all your devices — your data is kept and comes back if you switch again.",
+                confirmTitle: isInstructor ? "Become a student" : "Become an instructor"
+            ) {
+                switching = true
+                Task {
+                    await session.switchRole()
+                    switching = false
+                    dismiss()
                 }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("Your Flowe account acts as one role at a time. Switching changes it on all your devices — your data is kept and comes back if you switch again.")
+            }
+            .floweConfirm(
+                isPresented: $confirmLogout,
+                title: "Log out of Flowe?",
+                message: "Your profile, sessions and messages stay on your account — signing back in brings everything back.",
+                confirmTitle: "Log Out",
+                isDestructive: true
+            ) {
+                session.logout()
             }
         }
     }

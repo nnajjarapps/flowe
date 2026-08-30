@@ -78,12 +78,11 @@ struct DeleteAccountView: View {
             } message: {
                 Text("This permanently deletes your data. It cannot be undone.")
             }
-            .alert("Couldn't delete your account", isPresented: $failed) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text("Your account is unchanged. Check your connection and make sure you're "
-                     + "signed in to iCloud, then try again.")
-            }
+            .floweMessage(
+                isPresented: $failed,
+                title: "Couldn't delete your account",
+                message: "Your account is unchanged. Check your connection and make sure you're signed in to iCloud, then try again."
+            )
         }
     }
 

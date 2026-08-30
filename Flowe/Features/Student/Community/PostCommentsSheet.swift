@@ -68,13 +68,12 @@ struct PostCommentsSheet: View {
                     snapshot: comment.text
                 )
             }
-            .alert("Check your reply",
-                   isPresented: .init(get: { filterMessage != nil },
-                                      set: { if !$0 { filterMessage = nil } })) {
-                Button("OK", role: .cancel) { filterMessage = nil }
-            } message: {
-                Text(filterMessage ?? "")
-            }
+            .floweMessage(
+                isPresented: .init(get: { filterMessage != nil },
+                                   set: { if !$0 { filterMessage = nil } }),
+                title: "Check your reply",
+                detail: filterMessage
+            ) { filterMessage = nil }
         }
     }
 

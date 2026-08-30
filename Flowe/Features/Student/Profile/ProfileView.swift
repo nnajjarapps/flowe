@@ -10,6 +10,7 @@ struct ProfileView: View {
     @State private var showNotifications = false
     @State private var showEditProfile = false
     @State private var showOpportunities = false
+    @State private var confirmLogout = false
     @State private var legalDoc: LegalDoc?
     /// A tapped teacher in the "Your Teachers" rail → opens their profile to rebook (same destination
     /// as a booking card's "Book again"). `Instructor` is Identifiable, so `.sheet(item:)` drives it.
@@ -194,6 +195,15 @@ struct ProfileView: View {
         .sheet(isPresented: $showEditProfile) { EditStudentProfileView() }
         .sheet(isPresented: $showOpportunities) { StudentOpportunitiesView() }
         .sheet(item: $legalDoc) { LegalDocumentView(resource: $0.resource, title: $0.title) }
+        .floweConfirm(
+            isPresented: $confirmLogout,
+            title: "Log out of Flowe?",
+            message: "Your profile, sessions and messages stay on your account — signing back in brings everything back.",
+            confirmTitle: "Log Out",
+            isDestructive: true
+        ) {
+            session.logout()
+        }
         // Rebook destination — the instructor's full bookable profile, same as a booking card's
         // "Book again" (BookingCard deliberately opens the profile, not the sheet, so the student
         // picks the slot/time).
@@ -597,7 +607,7 @@ struct ProfileView: View {
                 let isLogout = row == "Log out"
                 Button {
                     switch row {
-                    case "Log out": session.logout()
+                    case "Log out": confirmLogout = true
                     case "Notifications": showNotifications = true
                     // Open the bundled documents directly rather than bouncing through Settings.
                     case "Privacy": legalDoc = .privacy
