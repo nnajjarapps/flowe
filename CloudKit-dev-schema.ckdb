@@ -407,6 +407,7 @@ DEFINE SCHEMA
         "___recordID"   REFERENCE QUERYABLE,
         authorID        STRING QUERYABLE SEARCHABLE SORTABLE,
         createdAt       TIMESTAMP QUERYABLE SORTABLE,
+        likeTargetID    STRING QUERYABLE SEARCHABLE SORTABLE,
         postID          STRING QUERYABLE SEARCHABLE SORTABLE,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud",

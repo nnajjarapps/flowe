@@ -2684,6 +2684,11 @@ final class MockDataStore {
     /// otherwise collapses into a bare count, so we stash the ids here to name them on demand.
     private(set) var likeAuthorsByPost: [String: [String]] = [:]
 
+    /// When each liker liked, keyed postID → likerID. Parallel to `likeAuthorsByPost` rather than
+    /// folded into it: that map's `[String]` shape is read in several places, and the Activity feed
+    /// is the only caller that needs a date.
+    private(set) var likeDatesByPost: [String: [String: Date]] = [:]
+
     /// Everyone who liked a post, as displayable rows — the data behind the Instagram-style "Liked by"
     /// sheet, open to any viewer. Blocked likers are hidden. The signed-in user's OWN like is folded in
     /// from `post.liked` so the list always agrees with the heart and the count even before a like
@@ -2709,6 +2714,8 @@ final class MockDataStore {
         guard !isPreview, let remoteID = post.remoteID else { return }
         guard let likes = await communityService.fetchLikes(postIDs: [remoteID]) else { return }
         likeAuthorsByPost[remoteID] = likes.map(\.authorID)
+        likeDatesByPost[remoteID] = Dictionary(likes.map { ($0.authorID, $0.createdAt) },
+                                               uniquingKeysWith: { a, b in max(a, b) })
         await fetchAuthorProfiles(Set(likes.map(\.authorID)))   // saves + refreshes
     }
 
@@ -2963,6 +2970,8 @@ final class MockDataStore {
                 guard let remoteID = post.remoteID else { continue }
                 let rows = byPost[remoteID] ?? []
                 likeAuthorsByPost[remoteID] = rows.map(\.authorID)
+                likeDatesByPost[remoteID] = Dictionary(rows.map { ($0.authorID, $0.createdAt) },
+                                                       uniquingKeysWith: { a, b in max(a, b) })
                 let mine = rows.contains { $0.authorID == me }
                 if post.pendingLike {
                     // An undelivered tap: keep the user's own state, and keep the count consistent

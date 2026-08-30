@@ -32,6 +32,11 @@ enum NotificationPreference {
     /// the only broadcast notification in the app — it fires for every published event, not just ones
     /// addressed to you — so a user must be able to mute it without also losing replies to their posts.
     static let events    = "notif.events"
+    /// Likes on your posts. Its OWN toggle, not folded into `community`: likes are by far the
+    /// highest-VOLUME notification a feed produces — replies and events are naturally rate-limited,
+    /// a like is one tap — so muting them must not also mute replies to your posts. Same reasoning
+    /// that gave `events` its own toggle.
+    static let likes     = "notif.likes"
     static let reminders = "notif.reminders"
     static let coverage  = "notif.coverage"
     /// "Show when I'm active" (last seen). Gates the presence heartbeat + the server-enforced opt-out
@@ -45,7 +50,7 @@ enum NotificationPreference {
     /// implicitly at the `register(defaults:)` call site, which wants `[String: Any]`.
     static let defaults: [String: Bool] = [
         bookings: true, messages: true, reviews: true, community: true, reminders: true,
-        coverage: true, events: true, presence: false   // "last seen" is OPT-IN
+        coverage: true, events: true, likes: true, presence: false   // "last seen" is OPT-IN
     ]
 
     /// Retired keys, removed on launch so a stale `true` can't linger in `UserDefaults`.
@@ -310,6 +315,26 @@ final class PushService {
                 options: [.firesOnRecordCreation],
                 titleKey: "push.community.reply.title", titleArgs: [],
                 bodyKey: "push.community.reply.body", bodyArgs: ["authorName"]
+            ))
+        }
+
+        // LIKES on your posts. Addressed exactly like replies, via a denormalised post-author field
+        // (`CommunityService.likeTarget`) that is EMPTY on a self-like — so liking your own post
+        // matches nobody and cannot notify you. Self-exclusion by data, never by a `!=` clause.
+        //
+        // The body names nobody on purpose. CloudKit substitutes `bodyArgs` from record FIELDS, and
+        // `CommunityLike` carries no `authorName` — deliberately: adding one would spend a SECOND
+        // permanent Production field (they can never be removed) to freeze a name, which is the very
+        // pattern that produced the "Member" bug. The Activity row this pushes toward resolves the
+        // liker's real name live via `displayIdentity` instead.
+        if isEnabled(NotificationPreference.likes) {
+            plans.append(Plan(
+                id: Self.subscriptionID(.community, "like", ownerID),
+                recordType: CommunityService.likeRecordType,
+                predicate: NSPredicate(format: "\(CommunityService.likeTargetField) == %@", ownerID),
+                options: [.firesOnRecordCreation],
+                titleKey: "push.community.like.title", titleArgs: [],
+                bodyKey: "push.community.like.body", bodyArgs: []
             ))
         }
 

@@ -33,12 +33,18 @@ struct RemotePost {
 struct RemoteLike {
     let postID: String
     let authorID: String
+    /// When the like landed. Already stored on the record and QUERYABLE/SORTABLE in the schema — it
+    /// just was not decoded until the Activity feed needed something to sort a "liked your post" row
+    /// by. Falls back to `.distantPast` so a pre-existing like without one sorts oldest rather than
+    /// dropping the row entirely.
+    let createdAt: Date
 
     init?(record: CKRecord) {
         guard let postID = record["postID"] as? String,
               let authorID = record["authorID"] as? String else { return nil }
         self.postID = postID
         self.authorID = authorID
+        self.createdAt = record["createdAt"] as? Date ?? .distantPast
     }
 }
 
@@ -119,6 +125,10 @@ final class CommunityService {
     /// The field a comment names the person to alert by — the post's author, and empty when that is
     /// the commenter themselves (see `replyTarget`). Shared with `PushService`.
     static let replyTargetField = "replyTargetID"
+
+    /// The field a LIKE names the person to alert by — the post's author, and empty when that is the
+    /// liker themselves. Exact mirror of `replyTargetField`; see `likeTarget`. Shared with `PushService`.
+    static let likeTargetField = "likeTargetID"
 
     /// How much feed is worth carrying on a phone. Also bounds the `IN` lists the engagement
     /// queries build, which CloudKit will reject if they grow without limit.
@@ -348,6 +358,11 @@ final class CommunityService {
         record["postID"] = postID
         record["authorID"] = authorID
         record["createdAt"] = Date()
+        // Denormalised post author, so "someone liked your post" is deliverable at all — a
+        // subscription predicate can only test fields on the record that changed, and a like
+        // otherwise names only its own author. Empty on a self-like, which is what stops you being
+        // notified about your own tap. See `likeTarget`.
+        record[Self.likeTargetField] = await likeTarget(postID: postID, likerID: authorID)
         // Overwrite rather than fetch-then-save: the record is keyed by (post, reader), so a save
         // that collides with an existing row is this same reader liking again, not a conflict.
         do {
@@ -442,6 +457,23 @@ final class CommunityService {
     private func replyTarget(postID: String, commenterID: String) async -> String {
         let post = try? await database.record(for: CKRecord.ID(recordName: postID))
         guard let authorID = post?["authorID"] as? String, authorID != commenterID else { return "" }
+        return authorID
+    }
+
+    /// Who should be told about this like — the post's author, denormalised onto the like.
+    ///
+    /// Identical reasoning to `replyTarget`: a `CKQuerySubscription` predicate can only test fields
+    /// on the changed record, so without this "someone liked your post" is undeliverable.
+    ///
+    /// Empty when the liker *is* the author, so a pure-equality predicate (`likeTargetID == me`)
+    /// matches nobody and liking your own post can never notify you. Deliberately NOT a `!=` clause:
+    /// query subscriptions handle plain equality far more reliably — a `!=` predicate is in fact
+    /// rejected outright at registration (see the CommunityEvent broadcast, fixed 2026-08-30).
+    ///
+    /// A failed lookup yields an empty string: the like still lands, it just goes unannounced.
+    private func likeTarget(postID: String, likerID: String) async -> String {
+        let post = try? await database.record(for: CKRecord.ID(recordName: postID))
+        guard let authorID = post?["authorID"] as? String, authorID != likerID else { return "" }
         return authorID
     }
 

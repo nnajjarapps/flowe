@@ -28,6 +28,7 @@ enum ActivityKind: String {
     case coverageCovered       // student: your session will be taught by someone else
     // Community
     case comment               // either: someone commented on your post
+    case like                  // either: someone liked your post
     case recommendation        // instructor: another instructor recommended you
     case eventJoinRequest      // instructor: a student asked to join your event
     // Marketplace (Flowe Pro)
@@ -48,6 +49,7 @@ enum ActivityKind: String {
         case .coverageOffer, .coverageClaim, .coverageCovered:
             return "arrow.triangle.2.circlepath"
         case .comment:                           return "text.bubble.fill"
+        case .like:                              return "heart.fill"
         case .recommendation:                    return "hand.thumbsup.fill"
         case .eventJoinRequest:                  return "person.2.fill"
         case .opportunityApplication, .applicationAdvanced, .applicationHired, .applicationDeclined:
@@ -80,7 +82,7 @@ enum ActivityKind: String {
             return .coverage
         case .message:            return .messages
         case .reviewReceived, .recommendation: return .reviews
-        case .comment, .eventJoinRequest:      return .community
+        case .comment, .like, .eventJoinRequest: return .community
         // Applicant-side decisions can go to a student OR an instructor and have no single tab — leave
         // them informational.
         case .applicationAdvanced, .applicationHired, .applicationDeclined: return nil
@@ -392,6 +394,22 @@ extension MockDataStore {
                 out.append(ActivityItem(
                     id: "cmt-\(c.remoteID ?? "\(c.postID)-\(c.authorID)-\(c.createdAt.timeIntervalSince1970)")",
                     kind: .comment, rawDate: c.createdAt,
+                    actorName: who.name, avatarID: who.img, avatarPhoto: who.photo))
+            }
+        }
+        // LIKES on my posts. Sourced from `likeAuthorsByPost`, which the engagement sweep already
+        // fills — there is no local Like model (`FeedPost.likes` is only an Int), so this reuses the
+        // map the "Liked by" sheet is built from. The liker's name resolves LIVE through
+        // `displayIdentity` rather than a frozen field on the record, which is why `CommunityLike`
+        // needs no `authorName` column. See [[FloweDialog]]-era note on frozen names ("Member").
+        for post in posts where isMine(post) {
+            guard let remoteID = post.remoteID else { continue }
+            let dates = likeDatesByPost[remoteID] ?? [:]
+            for likerID in likeAuthorsByPost[remoteID] ?? [] where likerID != currentUserID {
+                let who = displayIdentity(ownerID: likerID, fallbackName: "")
+                out.append(ActivityItem(
+                    id: "like-\(remoteID)-\(likerID)",
+                    kind: .like, rawDate: dates[likerID] ?? post.createdAt,
                     actorName: who.name, avatarID: who.img, avatarPhoto: who.photo))
             }
         }

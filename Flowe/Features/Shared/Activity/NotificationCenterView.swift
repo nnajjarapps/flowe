@@ -195,6 +195,7 @@ private struct ActivityRow: View {
         case .coverageClaim:    return Text("\(who) can cover your session")
         case .coverageCovered:  return Text("\(who) will cover your upcoming session")
         case .comment:          return Text("\(who) commented on your post")
+        case .like:             return Text("\(who) liked your post")
         case .recommendation:   return Text("\(who) recommended you")
         case .eventJoinRequest: return Text("\(who) asked to join \(item.detail)")
         case .opportunityApplication: return Text("\(who) applied to \(item.detail)")
