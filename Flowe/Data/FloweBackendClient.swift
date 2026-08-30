@@ -272,6 +272,31 @@ final class FloweBackendClient {
         _ = try? await authorized("/profile", method: "POST", body: Req(communityVisible: visible, displayName: name))
     }
 
+    // MARK: - Subscription entitlement
+
+    /// Report what StoreKit resolved to the backend, so Flowe holds its own durable record of who is
+    /// subscribed. Until this existed the ONLY trace of a subscription was `InstructorListing.visibility`
+    /// — a derived field the instructor's own device writes to public CloudKit — so nothing server-side
+    /// could answer "is this instructor actually paying?", and a lapse stayed invisible until their
+    /// device happened to reopen.
+    ///
+    /// This is BOOKKEEPING, not verification: the payload comes from the device, so it must never
+    /// become an authorization decision. Making it authoritative means App Store Server Notifications
+    /// V2 posting Apple's signed JWS to the backend instead of the client reporting it.
+    /// Best-effort and silent — entitlement on THIS device still comes from StoreKit either way.
+    func reportEntitlement(tier: Int, productID: String?, expiresAt: Date?,
+                           originalID: String?, environment: String?) async {
+        guard !isDebugInjected, hasSession else { return }
+        struct Req: Encodable {
+            let tier: Int; let productID: String?; let expiresAt: Double?
+            let originalID: String?; let environment: String?
+        }
+        _ = try? await authorized("/entitlement", method: "POST", body: Req(
+            tier: tier, productID: productID,
+            expiresAt: expiresAt.map { $0.timeIntervalSince1970 * 1000 },
+            originalID: originalID, environment: environment))
+    }
+
     // MARK: - Student preferences (reinstall recovery)
 
     /// Mirror the student's quiz answers to the backend. They previously lived only in UserDefaults,

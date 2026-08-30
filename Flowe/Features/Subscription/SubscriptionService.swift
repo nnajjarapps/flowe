@@ -153,17 +153,35 @@ final class SubscriptionService {
         // Boost, so "subscribe to Visible" stayed stuck on Boost forever. `purchaseDate` on an
         // auto-renewable is its latest renewal/purchase, so the newer choice wins; on a genuine
         // upgrade Visible→Boost the Boost transaction is newer and still wins correctly.
-        var current: (tier: SubscriptionTier, purchased: Date)?
+        var current: (tier: SubscriptionTier, purchased: Date, tx: Transaction)?
         for await result in Transaction.currentEntitlements {
             guard case .verified(let transaction) = result,
                   transaction.productType == .autoRenewable,
                   transaction.revocationDate == nil,
                   let t = SubscriptionTier(productID: transaction.productID) else { continue }
             if current == nil || transaction.purchaseDate > current!.purchased {
-                current = (t, transaction.purchaseDate)
+                current = (t, transaction.purchaseDate, transaction)
             }
         }
         tier = current?.tier
+        await reportEntitlementToBackend(current?.tx, tier: current?.tier)
+    }
+
+    /// Mirror the resolved entitlement to Flowe's backend. StoreKit remains the authority on THIS
+    /// device — this only gives the platform its own record, so a lapse or a paying-but-invisible
+    /// instructor is answerable server-side instead of being inferable only from a CloudKit field the
+    /// instructor's own device wrote. Reported on every refresh (launch, purchase, `Transaction.updates`),
+    /// including the lapse case, where tier 0 is what clears the row.
+    private func reportEntitlementToBackend(_ transaction: Transaction?, tier: SubscriptionTier?) async {
+        await FloweBackendClient.shared.reportEntitlement(
+            tier: tier?.rawValue ?? 0,
+            productID: transaction?.productID,
+            expiresAt: transaction?.expirationDate,
+            // `originalID` is stable across renewals AND reinstalls — the one id that identifies this
+            // subscription for its whole life, which `id` (per-transaction) does not.
+            originalID: transaction.map { String($0.originalID) },
+            environment: transaction.map { "\($0.environment)" }
+        )
     }
 
     private func listenForTransactions() -> Task<Void, Never> {
