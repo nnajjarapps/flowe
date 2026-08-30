@@ -113,16 +113,20 @@ struct ComposePostSheet: View {
                 detail: filterMessage
             ) { filterMessage = nil }
             // Soft AI second pass: surfaces a concern but lets the author decide (the model can be wrong).
-            .confirmationDialog("A quick check",
-                                isPresented: .init(get: { moderationConcern != nil },
-                                                   set: { if !$0 { moderationConcern = nil } }),
-                                titleVisibility: .visible,
-                                presenting: moderationConcern) { _ in
-                Button("Post anyway") { moderationConcern = nil; finishPublish() }
-                Button("Edit", role: .cancel) { moderationConcern = nil }
-            } message: { concern in
-                Text(concern)
-            }
+            // Soft AI pass: `moderationConcern` is a RUNTIME string from the model, so it goes
+            // through `detail:` — as a LocalizedStringKey it would become a catalog lookup key.
+            .floweDialog(
+                isPresented: .init(get: { moderationConcern != nil },
+                                   set: { if !$0 { moderationConcern = nil } }),
+                titleText: Text("A quick check"),
+                messageText: moderationConcern.map { Text(verbatim: $0) },
+                actions: [
+                    FloweDialogAction("Post anyway") {
+                        moderationConcern = nil; finishPublish()
+                    },
+                    FloweDialogAction("Edit", role: .cancel) { moderationConcern = nil },
+                ]
+            )
         }
     }
 

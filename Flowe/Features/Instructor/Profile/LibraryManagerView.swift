@@ -40,16 +40,16 @@ struct LibraryManagerView: View {
             .refreshable { await sync() }
             .sheet(isPresented: $showAddProgram) { ComposeProgramSheet() }
             .sheet(item: $editingProgram) { ComposeProgramSheet(editing: $0) }
-            .confirmationDialog("Delete this program?",
-                                isPresented: .init(get: { deletingProgram != nil },
-                                                   set: { if !$0 { deletingProgram = nil } }),
-                                titleVisibility: .visible) {
-                Button("Delete program and its exercises", role: .destructive) {
-                    if let program = deletingProgram { data.deleteProgram(program) }
-                }
-                Button("Keep it", role: .cancel) { }
-            } message: {
-                Text("Every exercise in this program is removed too. This can't be undone.")
+            .floweConfirm(
+                isPresented: .init(get: { deletingProgram != nil },
+                                   set: { if !$0 { deletingProgram = nil } }),
+                title: "Delete this program?",
+                message: "Every exercise in this program is removed too. This can't be undone.",
+                confirmTitle: "Delete program and its exercises",
+                isDestructive: true,
+                cancelTitle: "Keep it"
+            ) {
+                if let program = deletingProgram { data.deleteProgram(program) }
             }
         }
     }
@@ -195,14 +195,15 @@ private struct ProgramExercisesView: View {
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showAddExercise) { ComposeExerciseSheet(program: program) }
         .sheet(item: $editingExercise) { ComposeExerciseSheet(program: program, editing: $0) }
-        .confirmationDialog("Delete this exercise?",
-                            isPresented: .init(get: { deletingExercise != nil },
-                                               set: { if !$0 { deletingExercise = nil } }),
-                            titleVisibility: .visible) {
-            Button("Delete", role: .destructive) {
-                if let exercise = deletingExercise { data.deleteExercise(exercise) }
-            }
-            Button("Keep it", role: .cancel) { }
+        .floweConfirm(
+            isPresented: .init(get: { deletingExercise != nil },
+                               set: { if !$0 { deletingExercise = nil } }),
+            title: "Delete this exercise?",
+            confirmTitle: "Delete",
+            isDestructive: true,
+            cancelTitle: "Keep it"
+        ) {
+            if let exercise = deletingExercise { data.deleteExercise(exercise) }
         }
     }
 

@@ -295,23 +295,26 @@ struct CalendarSessionCard: View {
                                },
                                onClose: { showStudent = false })
         }
-        .confirmationDialog(skipEndTitle, isPresented: skipEndBinding, titleVisibility: .visible) {
-            switch skipEnd {
-            case .skip:
-                // Per-occurrence decline: cancels just this week; the series stays approved.
-                Button("Skip this week", role: .destructive) { data.respond(to: session, confirmed: false) }
-                Button("Keep it", role: .cancel) { }
-            default:
-                // Series-end tombstone: cancels every future week without touching the student's records.
-                Button("End series", role: .destructive) { data.respondSeries(session, confirmed: false) }
-                Button("Keep it", role: .cancel) { }
-            }
-        } message: {
-            switch skipEnd {
-            case .skip:      Text("This cancels only this week. Your weekly slot stays booked.")
-            default:         Text("This cancels all upcoming weeks. Past sessions stay.")
-            }
-        }
+        // `skipEndTitle` is a String(localized:) — already resolved — so it goes through `titleText:`.
+        .floweDialog(
+            isPresented: skipEndBinding,
+            titleText: Text(verbatim: skipEndTitle),
+            messageText: skipEnd == .skip
+                ? Text("This cancels only this week. Your weekly slot stays booked.")
+                : Text("This cancels all upcoming weeks. Past sessions stay."),
+            actions: [
+                skipEnd == .skip
+                    // Per-occurrence decline: cancels just this week; the series stays approved.
+                    ? FloweDialogAction("Skip this week", role: .destructive) {
+                        data.respond(to: session, confirmed: false)
+                    }
+                    // Series-end tombstone: cancels every future week, leaving the student's records.
+                    : FloweDialogAction("End series", role: .destructive) {
+                        data.respondSeries(session, confirmed: false)
+                    },
+                FloweDialogAction("Keep it", role: .cancel),
+            ]
+        )
     }
 
     /// Overflow menu for a standing week: skip just this week, or end the whole series.
@@ -565,18 +568,17 @@ struct BookingRequestCard: View {
         // series (all future weeks), an irreversible, outward-facing decision the student is notified of.
         // Confirm before it fires (mirrors the careful student-cancel flow); a one-off gets a lighter
         // confirm. Fixes the UX-audit "un-confirmed tap ends a series" gap.
-        .confirmationDialog(
-            request.isRecurring ? "Decline this weekly request?" : "Decline this request?",
-            isPresented: $showDeclineConfirm, titleVisibility: .visible
+        .floweConfirm(
+            isPresented: $showDeclineConfirm,
+            title: request.isRecurring ? "Decline this weekly request?" : "Decline this request?",
+            message: request.isRecurring
+                ? "This ends the standing weekly slot for all future weeks — the student will have to request again."
+                : "The student will be notified you can’t take this booking.",
+            confirmTitle: request.isRecurring ? "End the series" : "Decline",
+            isDestructive: true,
+            cancelTitle: "Keep it"
         ) {
-            Button(request.isRecurring ? "End the series" : "Decline", role: .destructive) {
-                withAnimation(FloweMotion.spring) { data.respond(to: request, confirmed: false) }
-            }
-            Button("Keep it", role: .cancel) { }
-        } message: {
-            Text(request.isRecurring
-                 ? "This ends the standing weekly slot for all future weeks — the student will have to request again."
-                 : "The student will be notified you can’t take this booking.")
+            withAnimation(FloweMotion.spring) { data.respond(to: request, confirmed: false) }
         }
         .sheet(isPresented: $showStudent) {
             StudentProfileView(studentID: request.studentID ?? "", studentName: request.studentName,

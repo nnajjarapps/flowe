@@ -73,13 +73,13 @@ struct PostRowView: View {
                 snapshot: post.text
             )
         }
-        .confirmationDialog("Delete this post?", isPresented: $confirmDelete,
-                            titleVisibility: .visible) {
-            Button("Delete", role: .destructive) { data.deletePost(post) }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("It disappears for everyone. This can't be undone.")
-        }
+        .floweConfirm(
+            isPresented: $confirmDelete,
+            title: "Delete this post?",
+            message: "It disappears for everyone. This can't be undone.",
+            confirmTitle: "Delete",
+            isDestructive: true
+        ) { data.deletePost(post) }
     }
 
     // MARK: - Header

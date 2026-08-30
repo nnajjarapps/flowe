@@ -144,13 +144,14 @@ struct OpportunityDetailView: View {
                     Button("Done") { dismiss() }.tint(Color.flowePinkDeep).fontWeight(.semibold)
                 }
             }
-            .confirmationDialog("Delete this opportunity?", isPresented: $confirmDelete,
-                                titleVisibility: .visible) {
-                Button("Delete", role: .destructive) { data.deleteOpportunity(opportunity); dismiss() }
-                Button("Keep it", role: .cancel) {}
-            } message: {
-                Text("It's removed for everyone. This can't be undone.")
-            }
+            .floweConfirm(
+                isPresented: $confirmDelete,
+                title: "Delete this opportunity?",
+                message: "It's removed for everyone. This can't be undone.",
+                confirmTitle: "Delete",
+                isDestructive: true,
+                cancelTitle: "Keep it"
+            ) { data.deleteOpportunity(opportunity); dismiss() }
         }
     }
 
@@ -509,16 +510,20 @@ struct ComposeOpportunitySheet: View {
                 title: "Check your post",
                 detail: filterMessage
             ) { filterMessage = nil }
-            .confirmationDialog("A quick check",
-                                isPresented: .init(get: { moderationConcern != nil },
-                                                   set: { if !$0 { moderationConcern = nil } }),
-                                titleVisibility: .visible,
-                                presenting: moderationConcern) { _ in
-                Button("Post anyway") { moderationConcern = nil; finishPost() }
-                Button("Edit", role: .cancel) { moderationConcern = nil }
-            } message: { concern in
-                Text(concern)
-            }
+            // Soft AI pass: `moderationConcern` is a RUNTIME string from the model, so it goes
+            // through `detail:` — as a LocalizedStringKey it would become a catalog lookup key.
+            .floweDialog(
+                isPresented: .init(get: { moderationConcern != nil },
+                                   set: { if !$0 { moderationConcern = nil } }),
+                titleText: Text("A quick check"),
+                messageText: moderationConcern.map { Text(verbatim: $0) },
+                actions: [
+                    FloweDialogAction("Post anyway") {
+                        moderationConcern = nil; finishPost()
+                    },
+                    FloweDialogAction("Edit", role: .cancel) { moderationConcern = nil },
+                ]
+            )
         }
     }
 

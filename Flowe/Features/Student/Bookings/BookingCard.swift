@@ -28,7 +28,7 @@ struct BookingCard: View {
     /// the first, the same trap as `.sheet`). A one-off booking → `.oneOff` (plain cancel); a standing
     /// weekly series → `.recurring`, whose dialog offers BOTH "skip this week" and "end series" — without
     /// this a student could only ever cancel single weeks, and the rolling top-up regrew the series.
-    private enum CancelKind { case oneOff, recurring }
+    private enum CancelKind: Equatable { case oneOff, recurring }
 
     /// Whether tapping cancel should present the standing-series dialog (skip-this-week vs end-series)
     /// rather than a plain one-off cancel: true for a recurring booking that isn't a waitlisted overflow
@@ -87,25 +87,26 @@ struct BookingCard: View {
         .fullScreenCover(item: $bookAgainInstructor) { ins in
             StudentInstructorProfileView(instructor: ins) { bookAgainInstructor = nil }
         }
-        .confirmationDialog(cancelTitle,
-                            isPresented: cancelDialogBinding, titleVisibility: .visible) {
-            switch cancelKind {
-            case .recurring:
-                Button("Skip this week", role: .destructive) { data.cancel(booking) }
-                Button("End series", role: .destructive) { data.endSeriesAsStudent(booking) }
-                Button("Keep it", role: .cancel) { }
-            default:
-                Button("Cancel session", role: .destructive) { data.cancel(booking) }
-                Button("Keep it", role: .cancel) { }
-            }
-        } message: {
-            switch cancelKind {
-            case .recurring:
-                Text("Skip just this week and keep your weekly slot, or end the series to cancel all upcoming weeks. Past sessions stay.")
-            default:
-                Text("Your instructor will be notified that you can no longer make it.")
-            }
-        }
+        // The one genuinely multi-option dialog: a standing weekly booking offers BOTH "skip this
+        // week" and "end the series", which a confirm/cancel pair can't express.
+        // `cancelTitle` is a String(localized:), hence `titleText:` rather than `title:`.
+        .floweDialog(
+            isPresented: cancelDialogBinding,
+            titleText: Text(verbatim: cancelTitle),
+            messageText: cancelKind == .recurring
+                ? Text("Skip just this week and keep your weekly slot, or end the series to cancel all upcoming weeks. Past sessions stay.")
+                : Text("Your instructor will be notified that you can no longer make it."),
+            actions: cancelKind == .recurring
+                ? [
+                    FloweDialogAction("Skip this week", role: .destructive) { data.cancel(booking) },
+                    FloweDialogAction("End series", role: .destructive) { data.endSeriesAsStudent(booking) },
+                    FloweDialogAction("Keep it", role: .cancel),
+                  ]
+                : [
+                    FloweDialogAction("Cancel session", role: .destructive) { data.cancel(booking) },
+                    FloweDialogAction("Keep it", role: .cancel),
+                  ]
+        )
     }
 
     /// Title for the shared cancel dialog, chosen by the pending `cancelKind`.

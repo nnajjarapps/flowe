@@ -186,15 +186,15 @@ struct StudentInstructorProfileView: View {
                 if booked { onClose() } else { showBooking = false }
             }
         }
-        .confirmationDialog("Block \(instructor.firstName)?",
-                            isPresented: $confirmBlock, titleVisibility: .visible) {
-            Button("Block", role: .destructive) {
-                if let id = instructor.ownerID { data.block(id: id, name: instructor.name) }
-                onClose()
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("You won't see their profile or messages. You can undo this in Settings.")
+        .floweConfirm(
+            isPresented: $confirmBlock,
+            title: "Block \(instructor.firstName)?",
+            message: "You won't see their profile or messages. You can undo this in Settings.",
+            confirmTitle: "Block",
+            isDestructive: true
+        ) {
+            if let id = instructor.ownerID { data.block(id: id, name: instructor.name) }
+            onClose()
         }
     }
 

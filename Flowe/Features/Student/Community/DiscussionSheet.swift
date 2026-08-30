@@ -56,13 +56,16 @@ struct DiscussionSheet: View {
                 title: "Check your message",
                 detail: filterMessage
             ) { filterMessage = nil }
-            .confirmationDialog("Block this person?",
-                                isPresented: .init(get: { blockTarget != nil }, set: { if !$0 { blockTarget = nil } }),
-                                titleVisibility: .visible, presenting: blockTarget) { t in
-                Button("Block", role: .destructive) { data.block(id: t.id, name: t.name); blockTarget = nil }
-                Button("Cancel", role: .cancel) { blockTarget = nil }
-            } message: { _ in
-                Text("You won't see their messages. You can undo this in Settings.")
+            .floweConfirm(
+                isPresented: .init(get: { blockTarget != nil },
+                                   set: { if !$0 { blockTarget = nil } }),
+                title: "Block this person?",
+                message: "You won't see their messages. You can undo this in Settings.",
+                confirmTitle: "Block",
+                isDestructive: true
+            ) {
+                if let t = blockTarget { data.block(id: t.id, name: t.name) }
+                blockTarget = nil
             }
         }
     }

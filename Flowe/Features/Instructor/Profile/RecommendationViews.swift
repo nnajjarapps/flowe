@@ -113,21 +113,27 @@ struct RecommendationComposeSheet: View {
                 title: "Check your recommendation",
                 detail: filterMessage
             ) { filterMessage = nil }
-            .confirmationDialog("Remove your recommendation?", isPresented: $confirmDelete,
-                                titleVisibility: .visible) {
-                Button("Remove", role: .destructive) { data.deleteRecommendation(to: toID); dismiss() }
-                Button("Keep it", role: .cancel) {}
-            }
-            .confirmationDialog("A quick check",
-                                isPresented: .init(get: { moderationConcern != nil },
-                                                   set: { if !$0 { moderationConcern = nil } }),
-                                titleVisibility: .visible,
-                                presenting: moderationConcern) { _ in
-                Button("Post anyway") { moderationConcern = nil; finishSave() }
-                Button("Edit", role: .cancel) { moderationConcern = nil }
-            } message: { concern in
-                Text(concern)
-            }
+            .floweConfirm(
+                isPresented: $confirmDelete,
+                title: "Remove your recommendation?",
+                confirmTitle: "Remove",
+                isDestructive: true,
+                cancelTitle: "Keep it"
+            ) { data.deleteRecommendation(to: toID); dismiss() }
+            // Soft AI pass: `moderationConcern` is a RUNTIME string from the model, so it goes
+            // through `detail:` — as a LocalizedStringKey it would become a catalog lookup key.
+            .floweDialog(
+                isPresented: .init(get: { moderationConcern != nil },
+                                   set: { if !$0 { moderationConcern = nil } }),
+                titleText: Text("A quick check"),
+                messageText: moderationConcern.map { Text(verbatim: $0) },
+                actions: [
+                    FloweDialogAction("Post anyway") {
+                        moderationConcern = nil; finishSave()
+                    },
+                    FloweDialogAction("Edit", role: .cancel) { moderationConcern = nil },
+                ]
+            )
             // Prefill when editing an existing recommendation.
             .onAppear { if let existing { text = existing.text } }
         }

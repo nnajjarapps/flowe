@@ -83,20 +83,17 @@ struct MessageListView: View {
         }
         .task { await data.syncMessages() }
         .sheet(isPresented: $showCompose) { NewMessageSheet() }
-        .confirmationDialog(
-            "Delete conversation?",
+        .floweConfirm(
             isPresented: Binding(get: { deleteTarget != nil },
                                  set: { if !$0 { deleteTarget = nil } }),
-            titleVisibility: .visible,
-            presenting: deleteTarget
-        ) { target in
-            Button("Delete", role: .destructive) {
-                data.deleteConversation(with: target.id)
-                deleteTarget = nil
-            }
-            Button("Cancel", role: .cancel) { deleteTarget = nil }
-        } message: { target in
-            Text("This removes your conversation with \(target.firstName) from your inbox.")
+            title: "Delete conversation?",
+            // `presenting:` is gone, so the name comes off the same optional the binding reads.
+            message: "This removes your conversation with \(deleteTarget?.firstName ?? "") from your inbox.",
+            confirmTitle: "Delete",
+            isDestructive: true
+        ) {
+            if let target = deleteTarget { data.deleteConversation(with: target.id) }
+            deleteTarget = nil
         }
     }
 

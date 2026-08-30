@@ -113,27 +113,28 @@ struct EventDetailView: View {
                 StudentInstructorProfileView(instructor: listing) { showOrganizer = false }
             }
         }
-        .confirmationDialog("Leave this event?", isPresented: $confirmLeave,
-                            titleVisibility: .visible) {
-            Button("Leave", role: .destructive) { data.leave(event) }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Your spot goes back to the pool and someone else can take it. You can rejoin if it's still open.")
-        }
-        .confirmationDialog("Cancel this event?", isPresented: $confirmCancel,
-                            titleVisibility: .visible) {
-            Button("Cancel event", role: .destructive) { data.cancelEvent(event) }
-            Button("Keep it", role: .cancel) {}
-        } message: {
-            Text("It disappears for everyone who hasn't joined, and the people who joined will see it marked cancelled. This can't be undone.")
-        }
-        .confirmationDialog("Delete this event?", isPresented: $confirmDelete,
-                            titleVisibility: .visible) {
-            Button("Delete", role: .destructive) { data.deleteEvent(event); dismiss() }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("It disappears for everyone. This can't be undone.")
-        }
+        .floweConfirm(
+            isPresented: $confirmLeave,
+            title: "Leave this event?",
+            message: "Your spot goes back to the pool and someone else can take it. You can rejoin if it's still open.",
+            confirmTitle: "Leave",
+            isDestructive: true
+        ) { data.leave(event) }
+        .floweConfirm(
+            isPresented: $confirmCancel,
+            title: "Cancel this event?",
+            message: "It disappears for everyone who hasn't joined, and the people who joined will see it marked cancelled. This can't be undone.",
+            confirmTitle: "Cancel event",
+            isDestructive: true,
+            cancelTitle: "Keep it"
+        ) { data.cancelEvent(event) }
+        .floweConfirm(
+            isPresented: $confirmDelete,
+            title: "Delete this event?",
+            message: "It disappears for everyone. This can't be undone.",
+            confirmTitle: "Delete",
+            isDestructive: true
+        ) { data.deleteEvent(event); dismiss() }
     }
 
     // MARK: - Hero

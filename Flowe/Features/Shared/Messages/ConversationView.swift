@@ -207,25 +207,25 @@ struct ConversationView: View {
                 onClose: { showStudentProfile = false }
             )
         }
-        .confirmationDialog("Block \(counterpart.firstName)?",
-                            isPresented: $confirmBlock, titleVisibility: .visible) {
-            Button("Block", role: .destructive) {
-                data.block(id: counterpart.id, name: counterpart.name)
-                dismiss()
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("You won't see their messages or their profile. You can undo this in Settings.")
+        .floweConfirm(
+            isPresented: $confirmBlock,
+            title: "Block \(counterpart.firstName)?",
+            message: "You won't see their messages or their profile. You can undo this in Settings.",
+            confirmTitle: "Block",
+            isDestructive: true
+        ) {
+            data.block(id: counterpart.id, name: counterpart.name)
+            dismiss()
         }
-        .confirmationDialog("Delete conversation?",
-                            isPresented: $confirmDeleteConversation, titleVisibility: .visible) {
-            Button("Delete", role: .destructive) {
-                data.deleteConversation(with: counterpart.id)
-                dismiss()
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This removes your conversation with \(counterpart.firstName) from your inbox.")
+        .floweConfirm(
+            isPresented: $confirmDeleteConversation,
+            title: "Delete conversation?",
+            message: "This removes your conversation with \(counterpart.firstName) from your inbox.",
+            confirmTitle: "Delete",
+            isDestructive: true
+        ) {
+            data.deleteConversation(with: counterpart.id)
+            dismiss()
         }
     }
 

@@ -72,19 +72,21 @@ struct OutOfStudioView: View {
             }
             // Cancelling withdraws the offers from every instructor you asked, and lets you re-request
             // (e.g. for a different date). Confirmed because those instructors already saw it.
-            .confirmationDialog("Cancel this cover request?",
-                                isPresented: Binding(get: { cancelTarget != nil },
-                                                     set: { if !$0 { cancelTarget = nil } }),
-                                titleVisibility: .visible,
-                                presenting: cancelTarget) { booking in
-                Button("Cancel request", role: .destructive) {
+            .floweConfirm(
+                isPresented: Binding(get: { cancelTarget != nil },
+                                     set: { if !$0 { cancelTarget = nil } }),
+                title: "Cancel this cover request?",
+                message: "The instructors you asked will no longer see it. You can request cover again after.",
+                confirmTitle: "Cancel request",
+                isDestructive: true,
+                cancelTitle: "Keep it"
+            ) {
+                // `presenting:` is gone, so re-read the same optional the binding drives.
+                if let booking = cancelTarget {
                     if let id = booking.remoteID { requestedIDs.remove(id) }
                     data.cancelCoverage(for: booking)
-                    cancelTarget = nil
                 }
-                Button("Keep it", role: .cancel) { cancelTarget = nil }
-            } message: { _ in
-                Text("The instructors you asked will no longer see it. You can request cover again after.")
+                cancelTarget = nil
             }
             .onAppear { rollForwardWindowIfStale() }
             .sheet(item: $pickerTarget) { booking in

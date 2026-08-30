@@ -71,13 +71,13 @@ struct DeleteAccountView: View {
                         .disabled(isDeleting)
                 }
             }
-            .confirmationDialog("Delete your Flowe account?",
-                                isPresented: $confirming, titleVisibility: .visible) {
-                Button("Delete Permanently", role: .destructive) { performDelete() }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("This permanently deletes your data. It cannot be undone.")
-            }
+            .floweConfirm(
+                isPresented: $confirming,
+                title: "Delete your Flowe account?",
+                message: "This permanently deletes your data. It cannot be undone.",
+                confirmTitle: "Delete Permanently",
+                isDestructive: true
+            ) { performDelete() }
             .floweMessage(
                 isPresented: $failed,
                 title: "Couldn't delete your account",
