@@ -29,7 +29,10 @@ struct BookingSheet: View {
     @State private var occupancy: [String: Int] = [:]
     @State private var occupancyLoading = false
     @State private var showBookingAlert = false
-    @State private var bookingAlertMessage = ""
+    /// `LocalizedStringKey`, not a `String(localized:)` result: the latter resolves against the
+    /// SYSTEM language and ignores the `\.locale` the app overrides from its own language
+    /// picker, which shows a system-language alert inside a picker-language UI.
+    @State private var bookingAlertMessage: LocalizedStringKey = ""
     @State private var showReport = false
     @State private var confirmBlock = false
     @State private var showCertificate = false
@@ -94,7 +97,7 @@ struct BookingSheet: View {
         .onChange(of: day) { _, _ in if step == 2 { Task { await loadOccupancy() } } }
         .floweDialog(
             isPresented: $showBookingAlert,
-            titleText: Text(verbatim: bookingAlertMessage),
+            title: bookingAlertMessage,
             actions: [FloweDialogAction("OK", role: .cancel)]
         )
         .sheet(isPresented: $showReport) {
@@ -754,7 +757,7 @@ struct BookingSheet: View {
         // Defensive backstop: a slot that was valid when selected may have passed while the sheet sat open.
         // The picker already disables past cells, so this only catches that lingering-open case.
         if isPast(time) {
-            bookingAlertMessage = String(localized: "That time has already passed. Pick another.")
+            bookingAlertMessage = "That time has already passed. Pick another."
             showBookingAlert = true
             time = ""
             return
@@ -778,12 +781,12 @@ struct BookingSheet: View {
             Haptic.success()
             withAnimation(FloweMotion.spring) { step = 3 }
         case .slotTaken:
-            bookingAlertMessage = String(localized: "This slot was just booked. Pick another time.")
+            bookingAlertMessage = "This slot was just booked. Pick another time."
             showBookingAlert = true
             time = ""                    // the just-taken time is no longer a valid selection
             await loadOccupancy()        // refresh so it flips to Full
         case .selfDuplicate:
-            bookingAlertMessage = String(localized: "You already have this slot booked.")
+            bookingAlertMessage = "You already have this slot booked."
             showBookingAlert = true
         }
     }

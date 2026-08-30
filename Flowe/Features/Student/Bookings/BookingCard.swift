@@ -89,13 +89,15 @@ struct BookingCard: View {
         }
         // The one genuinely multi-option dialog: a standing weekly booking offers BOTH "skip this
         // week" and "end the series", which a confirm/cancel pair can't express.
-        // `cancelTitle` is a String(localized:), hence `titleText:` rather than `title:`.
+        // `title:` (LocalizedStringKey), NOT `titleText: Text(verbatim:)`. String(localized:) resolves
+        // against the SYSTEM language and ignores the `\.locale` the app overrides from its own
+        // language picker — which rendered this dialog with a Hebrew title over an English body.
         .floweDialog(
             isPresented: cancelDialogBinding,
-            titleText: Text(verbatim: cancelTitle),
-            messageText: cancelKind == .recurring
-                ? Text("Skip just this week and keep your weekly slot, or end the series to cancel all upcoming weeks. Past sessions stay.")
-                : Text("Your instructor will be notified that you can no longer make it."),
+            title: cancelTitle,
+            message: cancelKind == .recurring
+                ? "Skip just this week and keep your weekly slot, or end the series to cancel all upcoming weeks. Past sessions stay."
+                : "Your instructor will be notified that you can no longer make it.",
             actions: cancelKind == .recurring
                 ? [
                     FloweDialogAction("Skip this week", role: .destructive) { data.cancel(booking) },
@@ -110,10 +112,10 @@ struct BookingCard: View {
     }
 
     /// Title for the shared cancel dialog, chosen by the pending `cancelKind`.
-    private var cancelTitle: String {
+    private var cancelTitle: LocalizedStringKey {
         switch cancelKind {
-        case .recurring: return String(localized: "Cancel this weekly session?")
-        default:         return String(localized: "Cancel this session?")
+        case .recurring: return "Cancel this weekly session?"
+        default:         return "Cancel this session?"
         }
     }
 
@@ -190,6 +192,34 @@ struct BookingCard: View {
         .background(Color.flowePink.opacity(0.10))
     }
 
+    /// An inline card action, as a CHIP rather than bare text.
+    ///
+    /// These were 11pt unbacked labels in `flowePinkDeep`/`floweMuted`, sitting in a row that reads
+    /// against the instructor's cover art — so on a dark or busy brand image "Class-mates" and
+    /// "Cancel" were barely visible, and neither looked tappable. A filled capsule carries its own
+    /// contrast regardless of what is behind it, and 11pt → 13pt clears the readable floor. The
+    /// 44pt-tall hit area is the tap-target minimum the bare text never met either.
+    private func cardAction(_ title: LocalizedStringKey,
+                            tint: Color = .flowePinkDeep,
+                            id: String,
+                            action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(FloweFont.sans(13, .medium))
+                .foregroundStyle(tint)
+                .lineLimit(1)
+                .padding(.horizontal, 12)
+                .frame(height: 30)
+                .background(Color.flowWhite.opacity(0.92))
+                .clipShape(Capsule())
+                .overlay(Capsule().stroke(tint.opacity(0.22), lineWidth: 1))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .frame(minHeight: 44)
+        .accessibilityIdentifier(id)
+    }
+
     // MARK: Body row
 
     private var bodyRow: some View {
@@ -210,47 +240,27 @@ struct BookingCard: View {
                 // ✦ Class-mates (Flowe Community) — see familiar faces in a group class; opt-in handled
                 // inside the sheet. Shown for group bookings that aren't cancelled. See [[Flowe-Community]].
                 if data.isGroupBooking(booking), booking.status != .cancelled {
-                    Button { route = .classmates } label: {
-                        Text("Class-mates")
-                            .font(FloweFont.sans(11))
-                            .foregroundStyle(Color.flowePinkDeep)
-                    }
-                    .accessibilityIdentifier("booking.classmates")
+                    cardAction("Class-mates", id: "booking.classmates") { route = .classmates }
                 }
 
                 if booking.status == .completed {
                     if data.canReview(booking) {
-                        Button {
-                            route = .review
-                        } label: {
-                            Text(LocalizedStringKey(data.myReview(for: booking) == nil ? "Leave a review" : "Edit review"))
-                                .font(FloweFont.sans(11))
-                                .foregroundStyle(Color.flowePinkDeep)
-                        }
-                        .accessibilityIdentifier("booking.review")
+                        cardAction(LocalizedStringKey(data.myReview(for: booking) == nil ? "Leave a review" : "Edit review"),
+                                   id: "booking.review") { route = .review }
                     }
 
-                    Button {
+                    cardAction("Book again", tint: .floweMuted, id: "booking.bookAgain") {
                         if let instructor { bookAgainInstructor = instructor }
-                    } label: {
-                        Text("Book again")
-                            .font(FloweFont.sans(11))
-                            .foregroundStyle(Color.floweMuted)
                     }
-                    .accessibilityIdentifier("booking.bookAgain")
                 } else if booking.status != .cancelled {
                     // A waitlisted row leaves the waitlist (the same one-off cancel path — it releases
                     // the overflow hold via `releaseSeat`); everything else cancels the session.
-                    Button {
+                    cardAction(data.isWaitlisted(booking) ? "Leave waitlist" : "Cancel",
+                               tint: .floweCancel, id: "booking.cancel") {
                         cancelKind = Self.offersSeriesCancel(
                             isRecurring: booking.isRecurring, isWaitlisted: data.isWaitlisted(booking)
                         ) ? .recurring : .oneOff
-                    } label: {
-                        Text(data.isWaitlisted(booking) ? "Leave waitlist" : "Cancel")
-                            .font(FloweFont.sans(11))
-                            .foregroundStyle(Color.floweMuted)
                     }
-                    .accessibilityIdentifier("booking.cancel")
                 }
             }
         }

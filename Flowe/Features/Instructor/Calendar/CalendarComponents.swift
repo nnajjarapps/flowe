@@ -295,13 +295,12 @@ struct CalendarSessionCard: View {
                                },
                                onClose: { showStudent = false })
         }
-        // `skipEndTitle` is a String(localized:) — already resolved — so it goes through `titleText:`.
         .floweDialog(
             isPresented: skipEndBinding,
-            titleText: Text(verbatim: skipEndTitle),
-            messageText: skipEnd == .skip
-                ? Text("This cancels only this week. Your weekly slot stays booked.")
-                : Text("This cancels all upcoming weeks. Past sessions stay."),
+            title: skipEndTitle,
+            message: skipEnd == .skip
+                ? "This cancels only this week. Your weekly slot stays booked."
+                : "This cancels all upcoming weeks. Past sessions stay.",
             actions: [
                 skipEnd == .skip
                     // Per-occurrence decline: cancels just this week; the series stays approved.
@@ -336,8 +335,11 @@ struct CalendarSessionCard: View {
         .accessibilityLabel("Manage weekly session")
     }
 
-    private var skipEndTitle: String {
-        skipEnd == .skip ? String(localized: "Skip just this week?") : String(localized: "End this weekly series?")
+    /// `LocalizedStringKey`, NOT `String(localized:)` — the latter resolves against the SYSTEM
+    /// language and ignores the `\.locale` the app overrides from its own language picker, which
+    /// renders a dialog with a system-language title over picker-language body text.
+    private var skipEndTitle: LocalizedStringKey {
+        skipEnd == .skip ? "Skip just this week?" : "End this weekly series?"
     }
 
     private var skipEndBinding: Binding<Bool> {
