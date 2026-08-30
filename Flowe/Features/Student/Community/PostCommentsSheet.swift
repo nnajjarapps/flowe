@@ -62,7 +62,7 @@ struct PostCommentsSheet: View {
             .sheet(item: $reported) { comment in
                 ReportSheet(
                     reportedID: comment.authorID,
-                    reportedName: comment.authorName,
+                    reportedName: commentBlockName(comment),
                     content: .communityComment,
                     contentID: comment.remoteID ?? "",
                     snapshot: comment.text
@@ -104,6 +104,13 @@ struct PostCommentsSheet: View {
         .padding(.bottom, 8)
     }
 
+    /// A commenter's LIVE name, mirroring the resolver the row body already uses. `comment.authorName`
+    /// is the snapshot frozen at write time, so it shows a renamed user's old name.
+    private func commentBlockName(_ comment: PostComment) -> String {
+        let live = data.displayIdentity(ownerID: comment.authorID, fallbackName: comment.authorName).name
+        return live.isEmpty ? String(localized: "Someone") : live
+    }
+
     private func row(_ comment: PostComment) -> some View {
         // Resolve the commenter's CURRENT name live — the core comment-staleness fix. Falls back to
         // the comment's snapshot; keeps the localized "Someone" for a blank author.
@@ -137,9 +144,11 @@ struct PostCommentsSheet: View {
                     }
                 } else {
                     Button("Report Reply", systemImage: "flag") { reported = comment }
-                    Button("Block \(comment.displayName)", systemImage: "hand.raised",
+                    // LIVE name — the row above already resolves via displayIdentity, so the frozen
+                    // `comment.authorName` here produced a menu naming someone's OLD name.
+                    Button("Block \(commentBlockName(comment))", systemImage: "hand.raised",
                            role: .destructive) {
-                        data.block(id: comment.authorID, name: comment.authorName)
+                        data.block(id: comment.authorID, name: commentBlockName(comment))
                     }
                 }
             } label: {

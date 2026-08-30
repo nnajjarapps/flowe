@@ -36,6 +36,13 @@ struct PostRowView: View {
         authorIdentity.name.isEmpty ? Text("Someone") : Text(authorIdentity.name)
     }
 
+    /// The author's live name for the block affordance, falling back to the localized "Someone" the
+    /// rest of the row uses rather than to the stale snapshot.
+    private var blockDisplayName: String {
+        let live = authorIdentity.name
+        return live.isEmpty ? String(localized: "Someone") : live
+    }
+
     private var subtitle: String {
         let action: String
         switch post.type {
@@ -67,7 +74,7 @@ struct PostRowView: View {
         .sheet(isPresented: $showReport) {
             ReportSheet(
                 reportedID: post.ownerID ?? "",
-                reportedName: post.user,
+                reportedName: blockDisplayName,
                 content: .communityPost,
                 contentID: post.remoteID ?? "",
                 snapshot: post.text
@@ -293,8 +300,12 @@ struct PostRowView: View {
                 }
             } else {
                 Button("Report Post", systemImage: "flag") { showReport = true }
-                Button("Block \(post.displayName)", systemImage: "hand.raised", role: .destructive) {
-                    data.block(id: post.ownerID ?? "", name: post.user)
+                // LIVE name, matching the row above. `post.displayName`/`post.user` are the snapshot
+                // frozen when the post was written, so an author who has since renamed showed one
+                // name in the post header and a different one here (and in Blocked Users, which
+                // stores whatever is passed). Same frozen-snapshot family as ae3ca3f.
+                Button("Block \(blockDisplayName)", systemImage: "hand.raised", role: .destructive) {
+                    data.block(id: post.ownerID ?? "", name: blockDisplayName)
                 }
             }
         } label: {
