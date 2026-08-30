@@ -116,6 +116,7 @@
 		A272AB954AC5935F65F0578E /* IconButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDB60A412E456123013E75E4 /* IconButton.swift */; };
 		A4FD8265A8D205270FAEDD66 /* SettingsAndPaywallUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F1129DAD3FC5185D2130BEF /* SettingsAndPaywallUITests.swift */; };
 		A6D68D101065C7820B5BB267 /* SubscriptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB5F301524BA50E4D3032BEA /* SubscriptionService.swift */; };
+		C7A21E4B93D50F6182ACB322 /* SubscriptionCelebrationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A21E4B93D50F6182ACB311 /* SubscriptionCelebrationView.swift */; };
 		AADC13572C1C1817ACD45F11 /* CommunityService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE5BBB50D708E0C0822A948A /* CommunityService.swift */; };
 		DD1DB1934510C148B3A2E4C1 /* CommunityEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = C468A4245116CFB4BA83A543 /* CommunityEvent.swift */; };
 		E3457EB253E484670841834A /* EventService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6D520220F189277F969F983 /* EventService.swift */; };
@@ -396,6 +397,7 @@
 		B5A1882EB901E61B7AF2A487 /* FloatingLabelField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingLabelField.swift; sourceTree = "<group>"; };
 		BAD7A38FB22FCE268513F1B9 /* ProfileImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileImage.swift; sourceTree = "<group>"; };
 		BB5F301524BA50E4D3032BEA /* SubscriptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionService.swift; sourceTree = "<group>"; };
+		C7A21E4B93D50F6182ACB311 /* SubscriptionCelebrationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionCelebrationView.swift; sourceTree = "<group>"; };
 		BCEE457F802C00210A9FFFF9 /* FloweUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = FloweUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C0F3A0FB151C0F688534ACEF /* EmptyStateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyStateView.swift; sourceTree = "<group>"; };
 		C15E26BF2DDDBD1EECABB0EC /* DMMono-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "DMMono-Regular.ttf"; sourceTree = "<group>"; };
@@ -490,6 +492,7 @@
 			isa = PBXGroup;
 			children = (
 				BB5F301524BA50E4D3032BEA /* SubscriptionService.swift */,
+				C7A21E4B93D50F6182ACB311 /* SubscriptionCelebrationView.swift */,
 			);
 			path = Subscription;
 			sourceTree = "<group>";
@@ -1321,6 +1324,7 @@
 				527829EADB9BDA6A843964F6 /* WelcomeView.swift in Sources */,
 				540376ADAA3BFBF4E858CF43 /* StudentTabView.swift in Sources */,
 				A6D68D101065C7820B5BB267 /* SubscriptionService.swift in Sources */,
+				C7A21E4B93D50F6182ACB322 /* SubscriptionCelebrationView.swift in Sources */,
 				A23AD802E43F2485CF6D38E3 /* UnsplashImage.swift in Sources */,
 				1AD5555D04999A8995C8D686 /* User.swift in Sources */,
 				FEEDFACE000000000000FF01 /* StudentProfile.swift in Sources */,

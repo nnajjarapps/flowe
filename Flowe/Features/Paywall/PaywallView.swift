@@ -9,6 +9,9 @@ struct PaywallView: View {
 
     @State private var purchasing: SubscriptionTier?
     @State private var restoring = false
+    /// Set ONLY on a verified purchase, which is what presents the celebration. Nil otherwise, so a
+    /// cancelled or unverifiable purchase falls through to the error path unchanged.
+    @State private var celebrating: SubscriptionTier?
     @State private var trialEligible = true
     @State private var showPrivacy = false
 
@@ -49,6 +52,15 @@ struct PaywallView: View {
             }
             .sheet(isPresented: $showPrivacy) {
                 LegalDocumentView(resource: LegalDoc.privacy.resource, title: LegalDoc.privacy.title)
+            }
+            // The purchase moment. Dismissing it dismisses the paywall too — the instructor came
+            // here to subscribe, and returning them to the price list afterwards would read as
+            // though it had not worked.
+            .fullScreenCover(item: $celebrating) { tier in
+                SubscriptionCelebrationView(tier: tier) {
+                    celebrating = nil
+                    dismiss()
+                }
             }
             // Surface purchase failures — StoreKit errors, an unavailable product, or an
             // unverifiable receipt. Without this the spinner just reverts and the user is left
@@ -207,7 +219,13 @@ struct PaywallView: View {
     private func buy(_ tier: SubscriptionTier) async {
         purchasing = tier
         defer { purchasing = nil }
-        _ = await subscription.purchase(tier)
+        // `purchase` returns true only from the `.verified` branch, AFTER `Transaction.finish()` and
+        // the entitlement refresh — so the celebration is a receipt for a purchase that actually
+        // landed, never a promise made before payment. `.userCancelled`, `.pending` and an
+        // unverifiable receipt all return false and are handled by the existing error path.
+        if await subscription.purchase(tier) {
+            celebrating = tier
+        }
     }
 
     // MARK: Footer (restore + disclosures)

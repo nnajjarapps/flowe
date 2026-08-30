@@ -28875,6 +28875,174 @@
           }
         }
       }
+    },
+    "You're in the feed." : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "אתם בפיד."
+          }
+        },
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "أنت الآن في الخلاصة."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ya estás en el feed."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vous êtes dans le fil."
+          }
+        }
+      }
+    },
+    "You're featured." : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "אתם מוצגים בראש."
+          }
+        },
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "أنت الآن في المقدّمة."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ya apareces destacada."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vous êtes mis en avant."
+          }
+        }
+      }
+    },
+    "Students searching near you can find and book you from today." : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "תלמידים שמחפשים באזור שלכם יכולים למצוא ולהזמין אתכם כבר היום."
+          }
+        },
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يمكن للطلاب الباحثين بالقرب منك أن يجدوك ويحجزوا معك ابتداءً من اليوم."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los alumnos que busquen cerca de ti pueden encontrarte y reservar desde hoy."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les élèves qui cherchent près de chez vous peuvent vous trouver et réserver dès aujourd’hui."
+          }
+        }
+      }
+    },
+    "You now appear above every other instructor in your area." : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "אתם מופיעים עכשיו מעל כל שאר המדריכים באזור שלכם."
+          }
+        },
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تظهر الآن فوق جميع المدربين الآخرين في منطقتك."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ahora apareces por encima de todos los demás instructores de tu zona."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vous apparaissez désormais au-dessus de tous les autres instructeurs de votre secteur."
+          }
+        }
+      }
+    },
+    "See my profile" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "לפרופיל שלי"
+          }
+        },
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "عرض ملفي الشخصي"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ver mi perfil"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voir mon profil"
+          }
+        }
+      }
+    },
+    "See my placement" : {
+      "localizations" : {
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "לראות את המיקום שלי"
+          }
+        },
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "عرض ترتيبي"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ver mi posición"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voir mon placement"
+          }
+        }
+      }
     }
   },
   "version" : "1.1"
