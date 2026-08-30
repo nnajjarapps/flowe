@@ -107,6 +107,21 @@ final class SubscriptionService {
                 case .verified(let transaction):
                     await transaction.finish()
                     await refreshEntitlements()
+                    // THEN apply the transaction we just verified — order matters.
+                    //
+                    // `Transaction.currentEntitlements` is not guaranteed to contain a transaction
+                    // the instant after `finish()`; StoreKit updates that set asynchronously. So the
+                    // refresh above can resolve to the PREVIOUS tier, or to nil, and its last line is
+                    // `tier = current?.tier` — which would wipe anything set beforehand. That race is
+                    // exactly the "tap Subscribe twice before the app shows the current plan" symptom.
+                    //
+                    // The just-verified transaction is BY DEFINITION the most recent purchase, which
+                    // is the same rule `refreshEntitlements` resolves by — so it wins outright, and it
+                    // also covers the case where the entitlement set had not caught up at all.
+                    // `self.` is required: the function parameter is also named `tier`.
+                    if let bought = SubscriptionTier(productID: transaction.productID) {
+                        self.tier = bought
+                    }
                     return true
                 case .unverified(let transaction, _):
                     // Tampered / unverifiable receipt: grant nothing, but finish it so StoreKit

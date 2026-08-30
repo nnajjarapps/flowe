@@ -144,8 +144,9 @@ struct SubscriptionCelebrationView: View {
         }
         .onAppear {
             start = Date()
-            // The heavier confirmation, matching what the app already uses for a completed booking.
-            if !reduceMotion { Haptic.success() }
+            // Always — Reduce Motion suppresses ANIMATION, not feedback. Someone who turns motion
+            // off should still feel the purchase land.
+            Haptic.success()
         }
         .task {
             // duration + the longest stagger + the last entrance, then stop redrawing.
