@@ -316,11 +316,22 @@ final class PushService {
         // NEW COMMUNITY EVENTS — the app's only BROADCAST push. Every other subscription here targets a
         // recipient field addressed to this user; an event is addressed to nobody, so this one fires on
         // every published event instead. Two consequences worth knowing:
-        //  • Self-exclusion is the predicate's job. CloudKit happily fires a subscription for a record
-        //    the subscriber just created, and unlike the addressed subscriptions there's no recipient
-        //    field to make that impossible — hence the explicit `organizerID != ownerID`. `organizerID`
-        //    is QUERYABLE in the deployed schema, and `!=` against a constant is a supported CKQuery
-        //    comparison (unlike NOT/OR, which are not).
+        //  • Self-exclusion is NOT achievable in the predicate. This previously read
+        //    `organizerID != ownerID`, on the assumption that `!=` is fine because it is a valid
+        //    CKQuery comparison. **That assumption was wrong**: CKQuerySubscription predicates accept a
+        //    STRICTER operator set than CKQuery, and "not equal to" is not in it. CloudKit rejected
+        //    every registration with BAD_REQUEST, so this subscription has never once existed on a
+        //    real device — confirmed from the Production request log (9 SubscriptionCreate /
+        //    BAD_REQUEST failures, the first ~2h after the predicate shipped on 24 Aug 2026, none in
+        //    the 30h of log before it, and continuing daily until this fix).
+        //    The damage was contained to THIS plan only because the batch failure is retried
+        //    one-by-one below; every other notification type still registered.
+        //    There is no equality-based way to exclude yourself — the record is identical for every
+        //    subscriber — so the organizer now receives a push for their own event. That is a
+        //    deliberate trade: one redundant self-notification, versus the feature not working at all.
+        //    PROPER FIX is server-side: the Worker already holds `events.organizer_id` and already
+        //    sends APNs, so it can push to every device except the organizer's with no CloudKit
+        //    predicate involved. Do that when the event write reaches the backend.
         //  • Volume is the toggle's job. This is the one notification whose frequency scales with the
         //    whole community rather than with the user's own activity, so it has its own preference
         //    (`NotificationPreference.events`) and is muted independently of community replies.
@@ -328,7 +339,7 @@ final class PushService {
             plans.append(Plan(
                 id: Self.subscriptionID(.community, "event", ownerID),
                 recordType: EventService.eventRecordType,
-                predicate: NSPredicate(format: "organizerID != %@", ownerID),
+                predicate: NSPredicate(value: true),
                 options: [.firesOnRecordCreation],
                 titleKey: "push.event.new.title", titleArgs: [],
                 // Args are RECORD FIELD NAMES; CloudKit substitutes them on the receiver's device

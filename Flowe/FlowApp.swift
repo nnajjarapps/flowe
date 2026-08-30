@@ -201,6 +201,16 @@ struct FlowApp: App {
                     // so it never syncs via the private DB. Pull photo/bio/specialties/etc back from the
                     // public listing before anything renders them. Guarded to the blank-row case inside.
                     if isInstructor { await data.hydrateOwnListingIfNeeded() }
+                    // Lesson types are a SEPARATE public record type — the listing hydrate above does
+                    // not carry them, and the only other `syncLessonTypes` call sits on the scenePhase
+                    // foreground path, which a cold launch that never backgrounds may not hit at all.
+                    // Missing them is not cosmetic: `myVisibilityBlocker` reads
+                    // `startingPrice(from: ownedLessonTypes(for: me))`, so a fully-configured
+                    // instructor on a fresh install was told they had no priced lesson type and sent
+                    // back to the studio wizard. See [[flowe-app-store-submission]].
+                    if isInstructor, let me = data.currentInstructor {
+                        await data.syncLessonTypes(for: me)
+                    }
                     // Pre-warm the opposite party's profiles so names + photos are present in
                     // Messages/Bookings before anything is tapped: an instructor caches the students
                     // they transact with; a student caches the instructors they message or booked.
@@ -216,6 +226,11 @@ struct FlowApp: App {
                                                             photo: mine.photo, memberSince: mine.memberSince)
                         data.currentUserName = session.currentUser?.fullName ?? data.currentUserName
                     }
+                    // Quiz answers are the last piece of a student's profile with no local copy after a
+                    // reinstall (UserDefaults is wiped, unlike the Keychain). Without this the returning
+                    // student is routed straight back into the 6-step quiz and their match profile —
+                    // disciplines, budget, distance — is silently rebuilt from scratch.
+                    if session.authState == .student { await session.restoreStudentPreferencesIfNeeded() }
 
                     // Re-arm APNs on every sign-in, not just at launch. `tearDown` unregisters the
                     // device token, and signing back in without relaunching would otherwise leave

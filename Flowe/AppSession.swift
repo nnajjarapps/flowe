@@ -225,7 +225,28 @@ final class AppSession {
         studentPreferences = stored
         if let data = try? JSONEncoder().encode(stored) {
             UserDefaults.standard.set(data, forKey: studentPrefsKey(for: ownerID))
+            // Mirror to the backend so the answers outlive this INSTALL, not just this session.
+            // UserDefaults dies with the app; without this a reinstalling student is re-quizzed.
+            if let json = String(data: data, encoding: .utf8) {
+                Task { await FloweBackendClient.shared.saveStudentPreferences(json: json) }
+            }
         }
+        withAnimation(.spring(duration: 0.4, bounce: 0.1)) { needsOnboardingQuiz = false }
+    }
+
+    /// Pull this account's quiz answers back from the backend when the device has none — the reinstall
+    /// case. Writes them through the normal local path (minus the re-upload) so `needsOnboardingQuiz`
+    /// clears and the student lands in Discover instead of the quiz they already completed.
+    /// No-op when local answers already exist: the device copy always wins.
+    @MainActor
+    func restoreStudentPreferencesIfNeeded() async {
+        guard authState == .student, studentPreferences == nil else { return }
+        guard let remote = await FloweBackendClient.shared.fetchMyProfile(),
+              let json = remote.preferences, let data = json.data(using: .utf8),
+              let prefs = try? JSONDecoder().decode(StudentPreferences.self, from: data)
+        else { return }
+        studentPreferences = prefs
+        UserDefaults.standard.set(data, forKey: studentPrefsKey(for: ownerID))
         withAnimation(.spring(duration: 0.4, bounce: 0.1)) { needsOnboardingQuiz = false }
     }
 
@@ -262,6 +283,25 @@ final class AppSession {
             .credentialState(forUserID: appleUserID)
         if state == .revoked || state == .notFound {
             await MainActor.run { logout() }
+            return
+        }
+        // REINSTALL RECOVERY. Deleting the app wipes UserDefaults (role, session user, durable
+        // profile) but NOT the Keychain, so `appleUserID` survives while the local session does not.
+        // Without this the returning user is walked through onboarding as a stranger and has to GUESS
+        // their own role — guess wrong and `startSignIn` blocks them with a role-mismatch error.
+        //
+        // The precondition is exact, not a heuristic: `clearLocalSession()` (logout) and
+        // `deleteAccount()` both nil the Keychain id, so "id present + no session" can ONLY mean a
+        // reinstall. A deliberate sign-out can never land here.
+        //
+        // Only the ROLE is recovered — it's the one thing the user would otherwise have to guess.
+        // Name/photo/bio are left empty on purpose: `isPlaceholderName("")` is true, so FlowApp's
+        // post-sign-in hydrate (`hydrateOwnListingIfNeeded` / `hydrateOwnStudentProfileIfNeeded` →
+        // `restoreProfileFromDirectory`) refills them from the public record it already fetches.
+        if authState == .unauthenticated, !isGuest,
+           case .claimed(let role) = await accountRoleService.lookup(for: appleUserID) {
+            await MainActor.run { startSession(defaultName: "", email: "", role: role) }
+            await FloweBackendClient.shared.ensureSessionSilently()
             return
         }
         // Keep an existing backend session fresh at launch — SILENTLY. An upgraded/new-device user with

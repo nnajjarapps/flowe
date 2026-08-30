@@ -272,6 +272,36 @@ final class FloweBackendClient {
         _ = try? await authorized("/profile", method: "POST", body: Req(communityVisible: visible, displayName: name))
     }
 
+    // MARK: - Student preferences (reinstall recovery)
+
+    /// Mirror the student's quiz answers to the backend. They previously lived only in UserDefaults,
+    /// which app deletion wipes — so a reinstalling student was pushed back through the whole quiz and
+    /// silently lost the match profile driving their recommendations. Best-effort: the local copy stays
+    /// the source of truth for this device, this is the copy that survives the device.
+    func saveStudentPreferences(json: String) async {
+        guard !isDebugInjected, hasSession else { return }
+        struct Req: Encodable { let preferences: String }
+        _ = try? await authorized("/profile", method: "POST", body: Req(preferences: json))
+    }
+
+    /// My own profile row. Used on sign-in to recover account state the device can't rebuild locally.
+    /// Returns nil when there's no session, no row, or the call fails — every caller treats a nil as
+    /// "nothing to restore" and carries on.
+    func fetchMyProfile() async -> RemoteProfile? {
+        guard !isDebugInjected, hasSession else { return nil }
+        guard let data = try? await authorized("/profile", method: "GET") else { return nil }
+        guard let resp = try? JSONDecoder().decode(RemoteProfile.self, from: data), resp.found else { return nil }
+        return resp
+    }
+
+    struct RemoteProfile: Decodable {
+        let found: Bool
+        let communityVisible: Bool?
+        let presenceVisible: Bool?
+        let displayName: String?
+        let preferences: String?
+    }
+
     // MARK: - Presence ("last seen")
 
     /// Heartbeat MY last-seen — the backend stamps SERVER time on the authenticated ownerID (a client

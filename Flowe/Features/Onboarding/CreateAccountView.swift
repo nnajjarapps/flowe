@@ -109,7 +109,10 @@ struct CreateAccountView: View {
             Task {
                 let outcome = await session.startSignIn(
                     appleUserID: cred.user,
-                    name: name.isEmpty ? "Member" : name,
+                    // Empty, never the literal "Member": that string is indistinguishable from a real
+                    // name once it lands in the durable profile, whereas "" is recognised by
+                    // `isPlaceholderName` and refilled by the post-sign-in hydrate.
+                    name: name,
                     email: cred.email ?? "",
                     desiredRole: role,
                     acceptTerms: true,

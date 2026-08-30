@@ -93,12 +93,23 @@ struct LoginView: View {
             // The identity token (a JWT) is the credential Apple returns on EVERY sign-in; the booking
             // backend verifies it to mint a per-device session. Optional, so bootstrap only when present.
             let identityToken = cred.identityToken.flatMap { String(data: $0, encoding: .utf8) }
+            // Apple returns the name only on the FIRST authorization, so it is nil on every later
+            // sign-in — including the reinstall case this screen mostly serves. Empty is the honest
+            // answer: `isPlaceholderName("")` is true, so FlowApp's post-sign-in hydrate refills the
+            // real name from the user's own public record.
+            //
+            // This previously read `cred.email`, a scope the request above deliberately never asks for
+            // (Flowe collects no email — see the App Privacy label). It was therefore ALWAYS nil, so
+            // every login fell through to "member@flowe.app" and named the user "Member".
+            let name = [cred.fullName?.givenName, cred.fullName?.familyName]
+                .compactMap { $0 }
+                .joined(separator: " ")
             isSigningIn = true
             Task {
                 let outcome = await session.startSignIn(
                     appleUserID: cred.user,
-                    name: AppSession.displayName(fromEmail: cred.email ?? "member@flowe.app"),
-                    email: cred.email ?? "member@flowe.app",
+                    name: name,
+                    email: cred.email ?? "",
                     desiredRole: role,
                     adoptExistingRole: adoptExistingRole,
                     identityToken: identityToken
