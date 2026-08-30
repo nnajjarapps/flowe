@@ -1697,6 +1697,18 @@ final class MockDataStore {
     /// Append a message to a thread and publish it.
     func sendMessage(to counterpart: Counterpart, text: String) {
         guard let me = currentUserID else { return }
+        // A message addressed to YOURSELF sets `recipientID == ownerID`, which is precisely what the
+        // DM push subscription matches (`PushService`: "recipientID == %@"). The result is a
+        // notification telling you that the person you just wrote to has written to you. The
+        // subscription is right — it addresses the recipient, so it cannot fire for a normal send —
+        // and this is the only way to make you your own recipient.
+        //
+        // Guarded here rather than only in the UI because every entry point funnels through this one
+        // method: the routers, the students list, No-Show Shield, opportunity applicants, and the
+        // community strip all build a `Counterpart` from an id that CAN be your own (an instructor
+        // viewing their own opportunity's applicants, a peer row for yourself). Same shape as the
+        // self-booking guard in 0b1f876.
+        guard counterpart.id != me else { return }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 

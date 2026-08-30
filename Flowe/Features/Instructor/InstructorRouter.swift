@@ -24,7 +24,16 @@ final class InstructorRouter {
 
     /// Open the Messages tab AND deep-link to a specific student's thread. The target is stashed
     /// for MessageListView to consume, then cleared after routing (same pattern as push.pendingTopic).
+    /// `ownerID` of the signed-in user, so a self-conversation is never opened. Optional because the
+    /// router is constructed before the session is injected; a nil simply skips the check, and
+    /// `MockDataStore.sendMessage` refuses the send regardless.
+    var currentUserID: String?
+
     func openConversation(with counterpart: Counterpart) {
+        // Opening a thread with yourself produces a conversation whose every message is addressed to
+        // you — which the DM push subscription then notifies you about. Refuse at the door as well as
+        // at the send, so the empty self-thread never appears in Messages either.
+        guard counterpart.id != currentUserID else { return }
         pendingCounterpart = counterpart
         selectedTab = 2
     }

@@ -116,6 +116,10 @@ struct InstructorTabView: View {
             showStudioWizard = true
         }
         .fullScreenCover(isPresented: $showStudioWizard) { StudioSetupWizard() }
+        // Keep the router's copy of the owner id current so `openConversation` can refuse a thread
+        // with yourself. `id:` so it re-runs if the session's identity changes (role switch, the
+        // reinstall restore, a sign-out and back in) rather than only on first appearance.
+        .task(id: session.ownerID) { router.currentUserID = session.ownerID }
         .environment(router)
     }
 }
