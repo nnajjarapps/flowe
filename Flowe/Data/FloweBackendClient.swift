@@ -9,8 +9,21 @@ import UIKit
 /// who-trains-with-whom is returned ONLY to the two parties, via a per-request authorization check
 /// CloudKit's public DB cannot provide. See flowe_vault/nodes/system/BookingBackend.md.
 enum FloweBackend {
-    /// The live Cloudflare Worker. A custom domain can front this later without touching callers.
+    /// The Cloudflare Worker. A custom domain can front this later without touching callers.
+    ///
+    /// DEBUG builds talk to a SEPARATE worker + D1 database. Before this existed the URL was hardcoded
+    /// to production, which left a genuine asymmetry: CloudKit routes a debug build to its DEVELOPMENT
+    /// container automatically, so the same build read CloudKit-dev while writing D1-PROD. Simulator
+    /// testing wrote real bookings, reviews and profiles next to real users' rows, a debug booking could
+    /// reference an instructor that only exists in the other container, and `DELETE /me` purged live
+    /// data. There was also nowhere to rehearse a migration.
+    ///
+    /// TestFlight and App Store builds are not DEBUG, so they keep using production — unchanged.
+    #if DEBUG
+    static let baseURL = URL(string: "https://flowe-backend-dev.flowepilates.workers.dev")!
+    #else
     static let baseURL = URL(string: "https://flowe-backend.flowepilates.workers.dev")!
+    #endif
 }
 
 enum BackendError: Error {
