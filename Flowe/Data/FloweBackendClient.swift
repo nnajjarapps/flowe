@@ -327,6 +327,32 @@ final class FloweBackendClient {
         let preferences: String?
     }
 
+    // MARK: - Hidden messages (delete-for-me, reinstall recovery)
+
+    /// Mirror deleted-message tombstones. A message the user RECEIVED isn't theirs to delete from the
+    /// shared store — it can only be hidden — and that hiding previously lived only in UserDefaults,
+    /// which app deletion wipes, so deleting a conversation and reinstalling brought the counterpart's
+    /// half of it straight back. Best-effort: the local set stays the source of truth for this device.
+    func hideMessages(remoteIDs: [String]) async {
+        guard !isDebugInjected, hasSession, !remoteIDs.isEmpty else { return }
+        struct Req: Encodable { let remoteIDs: [String] }
+        // The route caps a call at 500 ids; a long-running thread can exceed that in one delete.
+        for chunk in stride(from: 0, to: remoteIDs.count, by: 500).map({
+            Array(remoteIDs[$0..<min($0 + 500, remoteIDs.count)])
+        }) {
+            _ = try? await authorized("/messages/hidden", method: "POST", body: Req(remoteIDs: chunk))
+        }
+    }
+
+    /// Every message this account has hidden, on any install. Empty on no session or failure — callers
+    /// treat that as "nothing extra to hide" and keep their local set.
+    func fetchHiddenMessages() async -> [String] {
+        guard !isDebugInjected, hasSession else { return [] }
+        guard let data = try? await authorized("/messages/hidden", method: "GET") else { return [] }
+        struct Resp: Decodable { let remoteIDs: [String] }
+        return (try? JSONDecoder().decode(Resp.self, from: data))?.remoteIDs ?? []
+    }
+
     // MARK: - Presence ("last seen")
 
     /// Heartbeat MY last-seen — the backend stamps SERVER time on the authenticated ownerID (a client

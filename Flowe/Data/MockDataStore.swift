@@ -1777,6 +1777,31 @@ final class MockDataStore {
         UserDefaults.standard.set(Array(ids), forKey: deletedMessagesKey)
     }
 
+    /// Whether this session has reconciled the local tombstone set with the durable server copy yet.
+    private var didSyncHiddenMessages = false
+
+    /// Reconcile deleted-message tombstones with the backend, BOTH ways, once per session.
+    ///
+    /// UserDefaults does not survive app deletion, so before this existed a reinstall lost every
+    /// tombstone and `merge` happily re-inserted the thread — one-sided, because the user's OWN
+    /// messages really were deleted from the shared store while received ones could only be hidden.
+    /// Pushing local ids up as well as pulling the server's down means tombstones made before this
+    /// shipped become durable too, on the next sync, without a migration.
+    ///
+    /// Mirrors the durable `series_decisions` tombstone that already makes an ended series outlive a
+    /// reinstall. Best-effort: a failed call leaves the local set untouched and retries next launch.
+    private func syncHiddenMessageTombstones() async {
+        let defaults = UserDefaults.standard
+        let local = Set(defaults.stringArray(forKey: deletedMessagesKey) ?? [])
+        let remote = Set(await FloweBackendClient.shared.fetchHiddenMessages())
+        let missingUpstream = local.subtracting(remote)
+        if !missingUpstream.isEmpty {
+            await FloweBackendClient.shared.hideMessages(remoteIDs: Array(missingUpstream))
+        }
+        let merged = local.union(remote)
+        if merged != local { defaults.set(Array(merged), forKey: deletedMessagesKey) }
+    }
+
     /// Tombstones for feed posts the user deleted — so a `syncCommunity` whose fetch still returns the
     /// just-deleted post (CloudKit delete→query-index lag) can't re-insert it. Without this, a deleted
     /// post reappears in the feed on the next refresh. Mirrors `deletedMessagesKey`.
@@ -1815,9 +1840,14 @@ final class MockDataStore {
     /// "Delete for me" — hide the message on THIS device only; the counterpart keeps their copy. The id
     /// is tombstoned so a later sync can't resurrect it. No server write.
     func deleteForMe(_ message: Message) {
-        if let remoteID = message.remoteID { markMessageDeleted(remoteID) }
+        let remoteID = message.remoteID
+        if let remoteID { markMessageDeleted(remoteID) }
         context.delete(message)
         save()
+        // No server write for the MESSAGE (it isn't ours to delete) — but the tombstone must outlive
+        // this install, or the next reinstall pulls the message back in.
+        guard !isPreview, let remoteID else { return }
+        Task { await FloweBackendClient.shared.hideMessages(remoteIDs: [remoteID]) }
     }
 
     /// "Delete for everyone" — sender-only, within 24h. KEEP the row but flip it to a tombstone (both
@@ -1842,17 +1872,22 @@ final class MockDataStore {
         guard let me = currentUserID else { return }
         let id = Message.conversationID(me, counterpartID)
         let thread = messages.filter { $0.conversationID == id }
+        var hiddenRemoteIDs: [String] = []
         var minesRemoteIDs: [String] = []
         for message in thread {
             if let remoteID = message.remoteID {
                 markMessageDeleted(remoteID)
+                hiddenRemoteIDs.append(remoteID)
                 if message.senderID == me { minesRemoteIDs.append(remoteID) }
             }
             context.delete(message)
         }
         save()
-        guard !isPreview, !minesRemoteIDs.isEmpty else { return }
+        // Gate on the HIDDEN set, not the owned one: a thread where the user only ever received still
+        // needs its tombstones mirrored, and that is exactly the case that used to come back.
+        guard !isPreview, !hiddenRemoteIDs.isEmpty else { return }
         Task {
+            await FloweBackendClient.shared.hideMessages(remoteIDs: hiddenRemoteIDs)
             for remoteID in minesRemoteIDs {
                 await messagingService.delete(remoteID: remoteID)
             }
@@ -1944,6 +1979,12 @@ final class MockDataStore {
     /// Pull all messages involving this user and cache anything new.
     func syncMessages() async {
         guard !isPreview, let me = currentUserID else { return }
+        // Must run BEFORE the fetch below, or this sync re-inserts messages the server already knows
+        // are hidden. Once per session — explicit deletes mirror themselves immediately.
+        if !didSyncHiddenMessages {
+            didSyncHiddenMessages = true
+            await syncHiddenMessageTombstones()
+        }
         for message in messages where message.pendingUpload && message.remoteID == nil {
             await upload(message)
         }
