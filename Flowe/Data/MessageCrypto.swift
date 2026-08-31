@@ -67,6 +67,13 @@ final class PublicKeyService {
 @MainActor
 final class MessageCrypto {
     private static let privateKeyKeychainKey = "flowe.dm.x25519.private.v1"
+    /// Records when we FIRST saw "no local private key, but this account has a published one" — i.e. a
+    /// key exists somewhere and the iCloud Keychain has not delivered it to this device yet.
+    private static func keyWaitKey(_ ownerID: String) -> String { "flowe.dm.keyWaitSince.\(ownerID)" }
+    /// How long to wait for the iCloud Keychain before accepting the previous key is unrecoverable and
+    /// minting a new one. Sync normally lands in seconds; this bounds the outage for someone who has
+    /// iCloud Keychain switched off, who will never receive the old key and still needs a working one.
+    private static let keySyncGrace: TimeInterval = 15 * 60
     /// Wire prefix marking a sealed value. `nonisolated` so the model/display layer can recognise a
     /// not-yet-decrypted message without hopping to the main actor.
     private nonisolated static let tag = "enc.v1."
@@ -81,17 +88,24 @@ final class MessageCrypto {
     private var privateKey: Curve25519.KeyAgreement.PrivateKey?
     private var publicKeyCache: [String: Curve25519.KeyAgreement.PublicKey] = [:]
     private var symmetricCache: [String: SymmetricKey] = [:]
+    /// Captured by `activate` so the lazy seal/open paths can verify before ever minting a key.
+    private var myOwnerID: String?
 
     // MARK: - Keypair
 
-    private func myPrivateKey() -> Curve25519.KeyAgreement.PrivateKey {
+    /// This device's private key IF it already exists — memory cache, then Keychain. NEVER mints.
+    private func existingPrivateKey() -> Curve25519.KeyAgreement.PrivateKey? {
         if let key = privateKey { return key }
-        if let stored = KeychainStore.get(Self.privateKeyKeychainKey, synchronizable: true),
-           let data = Data(base64Encoded: stored),
-           let key = try? Curve25519.KeyAgreement.PrivateKey(rawRepresentation: data) {
-            privateKey = key
-            return key
-        }
+        guard let stored = KeychainStore.get(Self.privateKeyKeychainKey, synchronizable: true),
+              let data = Data(base64Encoded: stored),
+              let key = try? Curve25519.KeyAgreement.PrivateKey(rawRepresentation: data) else { return nil }
+        privateKey = key
+        return key
+    }
+
+    /// Create and persist a fresh keypair. Only ever reached from `resolvedPrivateKey(ownerID:)`, which
+    /// establishes first that this account has no key already.
+    private func mintPrivateKey() -> Curve25519.KeyAgreement.PrivateKey {
         let key = Curve25519.KeyAgreement.PrivateKey()
         KeychainStore.set(key.rawRepresentation.base64EncodedString(),
                           for: Self.privateKeyKeychainKey, synchronizable: true)
@@ -99,10 +113,60 @@ final class MessageCrypto {
         return key
     }
 
+    /// The private key to use, minting one ONLY when this account has never had one.
+    ///
+    /// A nil Keychain read is NOT evidence of that. The key is `synchronizable: true`, so on a fresh
+    /// install it arrives from the iCloud Keychain asynchronously — and minting inside that window
+    /// overwrites the real key and permanently orphans every message ever sealed against it: ECDH with
+    /// the new key derives a different shared secret, so the old ciphertext cannot be opened by anyone,
+    /// ever. This is the same hazard `NoteOpen.locked` guards for client notes, one layer down.
+    ///
+    /// A published `PublicKey` record is the evidence that a private key exists somewhere, so when one
+    /// is found we WAIT instead of minting, bounded by `keySyncGrace`. Account deletion is unaffected:
+    /// `AccountDeletionService` deletes the `pubkey-` record, so a genuinely fresh identity finds none
+    /// here and mints immediately.
+    ///
+    /// Returns nil while waiting — callers must treat that as "locked, retry later", never as "no key".
+    private func resolvedPrivateKey(ownerID: String) async -> Curve25519.KeyAgreement.PrivateKey? {
+        let defaults = UserDefaults.standard
+        let waitKey = Self.keyWaitKey(ownerID)
+        if let key = existingPrivateKey() {
+            defaults.removeObject(forKey: waitKey)
+            return key
+        }
+        guard await directory.fetch(ownerID: ownerID) != nil else {
+            defaults.removeObject(forKey: waitKey)
+            return mintPrivateKey()
+        }
+        guard let since = defaults.object(forKey: waitKey) as? Date else {
+            defaults.set(Date(), forKey: waitKey)
+            return nil
+        }
+        guard Date().timeIntervalSince(since) >= Self.keySyncGrace else { return nil }
+        defaults.removeObject(forKey: waitKey)
+        return mintPrivateKey()
+    }
+
+    /// Private key for the lazy seal/open paths. Never mints blind: without a known ownerID there is no
+    /// way to check whether a key already exists, so it reports "locked" rather than risk destroying one.
+    private func usablePrivateKey() async -> Curve25519.KeyAgreement.PrivateKey? {
+        if let key = existingPrivateKey() { return key }
+        guard let ownerID = myOwnerID else { return nil }
+        return await resolvedPrivateKey(ownerID: ownerID)
+    }
+
+    /// True once this device holds its own private key — false only in the narrow window where a key
+    /// exists for this account but the iCloud Keychain has not delivered it yet. Callers about to fall
+    /// back to sending PLAINTEXT must check this: a miss here is ours, not the recipient's.
+    var hasLocalKey: Bool { existingPrivateKey() != nil }
+
     /// Ensure my keypair exists and my public key is published so others can message me. Cheap to call
     /// on every sign-in — the publish no-ops when unchanged.
     func activate(ownerID: String) async {
-        let key = myPrivateKey()
+        myOwnerID = ownerID
+        // nil = a key exists for this account but hasn't synced yet; publishing a freshly minted one
+        // here is exactly the overwrite this guards against, so do nothing and retry next activation.
+        guard let key = await resolvedPrivateKey(ownerID: ownerID) else { return }
         await directory.publish(ownerID: ownerID, publicKey: key.publicKey.rawRepresentation)
     }
 
@@ -116,6 +180,8 @@ final class MessageCrypto {
         privateKey = nil
         publicKeyCache.removeAll()
         symmetricCache.removeAll()
+        if let ownerID = myOwnerID { UserDefaults.standard.removeObject(forKey: Self.keyWaitKey(ownerID)) }
+        myOwnerID = nil
     }
 
     // MARK: - Shared key per conversation
@@ -133,7 +199,8 @@ final class MessageCrypto {
     private func symmetricKey(counterpartID: String, conversationID: String) async -> SymmetricKey? {
         if let cached = symmetricCache[counterpartID] { return cached }
         guard let theirs = await publicKey(for: counterpartID),
-              let shared = try? myPrivateKey().sharedSecretFromKeyAgreement(with: theirs) else { return nil }
+              let mine = await usablePrivateKey(),
+              let shared = try? mine.sharedSecretFromKeyAgreement(with: theirs) else { return nil }
         let key = shared.hkdfDerivedSymmetricKey(
             using: SHA256.self,
             salt: Data(conversationID.utf8),

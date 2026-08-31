@@ -1734,11 +1734,21 @@ final class MockDataStore {
         // Encrypt the text end-to-end before it touches the world-readable public database. The local
         // `message.text` stays plaintext (this cache is on-device only); only the wire value is sealed.
         // If the recipient hasn't published a key yet, fall back to plaintext for this one message.
-        let wireText = await messageCrypto.encrypt(
+        let sealed = await messageCrypto.encrypt(
             message.text,
             conversationID: message.conversationID,
             counterpartID: message.recipientID
-        ) ?? message.text
+        )
+        // ...but a nil seal is not always the recipient's fault. Right after a reinstall OUR OWN key may
+        // still be in flight from the iCloud Keychain, and sending plaintext because of that would leak
+        // the message onto the world-readable public database. Hold it instead: the loop at the top of
+        // `syncMessages` re-uploads anything left `pendingUpload` once the key lands.
+        if sealed == nil, !messageCrypto.hasLocalKey {
+            message.pendingUpload = true
+            save()
+            return
+        }
+        let wireText = sealed ?? message.text
         let remoteID = await messagingService.send(
             recordName: message.recordName,          // deterministic → idempotent, never a duplicate
             conversationID: message.conversationID,
