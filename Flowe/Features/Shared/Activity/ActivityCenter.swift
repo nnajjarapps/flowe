@@ -314,6 +314,20 @@ extension MockDataStore {
                     actorName: ins?.name ?? "", avatarID: ins?.img ?? "", avatarPhoto: ins?.photo,
                     detail: b.type, detail2: "\(b.date) · \(b.time)"))
             case .cancelled:
+                // Never tell the student about their OWN cancellation, and never attribute it to the
+                // instructor — this row did both, so cancelling a session produced "<the studio>
+                // cancelled the session" in the canceller's own bell.
+                //
+                // The two cancellations are already distinguishable without new state. The backend's
+                // cancel route is STUDENT-ONLY (`UPDATE bookings SET cancelled = 1, cancelled_at = ?
+                // WHERE id = ? AND student_id = ?`), and that stamp reaches here as
+                // `bookingCancelledAt`; an INSTRUCTOR cancellation arrives as a decision instead and
+                // never sets it. `pendingDecision` covers the window before that write has synced back,
+                // since `cancel(_:)` sets it on the cancelling device.
+                //
+                // Same defect as `messageActivity()`: a builder that never filtered by who acted.
+                let cancelledByMe = b.pendingDecision || b.remoteID.flatMap { bookingCancelledAt[$0] } != nil
+                guard !cancelledByMe else { break }
                 out.append(ActivityItem(
                     id: "canc-\(stableKey(b))", kind: .bookingCancelled, rawDate: cancelledAt(b),
                     actorName: ins?.name ?? "", avatarID: ins?.img ?? "", avatarPhoto: ins?.photo,
