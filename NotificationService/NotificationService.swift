@@ -41,12 +41,21 @@ final class NotificationService: UNNotificationServiceExtension {
         // --- Parse the CloudKit query-notification payload (ck -> qry -> af). ---
         // NOTE: verify this key path on-device by logging `userInfo` once; if Apple changes it the
         // guards below simply fall through to the plain banner.
-        guard let ck  = userInfo["ck"] as? [AnyHashable: Any],
-              let qry = ck["qry"] as? [AnyHashable: Any],
-              // Only the DM subscription becomes a communication notification. Subscription id
-              // format: flowe.<version>.messages.received.<ownerID> (PushService.subscriptionID).
-              (qry["sid"] as? String)?.contains(".messages.") == true,
-              let af  = qry["af"] as? [AnyHashable: Any],
+        // Two shapes, because DM delivery moved off CloudKit in 1.1:
+        //   * the Worker sends senderID/conversationID at the TOP level, tagged `flowe.topic = messages`;
+        //   * CloudKit nested them under ck -> qry -> af, identified by the subscription id.
+        // Try the Worker shape first (the only one that fires now) and keep the CloudKit path so a
+        // notification still in flight from the old subscription is not mishandled.
+        let af: [AnyHashable: Any]? = {
+            if userInfo["flowe.topic"] as? String == "messages" { return userInfo }
+            guard let ck  = userInfo["ck"] as? [AnyHashable: Any],
+                  let qry = ck["qry"] as? [AnyHashable: Any],
+                  // Subscription id format: flowe.<version>.messages.received.<ownerID>.
+                  (qry["sid"] as? String)?.contains(".messages.") == true
+            else { return nil }
+            return qry["af"] as? [AnyHashable: Any]
+        }()
+        guard let af,
               let senderID = af["senderID"] as? String, !senderID.isEmpty,
               let conversationID = af["conversationID"] as? String, !conversationID.isEmpty
         else {

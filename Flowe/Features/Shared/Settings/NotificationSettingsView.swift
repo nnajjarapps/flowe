@@ -164,6 +164,7 @@ struct NotificationSettingsView: View {
             // Booking + review pushes come from the backend now, so their per-device preferences sync there.
             await FloweBackendClient.shared.setBookingNotifications(bookings)
             await FloweBackendClient.shared.setReviewNotifications(reviews)
+            await FloweBackendClient.shared.setMessageNotifications(messages)
             // Presence "last seen" opt-out is server-enforced (WhatsApp reciprocity).
             await FloweBackendClient.shared.setPresenceVisible(presence)
         }

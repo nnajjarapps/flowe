@@ -282,23 +282,14 @@ final class PushService {
         // See [[BookingBackend]]. The `.bookings` toggle is honoured backend-side; no CloudKit
         // subscription is registered here anymore. `refreshSubscriptions` sweeps the old ones by absence.
 
-        // Both roles message, and `MessagingService` addresses by `recipientID` — the sender is the
-        // creator, so this never fires for the user's own message.
-        if isEnabled(NotificationPreference.messages) {
-            plans.append(Plan(
-                id: Self.subscriptionID(.messages, "received", ownerID),
-                recordType: MessagingService.recordType,
-                predicate: NSPredicate(format: "\(MessagingService.recipientField) == %@", ownerID),
-                options: [.firesOnRecordCreation],
-                titleKey: "push.message.title", titleArgs: ["senderName"],
-                // Generic static body (NOT the "%@"-bound ciphertext `text` field): the extension
-                // replaces title/body in the happy path, but a fallback banner must never show
-                // ciphertext. The extension personalizes from senderID/senderName/conversationID.
-                bodyKey: "push.message.body.generic", bodyArgs: [],
-                mutableContent: true,
-                desiredKeys: ["senderID", "senderName", "conversationID"]
-            ))
-        }
+        // DM notifications now come from the backend over APNs — `ChatMessage` left the world-readable
+        // CloudKit DB in 1.1, which also kills any CKQuerySubscription on it (nothing writes that record
+        // type any more, so the subscription would simply never fire). NO plan is registered here; the
+        // `.messages` toggle is honoured backend-side via `devices.notify_messages`, pushed by
+        // `FloweBackendClient.setMessageNotifications`. `refreshSubscriptions` sweeps the old
+        // subscription by absence. The payload keeps `mutable-content` so the Notification Service
+        // Extension still upgrades it to a communication notification — it now reads senderID /
+        // conversationID from the TOP level of the Worker's payload instead of ck -> qry -> af.
 
         // Review notifications now come from the booking backend over APNs — SessionReview left the
         // world-readable CloudKit DB (which also kills any CKQuerySubscription). The `.reviews` toggle is

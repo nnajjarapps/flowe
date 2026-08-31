@@ -270,6 +270,16 @@ final class FloweBackendClient {
         _ = try? await authorized("/devices", method: "POST", body: Req(deviceId: deviceID, notifyReviews: enabled))
     }
 
+    /// Push the "Messages" toggle to the backend so DM pushes actually stop/resume.
+    ///
+    /// Needed since 1.1: DM delivery left CloudKit, so the toggle can no longer be honoured by simply
+    /// not registering a `CKQuerySubscription`. The server now decides, via `devices.notify_messages`.
+    func setMessageNotifications(_ enabled: Bool) async {
+        guard !isDebugInjected, hasSession else { return }
+        struct Req: Encodable { let deviceId: String; let notifyMessages: Bool }
+        _ = try? await authorized("/devices", method: "POST", body: Req(deviceId: deviceID, notifyMessages: enabled))
+    }
+
     /// Unauthenticated GET for a PUBLIC endpoint (e.g. the reviews wall a guest browses) — no session or
     /// bearer required, so it works before/without sign-in. Callers degrade on throw.
     func publicData(_ path: String, query: [URLQueryItem] = []) async throws -> Data {

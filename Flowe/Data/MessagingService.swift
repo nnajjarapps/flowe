@@ -66,10 +66,10 @@ struct RemoteReadReceipt: Decodable {
 /// stays on CloudKit — a public key is meant to be world-readable.
 @MainActor
 final class MessagingService {
-    /// Legacy CloudKit constants, kept ONLY for `AccountDeletionService`'s sweep of pre-cutover records
-    /// and for the push subscription that has not moved yet. No message is written to CloudKit anymore.
+    /// Legacy CloudKit constants, kept ONLY so `AccountDeletionService` can still sweep a user's
+    /// pre-cutover records out of the public database. Nothing writes, reads or subscribes to these
+    /// record types any more — the DM push subscription was retired with the delivery move.
     static let recordType = "ChatMessage"
-    static let recipientField = "recipientID"
     static let readReceiptRecordType = "ReadReceipt"
 
     private let backend = FloweBackendClient.shared
