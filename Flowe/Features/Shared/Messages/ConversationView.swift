@@ -342,11 +342,23 @@ struct ConversationView: View {
     /// to reply to) or the model is unavailable.
     private func refreshSuggestions() async {
         if #available(iOS 26, *), FloweAI.isAvailable {
-            guard let last = messages.last, last.senderID != data.currentUserID else {
+            // A sealed message's `displayText` is the "🔒 Message unavailable" placeholder, NOT anything
+            // the counterpart wrote — feeding it to the model produces replies to the error text itself
+            // ("Sorry, I'm having a technical issue"). Never suggest a reply to something we can't read,
+            // and keep sealed rows out of the context window entirely.
+            guard let last = messages.last,
+                  last.senderID != data.currentUserID,
+                  !MessageCrypto.isSealed(last.text) else {
                 suggestions = []
                 return
             }
-            let recent = messages.suffix(8).map { (mine: $0.senderID == data.currentUserID, text: $0.displayText) }
+            let recent = messages.suffix(8)
+                .filter { !MessageCrypto.isSealed($0.text) }
+                .map { (mine: $0.senderID == data.currentUserID, text: $0.displayText) }
+            guard !recent.isEmpty else {
+                suggestions = []
+                return
+            }
             suggestions = (try? await FloweIntelligence.shared.suggestReplies(recent: recent)) ?? []
         } else {
             suggestions = []
