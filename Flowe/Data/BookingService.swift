@@ -462,7 +462,11 @@ enum BookingWireDecodeSeam {
 }
 #endif
 
-private extension Date {
+extension Date {
     /// Backend timestamps are JS `Date.now()` — milliseconds since the epoch.
+    ///
+    /// Deliberately NOT file-private: every service that talks to the Worker needs it (`BookingService`
+    /// and, since 1.1, `MessagingService`). One definition rather than a copy per file, because two
+    /// copies of a unit conversion are exactly the kind of thing that drifts.
     init(msEpoch ms: Double) { self.init(timeIntervalSince1970: ms / 1000) }
 }

@@ -338,6 +338,24 @@ final class FloweBackendClient {
         let presenceVisible: Bool?
         let displayName: String?
         let preferences: String?
+        /// When this account first published a DM public key. Environment-INDEPENDENT proof that a
+        /// keypair exists — see `reportDMKeyPublished()`.
+        let dmKeyAt: Double?
+    }
+
+    /// Record that this account has a DM keypair.
+    ///
+    /// `MessageCrypto` must never mint a key when one already exists, because minting overwrites the
+    /// iCloud-Keychain key and permanently orphans every message sealed against it. Its evidence used to
+    /// be the CloudKit `PublicKey` record — but that record is PER-CONTAINER, so a debug build looks in
+    /// Development, and on a fresh device would find nothing, mint, and destroy the production key it
+    /// shares through the Keychain. This marker does not care which container you are talking to.
+    ///
+    /// Write-once server-side: the stamp is never refreshed or cleared, only removed with the account.
+    func reportDMKeyPublished() async {
+        guard !isDebugInjected, hasSession else { return }
+        struct Req: Encodable { let dmKeyPublished: Bool }
+        _ = try? await authorized("/profile", method: "POST", body: Req(dmKeyPublished: true))
     }
 
     // MARK: - Hidden messages (delete-for-me, reinstall recovery)

@@ -1752,10 +1752,7 @@ final class MockDataStore {
         let remoteID = await messagingService.send(
             recordName: message.recordName,          // deterministic → idempotent, never a duplicate
             conversationID: message.conversationID,
-            senderID: message.senderID,
-            senderName: message.senderName,
             recipientID: message.recipientID,
-            recipientName: message.recipientName,
             text: wireText,
             sentAt: message.sentAt
         )
@@ -2076,9 +2073,13 @@ final class MockDataStore {
                 remoteID: entry.id,
                 conversationID: entry.conversationID,
                 senderID: entry.senderID,
-                senderName: entry.senderName,
+                // Names are no longer carried on the wire (see `RemoteMessage`), and are deliberately
+                // NOT resolved here: writing a name at merge time would re-freeze the very snapshot the
+                // migration removed. `conversations` already prefers the live listing / StudentProfile
+                // name for both parties, so this stays empty and identity resolves at render.
+                senderName: "",
                 recipientID: entry.recipientID,
-                recipientName: entry.recipientName,
+                recipientName: "",
                 // A message deleted-for-everyone before we ever fetched it lands straight as a tombstone.
                 text: entry.deleted ? "" : plaintext,
                 sentAt: entry.sentAt,

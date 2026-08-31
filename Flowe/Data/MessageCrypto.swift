@@ -134,7 +134,15 @@ final class MessageCrypto {
             defaults.removeObject(forKey: waitKey)
             return key
         }
-        guard await directory.fetch(ownerID: ownerID) != nil else {
+        // Ask BOTH sources before concluding no key has ever existed, and mint only if BOTH say no.
+        // The CloudKit `PublicKey` record is per-CONTAINER: a debug build queries Development, so on a
+        // fresh device it would find nothing and mint — destroying the production key it shares through
+        // the iCloud Keychain. The backend marker is environment-independent and closes that hole.
+        var keyExistsElsewhere = await directory.fetch(ownerID: ownerID) != nil
+        if !keyExistsElsewhere {
+            keyExistsElsewhere = await FloweBackendClient.shared.fetchMyProfile()?.dmKeyAt != nil
+        }
+        guard keyExistsElsewhere else {
             defaults.removeObject(forKey: waitKey)
             return mintPrivateKey()
         }
@@ -168,6 +176,9 @@ final class MessageCrypto {
         // here is exactly the overwrite this guards against, so do nothing and retry next activation.
         guard let key = await resolvedPrivateKey(ownerID: ownerID) else { return }
         await directory.publish(ownerID: ownerID, publicKey: key.publicKey.rawRepresentation)
+        // Record it where the container cannot hide it. Cheap and write-once server-side, so this is
+        // safe to call on every activation.
+        await FloweBackendClient.shared.reportDMKeyPublished()
     }
 
     /// Erase this device's DM identity on ACCOUNT DELETION. The private key lives in the iCloud Keychain

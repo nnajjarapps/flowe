@@ -1,224 +1,156 @@
 import Foundation
-import CloudKit
 
-/// A message as it exists in the shared store (plain DTO decoded from a CKRecord).
-struct RemoteMessage {
+/// A message as it exists in the shared store.
+///
+/// No `senderName` / `recipientName`. The CloudKit record denormalised both, which froze a copy of a
+/// name at write time — the same defect that showed a renamed user by her OLD name in the block menu.
+/// `MockDataStore.conversations` already prefers the live listing / StudentProfile name in every
+/// message surface, so the snapshot was only ever a last-resort fallback, and a store whose whole point
+/// is not leaking who-talks-to-whom has no business retaining names either.
+struct RemoteMessage: Decodable {
     let id: String
     let conversationID: String
     let senderID: String
-    let senderName: String
     let recipientID: String
-    let recipientName: String
     let text: String
     let sentAt: Date
     let deleted: Bool
 
-    init?(record: CKRecord) {
-        guard let conversationID = record["conversationID"] as? String,
-              let senderID = record["senderID"] as? String,
-              let recipientID = record["recipientID"] as? String,
-              let text = record["text"] as? String else { return nil }
-        id = record.recordID.recordName
-        self.conversationID = conversationID
-        self.senderID = senderID
-        self.recipientID = recipientID
-        self.text = text
-        senderName = record["senderName"] as? String ?? ""
-        recipientName = record["recipientName"] as? String ?? ""
-        sentAt = record["sentAt"] as? Date ?? .distantPast
-        deleted = ((record["deleted"] as? Int) ?? 0) == 1
+    private enum CodingKeys: String, CodingKey {
+        case id, conversationID, senderID, recipientID, text, sentAt, deleted
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        conversationID = try c.decode(String.self, forKey: .conversationID)
+        senderID = try c.decode(String.self, forKey: .senderID)
+        recipientID = try c.decode(String.self, forKey: .recipientID)
+        text = try c.decode(String.self, forKey: .text)
+        sentAt = Date(msEpoch: try c.decodeIfPresent(Double.self, forKey: .sentAt) ?? 0)
+        deleted = try c.decodeIfPresent(Bool.self, forKey: .deleted) ?? false
     }
 }
 
 /// A per-conversation, per-reader "read up to `lastReadAt`" marker — the sender reads the counterpart's
-/// to render "Seen". Carries only a conversationID (a hash of the two owner ids), the reader's id and a
-/// timestamp: no message content, so nothing here needs the E2E encryption the messages themselves get.
-struct RemoteReadReceipt {
+/// to render "Seen". Carries only a conversationID, the reader's id and a timestamp: no message content.
+struct RemoteReadReceipt: Decodable {
     let conversationID: String
     let readerID: String
     let lastReadAt: Date
 
-    init?(record: CKRecord) {
-        guard let conversationID = record["conversationID"] as? String,
-              let readerID = record["readerID"] as? String else { return nil }
-        self.conversationID = conversationID
-        self.readerID = readerID
-        lastReadAt = record["lastReadAt"] as? Date ?? .distantPast
+    private enum CodingKeys: String, CodingKey { case found, conversationID, readerID, lastReadAt }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        guard try c.decodeIfPresent(Bool.self, forKey: .found) ?? false else {
+            throw DecodingError.dataCorruptedError(forKey: .found, in: c, debugDescription: "no receipt")
+        }
+        conversationID = try c.decode(String.self, forKey: .conversationID)
+        readerID = try c.decode(String.self, forKey: .readerID)
+        lastReadAt = Date(msEpoch: try c.decodeIfPresent(Double.self, forKey: .lastReadAt) ?? 0)
     }
 }
 
-/// Message exchange over CloudKit's **public** database, for the same reason bookings live there:
-/// SwiftData can only mirror the *private* database, which is per-iCloud-account, so a message
-/// written by one user would never reach the other.
+/// Direct-message exchange, **behind the authorization backend** as of 1.1.
 ///
-/// Messages are append-only and each is written by its sender, so the default `_creator`-write
-/// security role is a natural fit — no two-record split like `BookingService` needs.
+/// It used to live on CloudKit's public database. The message TEXT was safe there — end-to-end
+/// encrypted, and it still is; the same `enc.v1.` ciphertext simply travels here instead — but
+/// `ChatMessage` was `GRANT READ TO "_world"` with senderID, senderName, recipientID, recipientName and
+/// sentAt all QUERYABLE, so the SOCIAL GRAPH was public: anyone could enumerate who messages whom, by
+/// name, with timestamps. That metadata cannot be encrypted away, because the recipient has to query by
+/// their own id — the only fix is per-request authorization, which the public database cannot do at all.
 ///
-/// CloudKit query predicates do **not** support `OR`, so the inbox is assembled from two equality
-/// queries (messages I sent, messages I received) rather than one compound query.
+/// Every route here is scoped to the caller server-side: the sender is taken from the session token and
+/// never from the request, and reads return only rows the caller is party to. `PublicKey` deliberately
+/// stays on CloudKit — a public key is meant to be world-readable.
 @MainActor
 final class MessagingService {
+    /// Legacy CloudKit constants, kept ONLY for `AccountDeletionService`'s sweep of pre-cutover records
+    /// and for the push subscription that has not moved yet. No message is written to CloudKit anymore.
     static let recordType = "ChatMessage"
-
-    /// The field a message addresses its reader by — never the sender, so a `CKQuerySubscription`
-    /// on it can't notify someone about their own message. Shared with `PushService` so the query
-    /// and the subscription predicate can't drift apart.
     static let recipientField = "recipientID"
-
-    /// Read receipts (the "Seen" indicator). A separate record type; fetched by deterministic
-    /// recordName so NO field needs to be queryable in the CloudKit schema.
     static let readReceiptRecordType = "ReadReceipt"
 
-    /// Deterministic recordName so a reader's receipt for a conversation UPSERTS (exactly one row, always
-    /// current) and the counterpart fetches it by name without a query. The `read-` prefix namespaces it
-    /// away from every other record type — recordName is unique per zone ACROSS record types.
-    static func readReceiptRecordName(conversationID: String, readerID: String) -> String {
-        "read-\(conversationID)-\(readerID)"
-    }
-
-    /// Per-page size for the cursor sweep. Completeness comes from following the cursor, not this.
-    private static let pageSize = 400
-
-    #if CLOUDKIT_ENABLED
-    private let database = CKContainer(identifier: FloweModelContainer.cloudKitContainerID).publicCloudDatabase
-    #endif
+    private let backend = FloweBackendClient.shared
 
     /// Publish a message. Returns the remote id, or nil if it didn't reach the server.
-    /// `recordName` is the caller's DETERMINISTIC id for the message (`Message.recordName`), which makes
-    /// this an idempotent create: a re-send of the same message (the explicit upload racing the sync
-    /// retry loop, or a retry after a crash) targets the same record instead of minting a duplicate.
-    /// A conflict on the already-created record is therefore SUCCESS — the message is on the server —
-    /// so we return the name rather than nil (which would keep it flagged pending and re-tried forever).
+    ///
+    /// `recordName` is the caller's DETERMINISTIC id (`Message.recordName`), which makes this an
+    /// idempotent create: a re-send (the explicit upload racing the sync retry loop, or a retry after a
+    /// crash) targets the same row instead of minting a duplicate. The server's `ON CONFLICT DO NOTHING`
+    /// means a repeat is success, not a second message — and cannot rewrite the original's content.
+    ///
+    /// The sender is NOT a parameter: the server takes it from the session token, so a message can never
+    /// be forged as coming from someone else.
     func send(recordName: String,
               conversationID: String,
-              senderID: String,
-              senderName: String,
               recipientID: String,
-              recipientName: String,
               text: String,
               sentAt: Date) async -> String? {
-        #if CLOUDKIT_ENABLED
-        let record = CKRecord(recordType: Self.recordType,
-                              recordID: CKRecord.ID(recordName: recordName))
-        record["conversationID"] = conversationID
-        record["senderID"] = senderID
-        record["senderName"] = senderName
-        record["recipientID"] = recipientID
-        record["recipientName"] = recipientName
-        record["text"] = text
-        record["sentAt"] = sentAt
-        do {
-            let saved = try await database.save(record)
-            return saved.recordID.recordName
-        } catch let error as CKError where error.code == .serverRecordChanged {
-            // The record already exists (a concurrent/duplicate send won the race). That IS the
-            // record we wanted written — treat it as delivered, don't create a second copy.
-            return recordName
-        } catch {
-            return nil   // offline / not signed into iCloud / schema not deployed
+        struct Req: Encodable {
+            let id: String; let conversationID: String; let recipientID: String
+            let text: String; let sentAt: Double
         }
-        #else
-        return nil
-        #endif
+        let body = Req(id: recordName, conversationID: conversationID, recipientID: recipientID,
+                       text: text, sentAt: sentAt.timeIntervalSince1970 * 1000)
+        guard (try? await backend.authorized("/messages", method: "POST", body: body)) != nil else {
+            return nil    // offline / no session — caller keeps it pendingUpload and retries
+        }
+        return recordName
     }
 
-    /// Delete a message from the shared store. Only the message's own sender can do this — the
-    /// public database grants write to `_creator`, so deleting someone else's message is rejected.
-    /// Best-effort: a failure (offline, not mine) just leaves the record, which the caller tolerates.
+    /// Remove MY OWN message from the shared store — the "delete conversation" path, matching what
+    /// CloudKit's `deleteRecord` did, so a deleted thread doesn't linger as a wall of tombstones.
+    /// Sender-only and unwindowed, enforced server-side. Best-effort: a failure leaves the row, which
+    /// the caller tolerates because its local tombstone is durable regardless.
     func delete(remoteID: String) async {
-        #if CLOUDKIT_ENABLED
-        _ = try? await database.deleteRecord(withID: CKRecord.ID(recordName: remoteID))
-        #endif
+        _ = try? await backend.authorized("/messages/\(remoteID)?hard=1", method: "DELETE")
     }
 
-    /// "Delete for everyone" — a SOFT delete: keep the record but flag `deleted` and blank the
-    /// ciphertext, so the recipient's next sync flips their copy to a tombstone. A hard delete would
-    /// just make the row vanish with no "message was deleted" marker. Only the sender can do this
-    /// (public DB grants write to `_creator`). Fetch-then-mutate with one serverRecordChanged retry.
+    /// "Delete for everyone" — a SOFT delete: the row stays, flagged `deleted` with the ciphertext
+    /// stripped, so the recipient's next sync flips their copy to a tombstone instead of the message
+    /// silently vanishing. Sender-only AND inside the 24h window, both enforced server-side now; on the
+    /// client alone that was never a rule, just a hidden button.
     func deleteForEveryone(remoteID: String) async {
-        #if CLOUDKIT_ENABLED
-        func apply() async throws {
-            let record = try await database.record(for: CKRecord.ID(recordName: remoteID))
-            record["deleted"] = 1
-            record["text"] = ""          // strip the ciphertext — the content is gone for good
-            _ = try await database.save(record)
-        }
-        do { try await apply() }
-        catch let error as CKError where error.code == .serverRecordChanged { try? await apply() }
-        catch { /* offline / not mine — best-effort; the local tombstone still shows on this device */ }
-        #endif
+        _ = try? await backend.authorized("/messages/\(remoteID)", method: "DELETE")
     }
 
     /// Publish (upsert) the signed-in reader's "read up to `lastReadAt`" marker for a conversation.
-    /// Creator-owned by the reader; the deterministic recordName makes a re-read an UPDATE, not a dup.
+    /// `readerID` is accepted for call-site symmetry but NOT sent — the server stamps the authenticated
+    /// caller, so nobody can mark someone else's thread as seen.
     @discardableResult
     func publishReadReceipt(conversationID: String, readerID: String, lastReadAt: Date) async -> Bool {
-        #if CLOUDKIT_ENABLED
-        let id = CKRecord.ID(recordName: Self.readReceiptRecordName(conversationID: conversationID, readerID: readerID))
-        let record = (try? await database.record(for: id))
-            ?? CKRecord(recordType: Self.readReceiptRecordType, recordID: id)
-        record["conversationID"] = conversationID
-        record["readerID"] = readerID
-        record["lastReadAt"] = lastReadAt
-        return (try? await database.save(record)) != nil
-        #else
-        return false
-        #endif
+        struct Req: Encodable { let conversationID: String; let lastReadAt: Double }
+        let body = Req(conversationID: conversationID, lastReadAt: lastReadAt.timeIntervalSince1970 * 1000)
+        return (try? await backend.authorized("/messages/read", method: "POST", body: body)) != nil
     }
 
-    /// Fetch the counterpart's read marker for a conversation (direct record read by recordName — works
-    /// with no queryable index). Nil if they've never read, offline, or the type isn't deployed yet.
+    /// Fetch the counterpart's read marker for a conversation. Nil if they've never read, or offline.
     func fetchReadReceipt(conversationID: String, readerID: String) async -> RemoteReadReceipt? {
-        #if CLOUDKIT_ENABLED
-        let id = CKRecord.ID(recordName: Self.readReceiptRecordName(conversationID: conversationID, readerID: readerID))
-        guard let record = try? await database.record(for: id) else { return nil }
-        return RemoteReadReceipt(record: record)
-        #else
-        return nil
-        #endif
+        guard let data = try? await backend.authorized("/messages/read", query: [
+            URLQueryItem(name: "conversationID", value: conversationID),
+            URLQueryItem(name: "readerID", value: readerID),
+        ]) else { return nil }
+        return try? JSONDecoder().decode(RemoteReadReceipt.self, from: data)
     }
 
-    /// Every message involving this user, in both directions.
+    /// Every message involving this user, in both directions. `ownerID` is accepted for call-site
+    /// symmetry but NOT sent: the server answers only for the authenticated caller, which is precisely
+    /// the authorization the CloudKit version could not express.
     func fetchMessages(for ownerID: String) async -> [RemoteMessage] {
-        #if CLOUDKIT_ENABLED
-        async let sent = fetch(NSPredicate(format: "senderID == %@", ownerID))
-        async let received = fetch(NSPredicate(format: "recipientID == %@", ownerID))
-        return await sent + received
-        #else
-        return []
-        #endif
+        await fetch(query: [])
     }
 
     /// A single thread — used when opening a conversation, so it refreshes without a full sync.
     func fetchThread(conversationID: String) async -> [RemoteMessage] {
-        await fetch(NSPredicate(format: "conversationID == %@", conversationID))
+        await fetch(query: [URLQueryItem(name: "conversationID", value: conversationID)])
     }
 
-    private func fetch(_ predicate: NSPredicate) async -> [RemoteMessage] {
-        #if CLOUDKIT_ENABLED
-        let query = CKQuery(recordType: Self.recordType, predicate: predicate)
-        query.sortDescriptors = [NSSortDescriptor(key: "sentAt", ascending: true)]
-        var messages: [RemoteMessage] = []
-        do {
-            var page = try await database.records(
-                matching: query, desiredKeys: nil, resultsLimit: Self.pageSize
-            )
-            messages += page.matchResults.compactMap { try? $0.1.get() }.compactMap(RemoteMessage.init)
-            // Follow the cursor so a thread (or an inbox) past one page keeps updating. Without this,
-            // the ascending sort returns the OLDEST page and the newest messages are silently dropped
-            // forever once the record set crosses `pageSize` — an active conversation stops updating.
-            while let cursor = page.queryCursor {
-                page = try await database.records(
-                    continuingMatchFrom: cursor, desiredKeys: nil, resultsLimit: Self.pageSize
-                )
-                messages += page.matchResults.compactMap { try? $0.1.get() }.compactMap(RemoteMessage.init)
-            }
-            return messages
-        } catch {
-            return []
-        }
-        #else
-        return []
-        #endif
+    private func fetch(query: [URLQueryItem]) async -> [RemoteMessage] {
+        struct Resp: Decodable { let messages: [RemoteMessage] }
+        guard let data = try? await backend.authorized("/messages", query: query),
+              let resp = try? JSONDecoder().decode(Resp.self, from: data) else { return [] }
+        return resp.messages
     }
 }
