@@ -58,8 +58,8 @@ private struct FloweDialogSurface: View {
                 .ignoresSafeArea()
                 .onTapGesture {
                     guard let cancel = actions.first(where: { $0.role == .cancel }) else { return }
-                    dismiss()
                     cancel.action()
+                    dismiss()
                 }
                 .accessibilityHidden(true)
 
@@ -86,8 +86,16 @@ private struct FloweDialogSurface: View {
                             // Warning haptic on a destructive commit, a plain tick otherwise — the
                             // same split the rest of the app uses.
                             if action.role == .destructive { Haptic.warning() } else { Haptic.tap() }
-                            dismiss()
+                            // ACTION FIRST, then dismiss — never the other way round. Callers routinely
+                            // drive this dialog from an optional (`deleteTarget != nil`) whose binding
+                            // setter clears that optional on dismiss, and then read it back inside the
+                            // action. Dismissing first nils the value before the action can see it, so
+                            // the action silently does nothing — which is exactly how "Delete
+                            // conversation" became a no-op. The `.alert(_:isPresented:presenting:)` API
+                            // this replaced handed the value to the action for precisely this reason;
+                            // running in this order restores that guarantee for every caller at once.
                             action.action()
+                            dismiss()
                         } label: {
                             Text(action.title)
                                 .flowFont(.titleMedium)
