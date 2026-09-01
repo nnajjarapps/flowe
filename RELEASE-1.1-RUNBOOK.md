@@ -18,6 +18,38 @@ Temporary `#if DEBUG` logs are already in place:
 - `MessagingService.fetch` → `[DM] raw:` (the wire JSON) and `[DM] DECODE FAILED:`
 - `MockDataStore.merge` → `[DM] merge id=… wire.deleted=… localFound=… local.deleted=… textlen=…`
 
+### How to reproduce
+
+The tombstone is ALREADY in `flowe-app-dev`, so nothing needs creating — opening the thread is enough to fire both logs.
+
+Current dev state (as of 2026-09-01):
+
+| message id | sender | `deleted` | `length(text)` |
+|---|---|---|---|
+| `msg-95D02F21-…-269BDAE82E90` | instructor `001941` | 0 | 47 |
+| `msg-9919A94B-…-FB9DE455CAE2` | student `001331` | **1** | **0** |
+
+1. Run the app from Xcode (Debug — a TestFlight/App Store build talks to PRODUCTION and will show none of this).
+2. Sign in as either party. The bug shows on both.
+3. Open Messages → the conversation with the other account.
+4. In the Xcode console, filter for `[DM]`.
+
+The logs print in `MessagingService.fetch` (once per `GET /messages`, so once on the inbox and again on opening the thread) and in `MockDataStore.merge` (once per already-known message).
+
+**The line that matters** is the merge line whose id ends `E455CAE2` — the deleted one. Expected if everything were working:
+
+```
+[DM] merge id=…E455CAE2 wire.deleted=true localFound=true local.deleted=false textlen=0
+```
+
+and the matching `[DM] raw:` containing `"id":"msg-9919A94B…","deleted":true`.
+
+Any deviation from that is the bug — read it off the table below.
+
+**If dev has been wiped**, recreate in three steps: send a message from account A, long-press it → *Delete for everyone* (within 24h), then reopen the thread on either device.
+
+### Triage
+
 Run from Xcode, open the conversation, read the console. Then:
 
 | What you see | What it means | Fix |
