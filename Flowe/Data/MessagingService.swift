@@ -105,7 +105,12 @@ final class MessagingService {
     /// Sender-only and unwindowed, enforced server-side. Best-effort: a failure leaves the row, which
     /// the caller tolerates because its local tombstone is durable regardless.
     func delete(remoteID: String) async {
-        _ = try? await backend.authorized("/messages/\(remoteID)?hard=1", method: "DELETE")
+        // `hard` MUST go through `query:`. `rawSend` assigns `comps.path = path`, so a "?" written into
+        // the path string is percent-encoded INTO the path — the server then sees no query parameter,
+        // looks up an id that does not exist, and answers `{ok:true}` for the missing row. The delete
+        // silently did nothing and the client saw success.
+        _ = try? await backend.authorized("/messages/\(remoteID)", method: "DELETE",
+                                          query: [URLQueryItem(name: "hard", value: "1")])
     }
 
     /// "Delete for everyone" — a SOFT delete: the row stays, flagged `deleted` with the ciphertext
