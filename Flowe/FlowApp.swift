@@ -232,6 +232,9 @@ struct FlowApp: App {
                     // having iCloud space). Before `syncMessages`, so a block is in force before any
                     // message from that sender can land.
                     await data.syncPrivateState()
+                    // Language, coverage radius and Out-of-Studio hours follow the Apple ID too, so a
+                    // second device inherits the user's setup instead of resetting to defaults.
+                    await settings.restoreFromBackend()
                     await data.syncBookings(asInstructor: isInstructor)
                     await data.syncCoverage(asInstructor: isInstructor)
                     await data.syncMessages()

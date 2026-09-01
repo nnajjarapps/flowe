@@ -351,6 +351,7 @@ final class FloweBackendClient {
         /// When this account first published a DM public key. Environment-INDEPENDENT proof that a
         /// keypair exists — see `reportDMKeyPublished()`.
         let dmKeyAt: Double?
+        let appSettings: String?
     }
 
     /// Record that this account has a DM keypair.
@@ -443,6 +444,52 @@ final class FloweBackendClient {
         struct Req: Encodable { let blockedID: String; let blockedName: String }
         _ = try? await authorized("/blocks", method: "POST",
                                   body: Req(blockedID: blockedID, blockedName: blockedName))
+    }
+
+    struct RemoteBlockWindow: Decodable { let senderID: String; let startAt: Double; let endAt: Double }
+
+    func fetchBlockWindows() async -> [RemoteBlockWindow] {
+        guard !isDebugInjected, hasSession else { return [] }
+        guard let data = try? await authorized("/blocks/windows") else { return [] }
+        struct Resp: Decodable { let windows: [RemoteBlockWindow] }
+        return (try? JSONDecoder().decode(Resp.self, from: data))?.windows ?? []
+    }
+
+    /// Record WHEN a sender was blocked. Append-only and idempotent server-side — a window is history,
+    /// so a replayed sync must not duplicate it.
+    func addBlockWindow(senderID: String, startAt: Date, endAt: Date) async {
+        guard !isDebugInjected, hasSession else { return }
+        struct Req: Encodable { let senderID: String; let startAt: Double; let endAt: Double }
+        _ = try? await authorized("/blocks/windows", method: "POST", body: Req(
+            senderID: senderID, startAt: startAt.timeIntervalSince1970 * 1000,
+            endAt: endAt.timeIntervalSince1970 * 1000))
+    }
+
+    func fetchSavedInstructors() async -> [String] {
+        guard !isDebugInjected, hasSession else { return [] }
+        guard let data = try? await authorized("/saved") else { return [] }
+        struct Resp: Decodable { let saved: [String] }
+        return (try? JSONDecoder().decode(Resp.self, from: data))?.saved ?? []
+    }
+
+    func addSavedInstructor(_ instructorID: String) async {
+        guard !isDebugInjected, hasSession else { return }
+        struct Req: Encodable { let instructorID: String }
+        _ = try? await authorized("/saved", method: "POST", body: Req(instructorID: instructorID))
+    }
+
+    func removeSavedInstructor(_ instructorID: String) async {
+        guard !isDebugInjected, hasSession else { return }
+        _ = try? await authorized("/saved/\(instructorID)", method: "DELETE")
+    }
+
+    /// Device-agnostic app settings (language, coverage radius, Out-of-Studio window) as JSON.
+    /// Separate from `preferences`, which holds the student matching quiz — one is what the app looks
+    /// like, the other is what it recommends.
+    func saveAppSettings(json: String) async {
+        guard !isDebugInjected, hasSession else { return }
+        struct Req: Encodable { let appSettings: String }
+        _ = try? await authorized("/profile", method: "POST", body: Req(appSettings: json))
     }
 
     func removeBlock(blockedID: String) async {

@@ -301,15 +301,24 @@ final class MockDataStore {
         return savedInstructorIDs.contains(ownerID)
     }
 
-    /// Save / unsave an instructor. Local-only — never publishes to CloudKit.
+    /// Save / unsave an instructor. Mirrored to the backend so the list follows this Apple ID to
+    /// another device and survives a reinstall — UserDefaults does neither.
     func toggleSaved(_ ownerID: String?) {
         guard let ownerID, !ownerID.isEmpty else { return }
+        let nowSaved: Bool
         if let idx = savedInstructorIDs.firstIndex(of: ownerID) {
-            savedInstructorIDs.remove(at: idx)
+            savedInstructorIDs.remove(at: idx); nowSaved = false
         } else {
             savedInstructorIDs.insert(ownerID, at: 0)   // most-recently-saved first
+            nowSaved = true
         }
         UserDefaults.standard.set(savedInstructorIDs, forKey: Self.savedInstructorsKey)
+        guard !isPreview else { return }
+        Task {
+            nowSaved
+                ? await FloweBackendClient.shared.addSavedInstructor(ownerID)
+                : await FloweBackendClient.shared.removeSavedInstructor(ownerID)
+        }
     }
 
     /// Saved instructors resolved to cached listings (most-recently-saved first); unresolved ids skipped.
@@ -1895,6 +1904,31 @@ final class MockDataStore {
             blocksChanged = true
         }
         if blocksChanged { save(); mirrorBlockedToAppGroup() }
+
+        // --- block windows (append-only history; union both ways) ---
+        let remoteWindows = await client.fetchBlockWindows()
+        mergeBlockWindows(remoteWindows)
+        let known = Set(remoteWindows.map { "\($0.senderID)|\(Int($0.startAt))" })
+        for (sender, windows) in loadBlockWindows() {
+            for w in windows where w.count == 2 {
+                if !known.contains("\(sender)|\(Int(w[0] * 1000))") {
+                    await client.addBlockWindow(senderID: sender,
+                                                startAt: Date(timeIntervalSince1970: w[0]),
+                                                endAt: Date(timeIntervalSince1970: w[1]))
+                }
+            }
+        }
+
+        // --- saved instructors (union; a local-only save is pushed, a server-only save is pulled) ---
+        let remoteSaved = await client.fetchSavedInstructors()
+        for id in savedInstructorIDs where !remoteSaved.contains(id) {
+            await client.addSavedInstructor(id)
+        }
+        let merged = savedInstructorIDs + remoteSaved.filter { !savedInstructorIDs.contains($0) }
+        if merged != savedInstructorIDs {
+            savedInstructorIDs = merged
+            UserDefaults.standard.set(merged, forKey: Self.savedInstructorsKey)
+        }
     }
 
     /// Reconcile deleted-message tombstones with the backend, BOTH ways, once per session.
@@ -1945,6 +1979,26 @@ final class MockDataStore {
     private func recordBlockWindow(sender: String, from: Date, to: Date) {
         var all = loadBlockWindows()
         all[sender, default: []].append([from.timeIntervalSince1970, to.timeIntervalSince1970])
+        if let data = try? JSONEncoder().encode(all) { UserDefaults.standard.set(data, forKey: blockWindowsKey) }
+        // Mirror it. A window that exists only in UserDefaults dies with the install and never reaches a
+        // second device — so unblocking someone on a new phone would resurface exactly the messages the
+        // block was meant to hide.
+        guard !isPreview else { return }
+        Task { await FloweBackendClient.shared.addBlockWindow(senderID: sender, startAt: from, endAt: to) }
+    }
+
+    /// Merge server-held block windows into the local map (union — windows are append-only history).
+    private func mergeBlockWindows(_ remote: [FloweBackendClient.RemoteBlockWindow]) {
+        guard !remote.isEmpty else { return }
+        var all = loadBlockWindows()
+        for w in remote {
+            let pair = [w.startAt / 1000, w.endAt / 1000]
+            var windows = all[w.senderID] ?? []
+            if !windows.contains(where: { $0.count == 2 && $0[0] == pair[0] && $0[1] == pair[1] }) {
+                windows.append(pair)
+                all[w.senderID] = windows
+            }
+        }
         if let data = try? JSONEncoder().encode(all) { UserDefaults.standard.set(data, forKey: blockWindowsKey) }
     }
 

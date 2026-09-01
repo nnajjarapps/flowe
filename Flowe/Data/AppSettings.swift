@@ -43,7 +43,7 @@ enum AppLanguage: String, CaseIterable, Identifiable {
 final class AppSettings {
     /// Flowe prices are always in shekels; there is nothing to switch, so this is a constant.
     let currency = Currency.ils
-    var language: AppLanguage { didSet { defaults.set(language.rawValue, forKey: languageKey) } }
+    var language: AppLanguage { didSet { defaults.set(language.rawValue, forKey: languageKey); pushToBackend() } }
 
     /// How far (km) the Out-of-Studio coverage search reaches when finding a swap instructor. Enforced
     /// only when a device fix is available (see `MockDataStore.oosCandidates`). Clamped to a sane band
@@ -63,8 +63,8 @@ final class AppSettings {
     /// The instructor's saved Out-of-Studio window (From / Until). Persisted so it survives closing the
     /// sheet — `OutOfStudioView` rolls a stale (past) window forward on appear, preserving the DURATION
     /// the instructor set. Mirrors `coverageRadiusKm`.
-    var oosWindowStart: Date { didSet { defaults.set(oosWindowStart.timeIntervalSince1970, forKey: oosStartKey) } }
-    var oosWindowEnd: Date { didSet { defaults.set(oosWindowEnd.timeIntervalSince1970, forKey: oosEndKey) } }
+    var oosWindowStart: Date { didSet { defaults.set(oosWindowStart.timeIntervalSince1970, forKey: oosStartKey); pushToBackend() } }
+    var oosWindowEnd: Date { didSet { defaults.set(oosWindowEnd.timeIntervalSince1970, forKey: oosEndKey); pushToBackend() } }
 
     private let defaults = UserDefaults.standard
     private let languageKey = "flowe.language"
@@ -109,5 +109,53 @@ final class AppSettings {
     /// is everything before the first digit — so the entry prefix can never drift from the display.
     var currencySymbol: String {
         String(money(0).prefix { !$0.isNumber }).trimmingCharacters(in: .whitespaces)
+    }
+
+    // MARK: - Cross-device sync
+
+    /// The settings that should follow the signed-in Apple ID rather than the device. Stored as one
+    /// JSON blob in `profiles.app_settings`, deliberately apart from `preferences` (the student
+    /// matching quiz): one is what the app looks like, the other is what it recommends, and a format
+    /// change to either should not be able to break the other.
+    private struct Snapshot: Codable {
+        var language: String
+        var coverageRadiusKm: Double
+        var oosWindowStart: Double
+        var oosWindowEnd: Double
+    }
+
+    /// Set while applying a snapshot pulled from the backend, so the `didSet` hooks do not immediately
+    /// push what we just received straight back up.
+    private var isApplyingRemote = false
+
+    private func pushToBackend() {
+        guard !isApplyingRemote else { return }
+        let snap = Snapshot(
+            language: language.rawValue,
+            coverageRadiusKm: coverageRadiusKm,
+            oosWindowStart: oosWindowStart.timeIntervalSince1970,
+            oosWindowEnd: oosWindowEnd.timeIntervalSince1970
+        )
+        guard let data = try? JSONEncoder().encode(snap),
+              let json = String(data: data, encoding: .utf8) else { return }
+        Task { await FloweBackendClient.shared.saveAppSettings(json: json) }
+    }
+
+    /// Pull settings for this Apple ID. Called once at sign-in. Applied ONLY when the device has no
+    /// local choice yet or the values genuinely differ, so a fresh device inherits the user's setup
+    /// instead of resetting to defaults.
+    @MainActor
+    func restoreFromBackend() async {
+        guard let json = await FloweBackendClient.shared.fetchMyProfile()?.appSettings,
+              let data = json.data(using: .utf8),
+              let snap = try? JSONDecoder().decode(Snapshot.self, from: data) else { return }
+        isApplyingRemote = true
+        defer { isApplyingRemote = false }
+        if let lang = AppLanguage(rawValue: snap.language), lang != language { language = lang }
+        if snap.coverageRadiusKm != coverageRadiusKm { coverageRadiusKm = snap.coverageRadiusKm }
+        let start = Date(timeIntervalSince1970: snap.oosWindowStart)
+        let end = Date(timeIntervalSince1970: snap.oosWindowEnd)
+        if start != oosWindowStart { oosWindowStart = start }
+        if end != oosWindowEnd { oosWindowEnd = end }
     }
 }
