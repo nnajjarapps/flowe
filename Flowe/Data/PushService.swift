@@ -1,4 +1,5 @@
 import CloudKit
+import OSLog
 import Foundation
 import Observation
 import UIKit
@@ -466,7 +467,17 @@ final class PushService {
             // register and only the offending one is dropped. Deletes are re-attempted alone so a bad
             // save can't strand a swept subscription either.
             for subscription in toSave {
-                _ = try? await database.modifySubscriptions(saving: [subscription], deleting: [])
+                do {
+                    _ = try await database.modifySubscriptions(saving: [subscription], deleting: [])
+                } catch {
+                    // Do NOT swallow this one. A subscription that never registers is a notification
+                    // type that silently never fires — the user is told nothing, and neither were we:
+                    // a like subscription rejected for a non-QUERYABLE `likeTargetID` looked exactly
+                    // like "likes just don't notify". Degrading to no-notifications is still correct;
+                    // doing it invisibly is not.
+                    FloweLog.sync.error(
+                        "push subscription \(subscription.subscriptionID, privacy: .public) rejected: \(String(describing: error), privacy: .public)")
+                }
             }
             if !toDelete.isEmpty {
                 _ = try? await database.modifySubscriptions(saving: [], deleting: toDelete)
