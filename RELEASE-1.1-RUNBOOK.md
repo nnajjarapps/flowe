@@ -2,6 +2,12 @@
 
 Written 2026-09-01 at the end of the migration session, while the context was fresh. Follow in order — later steps assume earlier ones are done.
 
+**Biggest change since this file was written:** the private CloudKit mirror is RETIRED. Nothing writes
+to the user's iCloud any more, so a full iCloud cannot break the app — which it did, twice, in ways
+that looked like feature bugs. Local state now syncs from the backend keyed by the Apple ID, so it also
+works on a device not signed into iCloud at all. **On first launch of 1.1 the local store starts empty
+and repopulates from the backend** — expected, and the thing to watch during release verification.
+
 **State (updated 2026-09-01):** messaging migration verified on two real devices against dev. Client notes, block list, block windows, saved instructors and app settings all moved to the backend — **nothing in the app now depends on the user having iCloud space**, and everything follows the signed-in Apple ID across devices. Production untouched, still serving 1.0. Both repos pushed. Version already **1.1.0 (53)**.
 
 **One open bug** (Step 2) and **one product decision** (Step 3) remain before release.
@@ -93,9 +99,11 @@ The record TYPES cannot be deleted — Production schema is permanent — but em
 | `block_windows`, `saved_instructors` | moved off UserDefaults |
 | `content_reports`, `removed_content` | moderation — reports queryable, takedown list |
 | `saved_posts` | post bookmarks, moved off `FeedPost.saved` |
+| `booking_local`, `message_read` | the last private-mirror state — attendance, No-Show fee, cover ledger, read state |
+| `deleted_content` | author deletions, so they propagate as data not absence |
 | `profiles.app_settings` (column) | language / coverage radius / OOS window |
 
-**Nine tables and one column**, re-derived from a live dev-vs-prod diff on 2026-09-01.
+**Twelve tables and one column**, re-derived from a live dev-vs-prod diff.
 
 `devices.notify_messages` and `profiles.dm_key_at` are **already in production** — both were added schema-before-code.
 
@@ -116,9 +124,9 @@ Every statement in the migration file is additive and idempotent — it cannot t
 
 **Gate — re-run the diff and expect no output:**
 ```bash
-npx wrangler d1 execute flowe-app --remote --yes --command="SELECT name FROM sqlite_master WHERE type='table' AND name IN ('messages','read_receipts','client_notes','blocked_users','block_windows','saved_instructors','content_reports','removed_content','saved_posts');"
+npx wrangler d1 execute flowe-app --remote --yes --command="SELECT name FROM sqlite_master WHERE type='table' AND name IN ('messages','read_receipts','client_notes','blocked_users','block_windows','saved_instructors','content_reports','removed_content','saved_posts','booking_local','message_read','deleted_content');"
 ```
-All nine must be listed, and `pragma_table_info('profiles')` must include `app_settings`.
+All twelve must be listed, and `pragma_table_info('profiles')` must include `app_settings`.
 
 ### 4.2b CloudKit: make `likeTargetID` QUERYABLE in Production
 
