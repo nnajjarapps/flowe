@@ -18,6 +18,10 @@ enum FloweModelContainer {
     /// CloudKit container id — must match the iCloud container created in the paid portal.
     static let cloudKitContainerID = "iCloud.com.flowepilates.app"
 
+    /// Persisted marker that the user's iCloud is full, so the private-DB mirror must be skipped.
+    /// Deliberately in UserDefaults, not the store: it has to be readable BEFORE the container exists.
+    static let iCloudFullKey = "flowe.icloudStorageFull"
+
     static func make(inMemory: Bool = false) -> ModelContainer {
         if !inMemory { ensureApplicationSupportExists() }
 
@@ -70,6 +74,18 @@ enum FloweModelContainer {
         // all travel the PUBLIC database, which is unaffected by this).
         if UserDefaults.standard.bool(forKey: "flowe.disablePrivateSync") { return .none }
         #endif
+        // The USER's iCloud is full. Keep the app fully working by dropping the private-DB mirror
+        // entirely rather than letting it fail.
+        //
+        // This is not a nicety. When the mirror cannot export it repeatedly calls `resetAfterError:`,
+        // and that reset DISCARDS COMMITTED LOCAL WRITES — an edit saves, then silently reverts, on any
+        // screen, with no error anywhere. Running local-only is strictly better than running with a
+        // broken mirror: everything persists, nothing reverts, and the only thing lost is cross-device
+        // sync of the two models that have no other home (ClientNote, BlockedUser).
+        //
+        // Set by `MockDataStore.observeCloudKitHealth()`; cleared by the user from the banner. Read at
+        // container construction, so it takes effect on the next launch.
+        if UserDefaults.standard.bool(forKey: iCloudFullKey) { return .none }
         return .private(cloudKitContainerID)
         #else
         return .none

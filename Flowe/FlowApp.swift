@@ -127,9 +127,12 @@ struct FlowApp: App {
         _data = State(initialValue: store)
     }
 
-    /// Shown when the USER's iCloud storage is full. Not cosmetic: a failing CloudKit mirror
-    /// repeatedly resets its state, and that reset discards committed local writes — edits appear to
-    /// save and then silently revert. Before this banner the app explained none of it.
+    /// Shown when the USER's iCloud storage is full.
+    ///
+    /// Flowe keeps working: on detection the private-DB mirror is dropped for the next launch, because
+    /// a mirror that cannot export repeatedly resets and DISCARDS committed local writes. Local-only is
+    /// strictly better than broken-mirror — everything saves, nothing reverts. The only loss is
+    /// cross-device sync, so the copy says that rather than implying data is at risk.
     @ViewBuilder private var iCloudFullBanner: some View {
         if data.iCloudStorageFull {
             HStack(spacing: 10) {
@@ -138,11 +141,14 @@ struct FlowApp: App {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("iCloud storage is full")
                         .flowFont(.titleMedium)
-                    Text("Flowe can't sync, and some changes may not save. Free up space in Settings → iCloud.")
+                    Text("Flowe paused iCloud sync so everything keeps saving on this device. Free up space in Settings, then restart Flowe to sync again.")
                         .flowFont(.caption)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 0)
+                Button("Resume") { data.resumeICloudSync() }
+                    .flowFont(.label)
+                    .foregroundStyle(Color.flowePinkDeep)
             }
             .foregroundStyle(Color.floweInk)
             .padding(.horizontal, 16)

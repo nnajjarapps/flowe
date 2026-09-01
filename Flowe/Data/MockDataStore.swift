@@ -181,11 +181,21 @@ final class MockDataStore {
             Task { @MainActor in
                 guard let self else { return }
                 if full, !self.iCloudStorageFull {
-                    FloweLog.sync.error("iCloud storage full — CloudKit mirroring cannot export; local changes may revert")
+                    FloweLog.sync.error("iCloud storage full — disabling the private-DB mirror on next launch so writes stop reverting")
+                    // Persist it: the container is built before any of this runs, so the mirror can
+                    // only actually be dropped on the NEXT launch.
+                    UserDefaults.standard.set(true, forKey: FloweModelContainer.iCloudFullKey)
                 }
                 self.iCloudStorageFull = full
             }
         }
+    }
+
+    /// User asked to resume syncing after freeing space. Clears the marker; the mirror comes back when
+    /// the app next launches, because the container is built at startup.
+    func resumeICloudSync() {
+        UserDefaults.standard.set(false, forKey: FloweModelContainer.iCloudFullKey)
+        iCloudStorageFull = false
     }
 
     func refresh() {
