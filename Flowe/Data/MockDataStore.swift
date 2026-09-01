@@ -1665,6 +1665,14 @@ final class MockDataStore {
             || !conditions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         note.updatedAt = Date()
         save()   // context.save() + refresh() → glyphs re-render reactively
+        // Mirror to the backend so the note follows this Apple ID to another device and survives a
+        // reinstall. `sealed` is ciphertext — the server stores health data it cannot read.
+        guard !isPreview else { return }
+        let (sid, sealed, flagged, at) = (note.studentID, note.sealed, note.flagged, note.updatedAt)
+        Task {
+            await FloweBackendClient.shared.saveClientNote(
+                studentID: sid, sealed: sealed, flagged: flagged, updatedAt: at)
+        }
     }
 
     /// Flag a late cancellation for a fee. Called during the instructor's booking sync: a booking is a
@@ -1832,6 +1840,62 @@ final class MockDataStore {
 
     /// Whether this session has reconciled the local tombstone set with the durable server copy yet.
     private var didSyncHiddenMessages = false
+
+    /// Reconcile client notes and the block list with the backend, so both follow the signed-in Apple
+    /// ID across devices and survive a reinstall.
+    ///
+    /// These two were the ONLY models whose sole home was the private-DB mirror, which made them the
+    /// casualties of a full iCloud: the mirror stops and they neither sync nor survive. With them here,
+    /// nothing in the app depends on the user having iCloud space.
+    ///
+    /// **Notes: last-write-wins on `updatedAt`**, resolved server-side, so two devices editing the same
+    /// client converge. **Blocks converge toward BLOCKED**: local-only blocks are pushed up first, then
+    /// the server set is mirrored down. An unblock made offline can therefore be undone by a sync —
+    /// deliberate, because failing safe means staying blocked, not silently unblocking someone.
+    func syncPrivateState() async {
+        guard !isPreview, currentUserID != nil else { return }
+        let client = FloweBackendClient.shared
+
+        // --- notes ---
+        let remoteNotes = await client.fetchClientNotes()
+        var changed = false
+        for r in remoteNotes {
+            let at = Date(msEpoch: r.updatedAt)
+            if let local = clientNotes.first(where: { $0.studentID == r.studentID }) {
+                if at > local.updatedAt {
+                    local.sealed = r.sealed; local.flagged = r.flagged; local.updatedAt = at
+                    changed = true
+                }
+            } else {
+                let n = ClientNote(studentID: r.studentID)
+                n.sealed = r.sealed; n.flagged = r.flagged; n.updatedAt = at
+                context.insert(n); changed = true
+            }
+        }
+        if changed { save() }
+        // Push anything the server has not got, or has an older copy of.
+        for local in clientNotes where !local.sealed.isEmpty {
+            let remote = remoteNotes.first { $0.studentID == local.studentID }
+            if remote == nil || Date(msEpoch: remote!.updatedAt) < local.updatedAt {
+                await client.saveClientNote(studentID: local.studentID, sealed: local.sealed,
+                                            flagged: local.flagged, updatedAt: local.updatedAt)
+            }
+        }
+
+        // --- blocks ---
+        let remoteBlocks = await client.fetchBlocks()
+        let remoteIDs = Set(remoteBlocks.map(\.blockedID))
+        for local in blocked where !remoteIDs.contains(local.blockedID) {
+            await client.addBlock(blockedID: local.blockedID, blockedName: local.blockedName)
+        }
+        var blocksChanged = false
+        let localIDs = Set(blocked.map(\.blockedID))
+        for r in remoteBlocks where !localIDs.contains(r.blockedID) {
+            context.insert(BlockedUser(blockedID: r.blockedID, blockedName: r.blockedName))
+            blocksChanged = true
+        }
+        if blocksChanged { save(); mirrorBlockedToAppGroup() }
+    }
 
     /// Reconcile deleted-message tombstones with the backend, BOTH ways, once per session.
     ///
@@ -2397,9 +2461,16 @@ final class MockDataStore {
         context.insert(BlockedUser(blockedID: id, blockedName: name))
         save()
         mirrorBlockedToAppGroup()
+        // A block that does not reach the user's other devices is a safety feature that quietly stops
+        // working, so it goes to the backend too.
+        guard !isPreview else { return }
+        Task { await FloweBackendClient.shared.addBlock(blockedID: id, blockedName: name) }
     }
 
     func unblock(_ ownerID: String) {
+        if !isPreview {
+            Task { await FloweBackendClient.shared.removeBlock(blockedID: ownerID) }
+        }
         let now = Date()
         for entry in blocked where entry.blockedID == ownerID {
             // Remember exactly when they were blocked, so their messages sent during the block stay hidden

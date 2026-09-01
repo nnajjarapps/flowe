@@ -394,6 +394,62 @@ final class FloweBackendClient {
         return (try? JSONDecoder().decode(Resp.self, from: data))?.remoteIDs ?? []
     }
 
+    // MARK: - Private per-user state (client notes, block list)
+
+    /// An instructor's client note as the backend holds it. `sealed` is CIPHERTEXT — `NoteCrypto`
+    /// opens it on-device with a key from the iCloud Keychain, so the server stores health information
+    /// it cannot read. Same posture as a message's `text`.
+    struct RemoteClientNote: Decodable {
+        let studentID: String
+        let sealed: String
+        let flagged: Bool
+        let updatedAt: Double
+    }
+
+    struct RemoteBlock: Decodable {
+        let blockedID: String
+        let blockedName: String
+        let createdAt: Double
+    }
+
+    func fetchClientNotes() async -> [RemoteClientNote] {
+        guard !isDebugInjected, hasSession else { return [] }
+        guard let data = try? await authorized("/notes") else { return [] }
+        struct Resp: Decodable { let notes: [RemoteClientNote] }
+        return (try? JSONDecoder().decode(Resp.self, from: data))?.notes ?? []
+    }
+
+    /// Upsert one note. Last-write-wins on `updatedAt`, resolved server-side, so two devices editing
+    /// the same client converge instead of one silently winning by arriving second.
+    func saveClientNote(studentID: String, sealed: String, flagged: Bool, updatedAt: Date) async {
+        guard !isDebugInjected, hasSession else { return }
+        struct Req: Encodable {
+            let studentID: String; let sealed: String; let flagged: Bool; let updatedAt: Double
+        }
+        _ = try? await authorized("/notes", method: "POST", body: Req(
+            studentID: studentID, sealed: sealed, flagged: flagged,
+            updatedAt: updatedAt.timeIntervalSince1970 * 1000))
+    }
+
+    func fetchBlocks() async -> [RemoteBlock] {
+        guard !isDebugInjected, hasSession else { return [] }
+        guard let data = try? await authorized("/blocks") else { return [] }
+        struct Resp: Decodable { let blocks: [RemoteBlock] }
+        return (try? JSONDecoder().decode(Resp.self, from: data))?.blocks ?? []
+    }
+
+    func addBlock(blockedID: String, blockedName: String) async {
+        guard !isDebugInjected, hasSession else { return }
+        struct Req: Encodable { let blockedID: String; let blockedName: String }
+        _ = try? await authorized("/blocks", method: "POST",
+                                  body: Req(blockedID: blockedID, blockedName: blockedName))
+    }
+
+    func removeBlock(blockedID: String) async {
+        guard !isDebugInjected, hasSession else { return }
+        _ = try? await authorized("/blocks/\(blockedID)", method: "DELETE")
+    }
+
     // MARK: - Presence ("last seen")
 
     /// Heartbeat MY last-seen — the backend stamps SERVER time on the authenticated ownerID (a client

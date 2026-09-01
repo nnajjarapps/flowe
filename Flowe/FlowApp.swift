@@ -227,6 +227,11 @@ struct FlowApp: App {
                     // Publish my end-to-end messaging key before syncing messages, so counterparts
                     // can encrypt to me and my own sends can be sealed.
                     await data.activateMessaging()
+                    // Client notes + block list now live on the backend, so they follow this Apple ID
+                    // across devices and no longer depend on the private-DB mirror (or on the user
+                    // having iCloud space). Before `syncMessages`, so a block is in force before any
+                    // message from that sender can land.
+                    await data.syncPrivateState()
                     await data.syncBookings(asInstructor: isInstructor)
                     await data.syncCoverage(asInstructor: isInstructor)
                     await data.syncMessages()
