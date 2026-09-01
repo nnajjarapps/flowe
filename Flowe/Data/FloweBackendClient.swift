@@ -395,6 +395,60 @@ final class FloweBackendClient {
         return (try? JSONDecoder().decode(Resp.self, from: data))?.remoteIDs ?? []
     }
 
+    // MARK: - Booking local state + message read state
+
+    /// The instructor's private per-booking accounting: attendance, the No-Show fee, and the
+    /// Out-of-Studio cover ledger. None of it belongs on the shared booking record, so it used to live
+    /// ONLY in the CloudKit private mirror — which meant a full iCloud broke it, and it never followed
+    /// the instructor to a second device or survived a reinstall. That is money data with no backup.
+    struct RemoteBookingLocal: Decodable {
+        let bookingID: String
+        let attendance: String
+        let feeStatus: String
+        let feeAmount: Int
+        let coverRole: String
+        let coverStatus: String
+        let coverAmount: Int
+        let updatedAt: Double
+    }
+
+    func fetchBookingLocal() async -> [RemoteBookingLocal] {
+        guard !isDebugInjected, hasSession else { return [] }
+        guard let data = try? await authorized("/booking-local") else { return [] }
+        struct Resp: Decodable { let rows: [RemoteBookingLocal] }
+        return (try? JSONDecoder().decode(Resp.self, from: data))?.rows ?? []
+    }
+
+    func saveBookingLocal(bookingID: String, attendance: String, feeStatus: String, feeAmount: Int,
+                          coverRole: String, coverStatus: String, coverAmount: Int, updatedAt: Date) async {
+        guard !isDebugInjected, hasSession else { return }
+        struct Req: Encodable {
+            let bookingID: String; let attendance: String; let feeStatus: String; let feeAmount: Int
+            let coverRole: String; let coverStatus: String; let coverAmount: Int; let updatedAt: Double
+        }
+        _ = try? await authorized("/booking-local", method: "POST", body: Req(
+            bookingID: bookingID, attendance: attendance, feeStatus: feeStatus, feeAmount: feeAmount,
+            coverRole: coverRole, coverStatus: coverStatus, coverAmount: coverAmount,
+            updatedAt: updatedAt.timeIntervalSince1970 * 1000))
+    }
+
+    func fetchReadMessageIDs() async -> [String] {
+        guard !isDebugInjected, hasSession else { return [] }
+        guard let data = try? await authorized("/messages/read-state") else { return [] }
+        struct Resp: Decodable { let read: [String] }
+        return (try? JSONDecoder().decode(Resp.self, from: data))?.read ?? []
+    }
+
+    func markMessagesRead(_ ids: [String]) async {
+        guard !isDebugInjected, hasSession, !ids.isEmpty else { return }
+        struct Req: Encodable { let messageIDs: [String] }
+        for chunk in stride(from: 0, to: ids.count, by: 500).map({
+            Array(ids[$0..<min($0 + 500, ids.count)])
+        }) {
+            _ = try? await authorized("/messages/read-state", method: "POST", body: Req(messageIDs: chunk))
+        }
+    }
+
     // MARK: - Saved posts (bookmarks)
 
     /// Bookmarks moved off `FeedPost.saved`, the last piece of local-only state on the community

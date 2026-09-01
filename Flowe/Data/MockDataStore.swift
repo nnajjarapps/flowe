@@ -1873,6 +1873,44 @@ final class MockDataStore {
         // Same reason as `activateMessaging`: every call below no-ops without a session, silently.
         _ = await client.ensureSessionSilently()
 
+        // --- booking-local state (attendance / No-Show fee / cover ledger) ---
+        // The instructor's private accounting. Last-write-wins on updatedAt, resolved server-side.
+        let remoteLocal = await client.fetchBookingLocal()
+        var localChanged = false
+        for r in remoteLocal {
+            guard let b = bookings.first(where: { $0.remoteID == r.bookingID }) else { continue }
+            b.attendanceRaw = r.attendance.isEmpty ? b.attendanceRaw : r.attendance
+            b.feeStatusRaw = r.feeStatus.isEmpty ? b.feeStatusRaw : r.feeStatus
+            b.feeAmount = r.feeAmount
+            b.coverRoleRaw = r.coverRole.isEmpty ? b.coverRoleRaw : r.coverRole
+            b.coverStatusRaw = r.coverStatus.isEmpty ? b.coverStatusRaw : r.coverStatus
+            b.coverAmount = r.coverAmount
+            localChanged = true
+        }
+        if localChanged { save() }
+        // Push anything the server has not got. Only rows carrying actual state — an untouched booking
+        // has nothing worth storing.
+        let knownLocal = Set(remoteLocal.map(\.bookingID))
+        for b in bookings {
+            guard let id = b.remoteID, !knownLocal.contains(id) else { continue }
+            let hasState = b.attendance != .unknown || b.feeStatus != .none || b.coverRole != .none
+            guard hasState else { continue }
+            await client.saveBookingLocal(
+                bookingID: id, attendance: b.attendanceRaw, feeStatus: b.feeStatusRaw,
+                feeAmount: b.feeAmount, coverRole: b.coverRoleRaw, coverStatus: b.coverStatusRaw,
+                coverAmount: b.coverAmount, updatedAt: Date())
+        }
+
+        // --- message read state (recipient-local) ---
+        let readIDs = Set(await client.fetchReadMessageIDs())
+        var readChanged = false
+        for m in messages where !m.isRead {
+            if let id = m.remoteID, readIDs.contains(id) { m.isRead = true; readChanged = true }
+        }
+        if readChanged { save() }
+        let unknownRead = messages.compactMap { $0.isRead ? $0.remoteID : nil }.filter { !readIDs.contains($0) }
+        await client.markMessagesRead(unknownRead)
+
         // --- notes ---
         let remoteNotes = await client.fetchClientNotes()
         var changed = false

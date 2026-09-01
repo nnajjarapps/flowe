@@ -50,13 +50,33 @@ enum FloweModelContainer {
             cloudKitDatabase: .none
         )
 
+        // NOTHING mirrors to the user's private iCloud any more.
+        //
+        // Every model here is now a CACHE of state Flowe owns: bookings, messages, reviews and the
+        // instructor's private per-booking accounting live in D1; lesson types, programs and video
+        // exercises are CloudKit-PUBLIC records (Flowe's quota, not the user's); blocked users and
+        // client notes moved to D1 earlier today, notes as ciphertext.
+        //
+        // The private mirror was never storage the app needed — it was a sync mechanism that happened
+        // to also be a liability. When a user's iCloud filled up the mirror stopped, `resetAfterError`
+        // discarded committed local writes, and features broke in ways that looked like bugs: a
+        // tombstone that would not stick, a deleted post that kept reappearing. Two long investigations
+        // today were that, not code.
+        //
+        // Now the app works exactly like any server-backed app: content on a server, a purely local
+        // cache, and **no dependency on the reader having cloud storage free**. Sync across a user's
+        // devices comes from the backend, keyed by their Apple ID, which also makes it work on a device
+        // that is not signed into iCloud at all.
+        //
+        // `userDataCloudKitDatabase` is kept — it still holds the in-memory and quota-fallback logic,
+        // and re-enabling the mirror for a future model should be a deliberate choice, not a default.
         let userData = ModelConfiguration(
             "UserData",
             schema: Schema([Booking.self, Message.self,
                             BlockedUser.self, Review.self, LessonType.self,
                             ClientNote.self, Program.self, VideoExercise.self]),
             isStoredInMemoryOnly: inMemory,
-            cloudKitDatabase: userDataCloudKitDatabase(inMemory: inMemory)
+            cloudKitDatabase: .none
         )
 
         do {
