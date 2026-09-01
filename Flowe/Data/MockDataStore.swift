@@ -2988,10 +2988,34 @@ final class MockDataStore {
         }
     }
 
-    /// A bookmark is one reader's private shelf — it stays local by design and is never published.
+    /// A bookmark is one reader's private shelf — private, but no longer LOCAL. It lives on the
+    /// backend so it follows the Apple ID, and so `FeedPost` carries no local-only state and can stop
+    /// mirroring to the user's private iCloud (see `FloweModelContainer`).
     func toggleSave(_ post: FeedPost) {
         post.saved.toggle()
         save()
+        guard !isPreview, let id = post.remoteID else { return }
+        let nowSaved = post.saved
+        Task {
+            nowSaved
+                ? await FloweBackendClient.shared.addSavedPost(id)
+                : await FloweBackendClient.shared.removeSavedPost(id)
+        }
+    }
+
+    /// Reconcile bookmarks with the backend. Union both ways, like the other private-state syncs: a
+    /// bookmark made offline is pushed up, and one made on another device is pulled down.
+    private func syncSavedPosts() async {
+        let remote = Set(await FloweBackendClient.shared.fetchSavedPosts())
+        var changed = false
+        for post in posts {
+            guard let id = post.remoteID else { continue }
+            if remote.contains(id), !post.saved { post.saved = true; changed = true }
+            else if !remote.contains(id), post.saved {
+                await FloweBackendClient.shared.addSavedPost(id)   // local-only bookmark → push up
+            }
+        }
+        if changed { save() }
     }
 
     /// Reply to a post.
@@ -3074,6 +3098,7 @@ final class MockDataStore {
         // Refresh the takedown list BEFORE merging, so removed content never lands even once.
         removedContentIDs = Set(await FloweBackendClient.shared.fetchRemovedContent())
         await flushPendingCommunityWrites()
+        await syncSavedPosts()
         guard let posts = await communityService.fetchRecentPosts() else {
             if communityPhase != .loaded { communityPhase = .failed }
             return

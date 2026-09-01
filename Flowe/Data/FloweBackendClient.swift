@@ -395,6 +395,30 @@ final class FloweBackendClient {
         return (try? JSONDecoder().decode(Resp.self, from: data))?.remoteIDs ?? []
     }
 
+    // MARK: - Saved posts (bookmarks)
+
+    /// Bookmarks moved off `FeedPost.saved`, the last piece of local-only state on the community
+    /// models. With it here they are pure caches and can stop mirroring to the user's PRIVATE iCloud —
+    /// which is what made a full iCloud break the feed. They also now follow the Apple ID, which a
+    /// local-only bookmark never did.
+    func fetchSavedPosts() async -> [String] {
+        guard !isDebugInjected, hasSession else { return [] }
+        guard let data = try? await authorized("/saved-posts") else { return [] }
+        struct Resp: Decodable { let saved: [String] }
+        return (try? JSONDecoder().decode(Resp.self, from: data))?.saved ?? []
+    }
+
+    func addSavedPost(_ postID: String) async {
+        guard !isDebugInjected, hasSession else { return }
+        struct Req: Encodable { let postID: String }
+        _ = try? await authorized("/saved-posts", method: "POST", body: Req(postID: postID))
+    }
+
+    func removeSavedPost(_ postID: String) async {
+        guard !isDebugInjected, hasSession else { return }
+        _ = try? await authorized("/saved-posts/\(postID)", method: "DELETE")
+    }
+
     // MARK: - Moderation
 
     /// File a content report. Mirrors the CloudKit write so reports become QUERYABLE — the part of

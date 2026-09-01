@@ -32,10 +32,28 @@ enum FloweModelContainer {
             cloudKitDatabase: .none
         )
 
+        // Community models are PURE CACHES of CloudKit-public content, so they are deliberately NOT
+        // mirrored to the user's private iCloud.
+        //
+        // Mirroring a cache there cost the user quota for re-fetchable data AND broke the feed outright
+        // when their iCloud filled up: the mirror stops, `resetAfterError` discards committed local
+        // writes, and a post deleted by its author kept reappearing because the prune never persisted.
+        // Every field here re-fetches on the next sync, so there is nothing to lose by dropping it —
+        // the last piece of local-only state was `FeedPost.saved`, which now lives on the backend.
+        //
+        // This is exactly how a feed is normally built: content on a server, a purely local cache, and
+        // nothing depending on the reader having cloud storage free.
+        let communityCache = ModelConfiguration(
+            "CommunityCache",
+            schema: Schema([FeedPost.self, PostComment.self, CommunityEvent.self]),
+            isStoredInMemoryOnly: inMemory,
+            cloudKitDatabase: .none
+        )
+
         let userData = ModelConfiguration(
             "UserData",
-            schema: Schema([FeedPost.self, PostComment.self, Booking.self, Message.self,
-                            BlockedUser.self, Review.self, CommunityEvent.self, LessonType.self,
+            schema: Schema([Booking.self, Message.self,
+                            BlockedUser.self, Review.self, LessonType.self,
                             ClientNote.self, Program.self, VideoExercise.self]),
             isStoredInMemoryOnly: inMemory,
             cloudKitDatabase: userDataCloudKitDatabase(inMemory: inMemory)
@@ -45,7 +63,7 @@ enum FloweModelContainer {
             return try ModelContainer(
                 for: Instructor.self, StudentProfile.self, Opportunity.self, OpportunityApplication.self, ApplicationDecision.self, InstructorRecommendation.self, FeedPost.self, PostComment.self, Booking.self, Message.self,
                      BlockedUser.self, Review.self, CommunityEvent.self, LessonType.self, ClientNote.self, Program.self, VideoExercise.self,
-                configurations: reference, userData
+                configurations: reference, communityCache, userData
             )
         } catch {
             fatalError("Failed to create ModelContainer: \(error)")
