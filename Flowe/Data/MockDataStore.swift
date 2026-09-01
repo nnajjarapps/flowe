@@ -1864,6 +1864,8 @@ final class MockDataStore {
     func syncPrivateState() async {
         guard !isPreview, currentUserID != nil else { return }
         let client = FloweBackendClient.shared
+        // Same reason as `activateMessaging`: every call below no-ops without a session, silently.
+        _ = await client.ensureSessionSilently()
 
         // --- notes ---
         let remoteNotes = await client.fetchClientNotes()
@@ -2187,6 +2189,11 @@ final class MockDataStore {
     /// send me encrypted messages. Cheap to call on every sign-in — the publish no-ops when unchanged.
     func activateMessaging() async {
         guard !isPreview, let me = currentUserID else { return }
+        // Mint the backend session FIRST. Everything below — and `syncPrivateState` after it — guards on
+        // `hasSession` and returns SILENTLY without one. On the launch where the session has not been
+        // established yet, every mirror below skips with no error: precisely the launch where a new
+        // account most needs its key marker and profile row written.
+        _ = await FloweBackendClient.shared.ensureSessionSilently()
         // Reconcile the presence opt-out to the backend on every sign-in/launch, so a toggle that failed
         // to sync (offline) is re-pushed and the server flag converges to the user's actual choice.
         await FloweBackendClient.shared.setPresenceVisible(presenceVisiblePref)

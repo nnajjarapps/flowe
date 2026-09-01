@@ -1,5 +1,6 @@
 import Foundation
 import CryptoKit
+import OSLog
 import CloudKit
 
 /// A world-readable directory of users' X25519 public keys. Two users look each other up here, derive
@@ -174,11 +175,19 @@ final class MessageCrypto {
         myOwnerID = ownerID
         // nil = a key exists for this account but hasn't synced yet; publishing a freshly minted one
         // here is exactly the overwrite this guards against, so do nothing and retry next activation.
-        guard let key = await resolvedPrivateKey(ownerID: ownerID) else { return }
-        await directory.publish(ownerID: ownerID, publicKey: key.publicKey.rawRepresentation)
-        // Record it where the container cannot hide it. Cheap and write-once server-side, so this is
-        // safe to call on every activation.
+        guard let key = await resolvedPrivateKey(ownerID: ownerID) else {
+            // Waiting for the iCloud Keychain to deliver an existing key. Legitimate, but it means no
+            // key marker and no published public key this launch, so it must not be silent.
+            FloweLog.sync.notice("DM key not available yet — waiting for iCloud Keychain, messaging is inactive this launch")
+            return
+        }
+        // Report BEFORE publishing, deliberately. `publish` is a CloudKit round-trip that can stall or
+        // fail — a bad account state, no network, an unhealthy container — and when it did, this line
+        // never ran. That is why `dm_key_at` stayed NULL on a device whose key demonstrably existed:
+        // the marker was gated behind an unrelated network call. Its whole job is to record that a key
+        // EXISTS, and that is true the moment we hold one.
         await FloweBackendClient.shared.reportDMKeyPublished()
+        await directory.publish(ownerID: ownerID, publicKey: key.publicKey.rawRepresentation)
     }
 
     /// Erase this device's DM identity on ACCOUNT DELETION. The private key lives in the iCloud Keychain
