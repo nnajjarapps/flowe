@@ -495,6 +495,16 @@ final class FloweBackendClient {
     /// Content a human has taken down. CloudKit grants write to `_creator`, so Flowe cannot delete
     /// someone else's record — the client filters these out instead, which is what actually removes
     /// them from every feed. Deliberately not driven by a report threshold; see schema.sql.
+    /// Record an author's OWN deletion so it reaches other readers as DATA. Without this, deletion
+    /// propagates by ABSENCE — a post that did not come back from the fetch is pruned, but only once it
+    /// is older than a 60s guard — so everyone else kept seeing a deleted post for up to a minute.
+    func recordDeletedContent(contentID: String, contentType: String = "communityPost") async {
+        guard !isDebugInjected, hasSession else { return }
+        struct Req: Encodable { let contentID: String; let contentType: String }
+        _ = try? await authorized("/deleted-content", method: "POST",
+                                  body: Req(contentID: contentID, contentType: contentType))
+    }
+
     func fetchRemovedContent() async -> [String] {
         guard !isDebugInjected, hasSession else { return [] }
         guard let data = try? await authorized("/moderation/removed") else { return [] }

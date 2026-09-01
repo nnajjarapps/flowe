@@ -2936,7 +2936,13 @@ final class MockDataStore {
         save()
         guard let remoteID = post.remoteID else { return }
         Task {
-            if await communityService.deletePost(id: remoteID) { deleteLocally(post) }
+            if await communityService.deletePost(id: remoteID) {
+                deleteLocally(post)
+                // Tell everyone else, rather than making them infer it. Otherwise the post survives on
+                // other readers' devices until a sync happens AND the 60s `settled` guard has passed —
+                // which is why a deleted post lingered for almost a minute.
+                await FloweBackendClient.shared.recordDeletedContent(contentID: remoteID)
+            }
             save()
         }
     }
