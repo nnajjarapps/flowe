@@ -936,6 +936,12 @@ final class MockDataStore {
         Task {
             let delivered = await bookingService.cancel(bookingID: remoteID)
             booking.pendingDecision = !delivered
+            // Stamp the cancellation locally the moment the server accepts it. `bookingCancelledAt` is
+            // otherwise only populated by the NEXT sync, and `pendingDecision` clears on delivery — so
+            // between those two there is a window with neither signal, and ActivityCenter cannot tell
+            // this was the student's OWN cancellation. That window is exactly when the user looks at
+            // the bell, and it is where "the studio cancelled your session" reappeared.
+            if delivered { bookingCancelledAt[remoteID] = Date() }
             save()
             // A not-yet-delivered cancel refunds any class-credit used — refresh so the ring ticks back up.
             if delivered, let instructorID = booking.instructorOwnerID {
