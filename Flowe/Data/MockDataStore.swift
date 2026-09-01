@@ -3071,6 +3071,8 @@ final class MockDataStore {
     func syncCommunity() async {
         guard !isPreview else { return }
         if communityPhase != .loaded { communityPhase = .loading }
+        // Refresh the takedown list BEFORE merging, so removed content never lands even once.
+        removedContentIDs = Set(await FloweBackendClient.shared.fetchRemovedContent())
         await flushPendingCommunityWrites()
         guard let posts = await communityService.fetchRecentPosts() else {
             if communityPhase != .loaded { communityPhase = .failed }
@@ -3155,7 +3157,9 @@ final class MockDataStore {
         let known = Set(posts.compactMap(\.remoteID))
         // Never re-insert a post the user deleted: CloudKit's delete may not have propagated to the
         // query index yet, so the fetch can still return the ghost — without this it reappears.
+        // The user's own deletions, PLUS anything moderation has taken down.
         let tombstoned = Set(UserDefaults.standard.stringArray(forKey: deletedPostsKey) ?? [])
+            .union(removedContentIDs)
         var nextId = posts.map(\.legacyId).max() ?? 0
 
         for entry in remote where !known.contains(entry.id) && !tombstoned.contains(entry.id) {
@@ -5643,6 +5647,15 @@ final class MockDataStore {
     /// renders "now". Same memory-only rationale as `bookingRequestedAt`.
     private(set) var bookingDecidedAt: [String: Date] = [:]
     private(set) var bookingCancelledAt: [String: Date] = [:]
+
+    /// Content a human has taken down, fetched from the backend each community sync.
+    ///
+    /// This is what actually removes a post: CloudKit grants write to `_creator`, so Flowe cannot
+    /// delete someone else's record at all — the record survives and every client filters it out
+    /// instead. Deliberately NOT driven by a report threshold: Flowe is a marketplace where
+    /// instructors compete for the same students, so an N-report trigger would be a button for
+    /// silencing a rival. A row appears here only when a human decided.
+    private(set) var removedContentIDs: Set<String> = []
 
     /// Pending package-purchase requests — the instructor dashboard signal card + the approval inbox badge.
     var pendingPurchaseCards: [RemotePurchase] { incomingPurchases.filter { $0.status == .pending } }

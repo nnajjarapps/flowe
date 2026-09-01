@@ -395,6 +395,36 @@ final class FloweBackendClient {
         return (try? JSONDecoder().decode(Resp.self, from: data))?.remoteIDs ?? []
     }
 
+    // MARK: - Moderation
+
+    /// File a content report. Mirrors the CloudKit write so reports become QUERYABLE — the part of
+    /// moderation that does not scale is not actioning a report, it is knowing one exists.
+    /// `id` is client-minted so a retry cannot file the same complaint twice.
+    func submitReport(id: String, reportedID: String, reportedName: String, contentType: String,
+                      contentID: String, reason: String, snapshot: String, details: String) async {
+        guard !isDebugInjected, hasSession else { return }
+        struct Req: Encodable {
+            let id: String; let reportedID: String; let reportedName: String
+            let contentType: String; let contentID: String; let reason: String
+            let snapshot: String; let details: String
+        }
+        _ = try? await authorized("/reports", method: "POST", body: Req(
+            id: id, reportedID: reportedID, reportedName: reportedName, contentType: contentType,
+            contentID: contentID, reason: reason, snapshot: String(snapshot.prefix(2000)),
+            details: String(details.prefix(2000))))
+    }
+
+    /// Content a human has taken down. CloudKit grants write to `_creator`, so Flowe cannot delete
+    /// someone else's record — the client filters these out instead, which is what actually removes
+    /// them from every feed. Deliberately not driven by a report threshold; see schema.sql.
+    func fetchRemovedContent() async -> [String] {
+        guard !isDebugInjected, hasSession else { return [] }
+        guard let data = try? await authorized("/moderation/removed") else { return [] }
+        struct Row: Decodable { let contentID: String; let contentType: String }
+        struct Resp: Decodable { let removed: [Row] }
+        return (try? JSONDecoder().decode(Resp.self, from: data))?.removed.map(\.contentID) ?? []
+    }
+
     // MARK: - Private per-user state (client notes, block list)
 
     /// An instructor's client note as the backend holds it. `sealed` is CIPHERTEXT — `NoteCrypto`

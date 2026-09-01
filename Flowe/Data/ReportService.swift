@@ -63,7 +63,14 @@ final class ReportService {
         record["snapshot"] = String(snapshot.prefix(2000))
         record["details"] = String(details.prefix(2000))
         record["createdAt"] = Date()
-        return (try? await database.save(record)) != nil
+        let saved = (try? await database.save(record)) != nil
+        // Mirror to the backend so the report is QUERYABLE. The CloudKit copy is creator-read-only by
+        // design, which also meant the only way to see a pending report was opening the Dashboard.
+        await FloweBackendClient.shared.submitReport(
+            id: record.recordID.recordName, reportedID: reportedID, reportedName: reportedName,
+            contentType: content.rawValue, contentID: contentID, reason: reason.rawValue,
+            snapshot: snapshot, details: details)
+        return saved
         #else
         return false
         #endif
