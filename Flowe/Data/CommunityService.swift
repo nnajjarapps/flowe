@@ -1,5 +1,6 @@
 import Foundation
 import CloudKit
+import OSLog
 
 /// A community post as it exists in the shared store (plain DTO decoded from a CKRecord).
 struct RemotePost {
@@ -538,8 +539,15 @@ final class CommunityService {
             _ = try await database.deleteRecord(withID: id)
             return true
         } catch let error as CKError where error.code == .unknownItem {
+            // Already gone — that is the desired state, so treat it as success.
             return true
         } catch {
+            // Returning false is right (the caller keeps `pendingDelete` and retries), but the reason
+            // was discarded — so a delete that can NEVER succeed looked identical to one that simply
+            // had not run yet. The author sees the post vanish either way, because `pendingDelete`
+            // hides it optimistically; only everyone ELSE keeps seeing it.
+            FloweLog.sync.error(
+                "record delete failed \(id.recordName, privacy: .public): \(String(describing: error), privacy: .public)")
             return false
         }
     }
