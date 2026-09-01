@@ -2,66 +2,23 @@
 
 Written 2026-09-01 at the end of the migration session, while the context was fresh. Follow in order — later steps assume earlier ones are done.
 
-**State at time of writing:** messaging migration verified working on two real devices against dev. Production untouched, still serving 1.0. Both repos pushed. Two open client bugs (below). Version already bumped to **1.1.0 (53)**.
+**State (updated 2026-09-01):** messaging migration verified on two real devices against dev. Client notes, block list, block windows, saved instructors and app settings all moved to the backend — **nothing in the app now depends on the user having iCloud space**, and everything follows the signed-in Apple ID across devices. Production untouched, still serving 1.0. Both repos pushed. Version already **1.1.0 (53)**.
+
+**One open bug** (Step 2) and **one product decision** (Step 3) remain before release.
 
 Background: `flowe_vault/nodes/system/flowe-messaging-migration.md`, `flowe-storage-split-rule.md`, `flowe-dm-key-reinstall-race.md`.
 
 ---
 
-## Step 1 — The empty-bubble bug
+## Step 1 — ~~The empty-bubble bug~~ RESOLVED (environmental)
 
-**Symptom:** after "delete for everyone", the message renders as a blank bubble on BOTH devices instead of "You deleted this message" / "This message was deleted". Survives a force-quit, so it is not a rendering-refresh issue.
+**Not a messaging bug, and no code was at fault.** The test device's iCloud storage was full. SwiftData's CloudKit mirror then fails every export with `CKError 25 "Quota Exceeded"`, never initialises, and repeatedly calls `resetAfterError:` — and that reset discards committed local writes. `context.save()` succeeded; the mirror threw the change away afterwards.
 
-**Not a data bug.** The server is correct: the row is kept with `deleted=1` and `length(text)=0`. The ciphertext really is destroyed. This is cosmetic — but it looks broken.
+Fixed in `8677488` + `0e912df`: the quota state is now detected, explained by a banner, and the private-DB mirror is DROPPED rather than left to fail, so the app keeps working. Two silent-error paths found on the way were also removed (`try? context.save()`, and a decode failure returning an empty inbox).
 
-Temporary `#if DEBUG` logs are already in place:
-- `MessagingService.fetch` → `[DM] raw:` (the wire JSON) and `[DM] DECODE FAILED:`
-- `MockDataStore.merge` → `[DM] merge id=… wire.deleted=… localFound=… local.deleted=… textlen=…`
+Then closed properly in `3426077` + `21eb79a` / `e88f736`: client notes, the block list, block windows, saved instructors and app settings all moved to the backend, so **nothing depends on the user having iCloud space**. See `flowe_vault/nodes/system/flowe-cross-device-sync.md`.
 
-### How to reproduce
-
-The tombstone is ALREADY in `flowe-app-dev`, so nothing needs creating — opening the thread is enough to fire both logs.
-
-Current dev state (as of 2026-09-01):
-
-| message id | sender | `deleted` | `length(text)` |
-|---|---|---|---|
-| `msg-95D02F21-…-269BDAE82E90` | instructor `001941` | 0 | 47 |
-| `msg-9919A94B-…-FB9DE455CAE2` | student `001331` | **1** | **0** |
-
-1. Run the app from Xcode (Debug — a TestFlight/App Store build talks to PRODUCTION and will show none of this).
-2. Sign in as either party. The bug shows on both.
-3. Open Messages → the conversation with the other account.
-4. In the Xcode console, filter for `[DM]`.
-
-The logs print in `MessagingService.fetch` (once per `GET /messages`, so once on the inbox and again on opening the thread) and in `MockDataStore.merge` (once per already-known message).
-
-**The line that matters** is the merge line whose id ends `E455CAE2` — the deleted one. Expected if everything were working:
-
-```
-[DM] merge id=…E455CAE2 wire.deleted=true localFound=true local.deleted=false textlen=0
-```
-
-and the matching `[DM] raw:` containing `"id":"msg-9919A94B…","deleted":true`.
-
-Any deviation from that is the bug — read it off the table below.
-
-**If dev has been wiped**, recreate in three steps: send a message from account A, long-press it → *Delete for everyone* (within 24h), then reopen the thread on either device.
-
-### Triage
-
-Run from Xcode, open the conversation, read the console. Then:
-
-| What you see | What it means | Fix |
-|---|---|---|
-| `[DM] DECODE FAILED` | the WHOLE payload fails to decode, so `fetch` returns `[]` and every merge is a silent no-op | fix `RemoteMessage`'s decoder — this would explain far more than this one bug |
-| `"deleted":true` in raw, but `wire.deleted=false` | decoder is dropping the field | `RemoteMessage.init(from:)` — check the `CodingKeys` case and `decodeIfPresent(Bool.self…)`; SQLite returns 0/1, and if the Worker ever sends a number rather than a bool, decoding to `Bool` silently yields the default |
-| both true, `localFound=false` | the flip can't find the local row — `remoteID` mismatch | the merge matches on `$0.remoteID == entry.id`; check what `upload()` stored |
-| `deleted` absent from raw entirely | the deployed dev Worker is older than `src/index.js` | `npx wrangler deploy --env dev` |
-
-**When fixed, REMOVE BOTH `[DM]` LOG BLOCKS.** They are marked `TEMPORARY (1.1 migration)`.
-
----
+The temporary `[DM]` logs are gone. Nothing to do here.
 
 ## Step 2 — `activateMessaging()` not completing
 
@@ -128,20 +85,39 @@ The record TYPES cannot be deleted — Production schema is permanent — but em
 
 ⚠️ Check the **Production** environment specifically. Development is a separate container and tells you nothing.
 
-### 4.2 Apply the message tables to production
+### 4.2 Apply the schema to production
+
+`flowe-app` is missing **6 tables and 1 column** relative to dev. This list was derived by diffing the two databases on 2026-09-01, not written from memory:
+
+| Missing in production | From |
+|---|---|
+| `messages`, `read_receipts` | DM delivery moved off CloudKit |
+| `client_notes`, `blocked_users` | moved off the CloudKit private mirror |
+| `block_windows`, `saved_instructors` | moved off UserDefaults |
+| `profiles.app_settings` (column) | language / coverage radius / OOS window |
+
+`devices.notify_messages` and `profiles.dm_key_at` are **already in production** — both were added schema-before-code.
 
 ```bash
 cd /Users/nadinajjar/Projects/flowe-backend
-npx wrangler d1 execute flowe-app --remote --yes --file=/tmp/msg-tables.sql
+npx wrangler d1 execute flowe-app --remote --yes --file=migrations/1.1-production.sql
 ```
 
-If that file is gone, take the `messages` + `read_receipts` blocks (and the three indexes) from `schema.sql`. Do **not** apply `schema.sql` wholesale to `flowe-app` — it still contains `DROP TABLE` lines that would wipe live credit grants.
+Then the column, kept separate because SQLite's `ALTER TABLE` has no `IF NOT EXISTS`, so re-running the file above must never fail:
 
-**Gate:**
 ```bash
-npx wrangler d1 execute flowe-app --remote --yes --command="SELECT name FROM sqlite_master WHERE type='table' AND name IN ('messages','read_receipts');"
+npx wrangler d1 execute flowe-app --remote --yes --command="ALTER TABLE profiles ADD COLUMN app_settings TEXT;"
 ```
-Both must be listed. `profiles.dm_key_at` and `devices.notify_messages` are already present in production.
+
+Every statement in the migration file is additive and idempotent — it cannot touch existing data.
+
+⚠️ Do **NOT** apply `schema.sql` wholesale to production instead. It still contains `DROP TABLE` statements that would wipe live credit grants.
+
+**Gate — re-run the diff and expect no output:**
+```bash
+npx wrangler d1 execute flowe-app --remote --yes --command="SELECT name FROM sqlite_master WHERE type='table' AND name IN ('messages','read_receipts','client_notes','blocked_users','block_windows','saved_instructors');"
+```
+All six must be listed, and `pragma_table_info('profiles')` must include `app_settings`.
 
 ### 4.3 Deploy the production Worker
 
@@ -175,7 +151,7 @@ Watch for: messages not arriving (authz), "Someone" instead of names (profile ca
 
 ## Do not forget
 
-- Remove the temporary `[DM]` logs (Step 1)
 - `flowe-backend` deploys TWICE now — `--env dev` and prod. Forgetting prod means production runs old code
 - The dev environment only receives DEBUG builds. A TestFlight build talks to production, so it cannot exercise dev
 - Take a durable copy of the production backup; the one from this session is in a temp scratchpad
+- After release, re-run the dev-vs-prod schema diff — it is the cheapest way to catch a missed migration, and it is how the 6-table list in 4.2 was built
