@@ -121,6 +121,13 @@ final class SubscriptionService {
                     // `self.` is required: the function parameter is also named `tier`.
                     if let bought = SubscriptionTier(productID: transaction.productID) {
                         self.tier = bought
+                        // ...and TELL THE BACKEND. `refreshEntitlements` above already reported what it
+                        // resolved — which is tier 0 whenever `currentEntitlements` has not caught up
+                        // yet — so without this the server keeps a "not subscribed" record for someone
+                        // who just paid. The local tier was corrected here and the mirror was not,
+                        // which is how a fresh purchase showed a celebration and still read as
+                        // unsubscribed everywhere the server is the source of truth.
+                        await reportEntitlementToBackend(transaction, tier: bought)
                     }
                     return true
                 case .unverified(let transaction, _):
@@ -202,10 +209,27 @@ final class SubscriptionService {
     private func listenForTransactions() -> Task<Void, Never> {
         Task { [weak self] in
             for await update in Transaction.updates {
+                var applied: (SubscriptionTier, Transaction)?
                 if case .verified(let transaction) = update {
                     await transaction.finish()
+                    // A live, non-revoked auto-renewable tells us the tier directly. Keep it so we can
+                    // re-apply it AFTER the refresh below.
+                    if transaction.revocationDate == nil,
+                       (transaction.expirationDate ?? .distantFuture) > Date(),
+                       let t = SubscriptionTier(productID: transaction.productID) {
+                        applied = (t, transaction)
+                    }
                 }
                 await self?.refreshEntitlements()
+                // Same race `purchase()` guards against, reached from the other direction:
+                // `refreshEntitlements` ends with `tier = current?.tier`, so if
+                // `Transaction.currentEntitlements` has not caught up it wipes a tier that IS valid —
+                // and an update fires right after a purchase, which is exactly when it has not caught
+                // up. Re-apply the transaction we just verified; it is by definition the newest.
+                if let (t, tx) = applied, await self?.tier != t {
+                    await MainActor.run { self?.tier = t }
+                    await self?.reportEntitlementToBackend(tx, tier: t)
+                }
             }
         }
     }
