@@ -48,26 +48,23 @@ Corroborating clue: the student has no `profiles` row, so `setPresenceVisible` �
 
 ---
 
-## Step 3 — Decide what happens to existing conversations
+## Step 3 — ~~Existing conversations~~ DECIDED: do not migrate
 
-**This is a product decision, not a technical one, and it needs making before release.**
+1.1 reads messages from D1; the CloudKit `ChatMessage` records stay where they are, unread. Every
+existing conversation therefore disappears from the app on update.
 
-1.1 does not migrate messages. Conversations live in CloudKit `ChatMessage`; the new D1 store is empty. **On update, every existing conversation disappears from the app.** Nothing warns the user, and it reads as "the update deleted my messages."
+**Decided 2026-09-01: accept it.** The entire user base is two people the developer knows personally
+(plus the developer's own test accounts), so a migration — a one-time client pass, an idempotency
+guarantee, and threads that stay half-empty until BOTH parties update — is disproportionate. Tell them
+directly; no release note needed.
 
-### Option A — Don't migrate (recommended)
-Accept the loss, say so in the release notes. Volume is tiny (a handful of testers plus your own thread), the text is E2E ciphertext nobody can read anyway, and it keeps the release simple.
+Purge the old `ChatMessage` and `ReadReceipt` rows in Step 4.1 while you are there. They are
+world-readable and serve nobody once 1.1 ships.
 
-### Option B — Migrate
-Technically feasible: the ciphertext is unchanged by the move, so old rows can be copied into D1 as-is and still decrypt.
-
-**But there is a hard constraint.** `POST /messages` forces `sender_id` to the authenticated caller — deliberately, so a message cannot be forged. So each device can only migrate the messages **it sent**. A thread is only whole once BOTH parties have updated and run the migration. Expect partial threads in the meantime.
-
-Cost: a one-time client-side pass on first 1.1 launch, plus an idempotency guarantee so it cannot run twice. Disproportionate at this volume — but it is the honest option if losing history is unacceptable.
-
-### Either way
-Purge the CloudKit rows afterwards — see Step 4.1. Leaving them serves nobody and they stay world-readable.
-
----
+**Revisit this if 1.1 ever slips far enough that real users accumulate first.** The reasoning is
+entirely about volume, not about the data being unimportant — at a hundred users the answer flips, and
+the migration is ~20 lines: for each local message I sent, POST it to `/messages`. The local SwiftData
+cache is the source, not CloudKit, and deterministic ids make it idempotent.
 
 ## Step 4 — Release
 
