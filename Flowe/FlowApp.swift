@@ -127,9 +127,37 @@ struct FlowApp: App {
         _data = State(initialValue: store)
     }
 
+    /// Shown when the USER's iCloud storage is full. Not cosmetic: a failing CloudKit mirror
+    /// repeatedly resets its state, and that reset discards committed local writes — edits appear to
+    /// save and then silently revert. Before this banner the app explained none of it.
+    @ViewBuilder private var iCloudFullBanner: some View {
+        if data.iCloudStorageFull {
+            HStack(spacing: 10) {
+                Image(systemName: "exclamationmark.icloud.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("iCloud storage is full")
+                        .flowFont(.titleMedium)
+                    Text("Flowe can't sync, and some changes may not save. Free up space in Settings → iCloud.")
+                        .flowFont(.caption)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(Color.floweInk)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.floweCardBg)
+            .overlay(alignment: .bottom) { Divider().overlay(Color.floweBorder) }
+        }
+    }
+
     var body: some Scene {
         WindowGroup {
             AppRouter()
+                .safeAreaInset(edge: .top, spacing: 0) { iCloudFullBanner }
+                .task { data.observeCloudKitHealth() }
                 .environment(session)
                 .environment(data)
                 .environment(settings)

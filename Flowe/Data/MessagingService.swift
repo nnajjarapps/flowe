@@ -149,8 +149,14 @@ final class MessagingService {
 
     private func fetch(query: [URLQueryItem]) async -> [RemoteMessage] {
         struct Resp: Decodable { let messages: [RemoteMessage] }
-        guard let data = try? await backend.authorized("/messages", query: query),
-              let resp = try? JSONDecoder().decode(Resp.self, from: data) else { return [] }
-        return resp.messages
+        guard let data = try? await backend.authorized("/messages", query: query) else { return [] }
+        do {
+            return try JSONDecoder().decode(Resp.self, from: data).messages
+        } catch {
+            // A decode failure returns an EMPTY inbox, which is indistinguishable from "no messages" —
+            // so it must never be silent. Same lesson as `MockDataStore.save()`'s `try?`.
+            FloweLog.data.error("GET /messages decode failed: \(String(describing: error), privacy: .public)")
+            return []
+        }
     }
 }

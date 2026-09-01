@@ -1,8 +1,10 @@
 import SwiftUI
 import SwiftData
+import OSLog
 import Observation
 import CoreLocation
 import CloudKit
+import CoreData
 
 /// The identity to render for an authored record, resolved LIVE at display time from the author's
 /// current public profile rather than the denormalised snapshot frozen onto the record at creation.
@@ -24,6 +26,16 @@ struct AuthorIdentity {
 /// storage swap (JSON → `ModelContext`, later CloudKit-synced) doesn't ripple into the views.
 ///
 /// Cached arrays are re-fetched via `refresh()` after each mutation so `@Observable` re-renders.
+/// App-wide logging. Declared here rather than in its own file because adding a file means
+/// hand-editing `project.pbxproj` (xcodegen is not installed).
+enum FloweLog {
+    /// Persistence and backend decoding — the paths where a swallowed error means a write or a read
+    /// silently did not happen.
+    static let data = Logger(subsystem: "com.flowepilates.app", category: "data")
+    /// CloudKit mirroring health (quota, account state).
+    static let sync = Logger(subsystem: "com.flowepilates.app", category: "sync")
+}
+
 @MainActor
 @Observable
 final class MockDataStore {
@@ -37,6 +49,15 @@ final class MockDataStore {
     private(set) var postComments: [PostComment] = []
     private(set) var bookings: [Booking] = []
     private(set) var messages: [Message] = []
+
+    /// True when SwiftData's CloudKit mirror is failing because the USER's iCloud storage is full
+    /// (`CKError.quotaExceeded`, code 25, on a private zone — the person's quota, not Flowe's).
+    ///
+    /// This matters far more than it looks. When the mirror cannot export it repeatedly resets its
+    /// internal state, and that reset discards committed local changes — a write succeeds, then
+    /// silently reverts. Until this flag existed the app said NOTHING: the user simply saw edits not
+    /// stick, with no explanation anywhere. Surfaced by `iCloudFullBanner` at the app root.
+    private(set) var iCloudStorageFull = false
     private(set) var blocked: [BlockedUser] = []
     /// The instructor's PRIVATE clinical/safety notes about their clients — injuries, pregnancy,
     /// conditions. Private-DB only (see [[ClientNote]]); NEVER published to any public record.
@@ -140,6 +161,31 @@ final class MockDataStore {
         try? context.delete(model: Program.self)
         try? context.delete(model: VideoExercise.self)
         do { try context.save(); return true } catch { return false }
+    }
+
+    /// Listen for CloudKit mirroring failures. `NSPersistentCloudKitContainer` posts these even under
+    /// SwiftData, which does not surface them any other way.
+    func observeCloudKitHealth() {
+        NotificationCenter.default.addObserver(
+            forName: NSPersistentCloudKitContainer.eventChangedNotification,
+            object: nil, queue: .main
+        ) { [weak self] note in
+            guard let event = note.userInfo?[NSPersistentCloudKitContainer.eventNotificationUserInfoKey]
+                    as? NSPersistentCloudKitContainer.Event else { return }
+            // Only a FINISHED event carries a conclusive error; an in-flight one has none yet.
+            guard event.endDate != nil else { return }
+            let full = (event.error as? CKError)?.code == .quotaExceeded
+                || ((event.error as? CKError)?.partialErrorsByItemID?.values
+                        .contains { ($0 as? CKError)?.code == .quotaExceeded } ?? false)
+            guard full || self?.iCloudStorageFull == true else { return }
+            Task { @MainActor in
+                guard let self else { return }
+                if full, !self.iCloudStorageFull {
+                    FloweLog.sync.error("iCloud storage full — CloudKit mirroring cannot export; local changes may revert")
+                }
+                self.iCloudStorageFull = full
+            }
+        }
     }
 
     func refresh() {
@@ -5937,8 +5983,13 @@ final class MockDataStore {
 
     // MARK: - Persistence
 
+    /// Persist, then re-read. NEVER `try?` — this is called from every mutation path in the store
+    /// (bookings, messages, profiles, posts, notes), so a swallowed error here is a write that
+    /// silently did not happen, anywhere in the app. `try?` hid a real defect for the app's whole
+    /// life and sent a diagnosis session down the wrong path before it was found.
     private func save() {
-        try? context.save()
+        do { try context.save() }
+        catch { FloweLog.data.error("context.save() failed: \(String(describing: error), privacy: .public)") }
         refresh()
     }
 }
