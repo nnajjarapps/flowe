@@ -185,6 +185,30 @@ final class SubscriptionService {
                 current = (t, transaction.purchaseDate, transaction)
             }
         }
+        // FALLBACK: `Transaction.currentEntitlements` can return NOTHING while `Transaction.all`
+        // holds a live subscription. Observed on device 2026-09-01 — one auto-renewable, unexpired
+        // (expires 2026-10-01), unrevoked, and `currentEntitlements` yielded 0 across repeated
+        // refreshes over several seconds. The result was a paying instructor reading as unsubscribed
+        // and staying hidden from students.
+        //
+        // This is not a workaround for a race; the loop above never ran at all. An unexpired,
+        // unrevoked auto-renewable in `all` IS an entitlement, and the filter here is the same one
+        // `currentEntitlements` is documented to apply — so this can only ever ADD a subscription that
+        // is genuinely valid. A refund sets `revocationDate`, and a cancellation still entitles until
+        // `expirationDate`, so neither can be resurrected by it.
+        if current == nil {
+            let now = Date()
+            for await result in Transaction.all {
+                guard case .verified(let transaction) = result,
+                      transaction.productType == .autoRenewable,
+                      transaction.revocationDate == nil,
+                      (transaction.expirationDate ?? .distantPast) > now,
+                      let t = SubscriptionTier(productID: transaction.productID) else { continue }
+                if current == nil || transaction.purchaseDate > current!.purchased {
+                    current = (t, transaction.purchaseDate, transaction)
+                }
+            }
+        }
         tier = current?.tier
         await reportEntitlementToBackend(current?.tx, tier: current?.tier)
     }
