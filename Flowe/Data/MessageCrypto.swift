@@ -34,7 +34,15 @@ final class PublicKeyService {
         let record = (try? await database.record(for: id)) ?? CKRecord(recordType: Self.recordType, recordID: id)
         if let existing = record["key"] as? Data, existing == publicKey { return }
         record["key"] = publicKey
-        _ = try? await database.save(record)
+        do {
+            _ = try await database.save(record)
+        } catch {
+            // The single most consequential silent failure in messaging: without a published public
+            // key NOBODY can encrypt to this user, so every incoming message falls back to plaintext
+            // or never arrives — and the user is told nothing, because the failure is on THEIR side of
+            // a handshake they cannot see. Degrading is still right; degrading silently is not.
+            FloweLog.sync.error("DM public key failed to publish: \(String(describing: error), privacy: .public)")
+        }
         #endif
     }
 
