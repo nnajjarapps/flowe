@@ -1908,7 +1908,13 @@ final class MockDataStore {
             if let id = m.remoteID, readIDs.contains(id) { m.isRead = true; readChanged = true }
         }
         if readChanged { save() }
-        let unknownRead = messages.compactMap { $0.isRead ? $0.remoteID : nil }.filter { !readIDs.contains($0) }
+        // RECEIVED messages only. A sender has by definition read their own, and `merge` sets
+        // `isRead` for them automatically — storing that is pure noise, and it was the only thing in
+        // this table on first run.
+        let unknownRead = messages
+            .filter { $0.isRead && $0.senderID != currentUserID }
+            .compactMap(\.remoteID)
+            .filter { !readIDs.contains($0) }
         await client.markMessagesRead(unknownRead)
 
         // --- notes ---
@@ -2182,13 +2188,21 @@ final class MockDataStore {
         guard let me = currentUserID else { return }
         let id = Message.conversationID(me, counterpartID)
         var changed = false
+        var newlyRead: [String] = []
         for message in messages where message.conversationID == id
             && message.recipientID == me && !message.isRead {
             message.isRead = true
             changed = true
+            if let rid = message.remoteID { newlyRead.append(rid) }
         }
         if changed { save() }
         guard !isPreview, changed else { return }   // only acknowledge when we newly read something
+        // Mirror it NOW. `syncPrivateState` only pushes read state at sign-in, so without this a read
+        // was not durable until the next launch — and the unread badge came back after a reinstall,
+        // which is the whole reason this moved off the private mirror.
+        if !newlyRead.isEmpty {
+            Task { await FloweBackendClient.shared.markMessagesRead(newlyRead) }
+        }
         let readUpTo = messages.filter { $0.conversationID == id }.map(\.sentAt).max() ?? Date()
         Task { await messagingService.publishReadReceipt(conversationID: id, readerID: me, lastReadAt: readUpTo) }
     }
