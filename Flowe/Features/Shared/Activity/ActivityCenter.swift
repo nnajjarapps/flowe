@@ -300,6 +300,21 @@ extension MockDataStore {
                 actorName: actor(b), avatarID: "", avatarPhoto: studentPhoto(forOwnerID: b.studentID ?? ""),
                 detail: b.type, detail2: "₪\(b.feeAmount)", isActionable: true))
         }
+        // A session the STUDENT cancelled. The instructor is pushed once when it happens, and without a
+        // row here that push was the ONLY trace — miss the banner and the cancellation left no record in
+        // the app at all, which is the opposite of what an instructor needs from a cancelled session.
+        //
+        // STUDENT cancellations only. `bookingCancelledAt` is stamped from the backend's cancel route,
+        // which is student-only (`WHERE id = ? AND student_id = ?`); an instructor's OWN cancellation
+        // arrives as a decision and never sets it. Telling someone about their own action is the exact
+        // defect this file already carries three fixes for.
+        for b in incomingBookings where b.status == .cancelled {
+            guard b.remoteID.flatMap({ bookingCancelledAt[$0] }) != nil else { continue }
+            out.append(ActivityItem(
+                id: "canc-\(stableKey(b))", kind: .bookingCancelled, rawDate: cancelledAt(b),
+                actorName: actor(b), avatarID: "", avatarPhoto: studentPhoto(forOwnerID: b.studentID ?? ""),
+                detail: b.type, detail2: "\(b.date) · \(b.time)"))
+        }
         return out
     }
 
