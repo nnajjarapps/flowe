@@ -94,7 +94,11 @@ The record TYPES cannot be deleted — Production schema is permanent — but em
 | `messages`, `read_receipts` | DM delivery moved off CloudKit |
 | `client_notes`, `blocked_users` | moved off the CloudKit private mirror |
 | `block_windows`, `saved_instructors` | moved off UserDefaults |
+| `content_reports`, `removed_content` | moderation — reports queryable, takedown list |
+| `saved_posts` | post bookmarks, moved off `FeedPost.saved` |
 | `profiles.app_settings` (column) | language / coverage radius / OOS window |
+
+**Nine tables and one column**, re-derived from a live dev-vs-prod diff on 2026-09-01.
 
 `devices.notify_messages` and `profiles.dm_key_at` are **already in production** — both were added schema-before-code.
 
@@ -115,9 +119,22 @@ Every statement in the migration file is additive and idempotent — it cannot t
 
 **Gate — re-run the diff and expect no output:**
 ```bash
-npx wrangler d1 execute flowe-app --remote --yes --command="SELECT name FROM sqlite_master WHERE type='table' AND name IN ('messages','read_receipts','client_notes','blocked_users','block_windows','saved_instructors');"
+npx wrangler d1 execute flowe-app --remote --yes --command="SELECT name FROM sqlite_master WHERE type='table' AND name IN ('messages','read_receipts','client_notes','blocked_users','block_windows','saved_instructors','content_reports','removed_content','saved_posts');"
 ```
-All six must be listed, and `pragma_table_info('profiles')` must include `app_settings`.
+All nine must be listed, and `pragma_table_info('profiles')` must include `app_settings`.
+
+### 4.2b CloudKit: make `likeTargetID` QUERYABLE in Production
+
+**Confirmed by testing, not assumed.** Like notifications fire through a `CKQuerySubscription` whose
+predicate filters on `CommunityLike.likeTargetID`, and a subscription predicate requires that field to
+be **QUERYABLE**. A field CloudKit auto-creates from a record write is **not** indexed — so the like
+records fine, the bell row appears, and **the push silently never fires**. That is exactly what
+happened in dev until the schema was imported.
+
+CloudKit Console → **Production** → Schema → import `CloudKit-dev-schema.ckdb`, or add the index on
+`CommunityLike.likeTargetID` by hand. Then check **Subscriptions** for `flowe.v2.community.like.…`.
+
+⚠️ Without this, likes notify nobody in production and nothing reports an error.
 
 ### 4.3 Deploy the production Worker
 
