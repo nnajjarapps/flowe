@@ -2029,7 +2029,7 @@ final class MockDataStore {
     func deleteForEveryone(_ message: Message) {
         guard message.canDeleteForEveryone(currentUserID: currentUserID),
               let remoteID = message.remoteID else { return }
-        message.deleted = true
+        message.tombstoned = true
         message.text = ""
         save()
         guard !isPreview else { return }
@@ -2234,8 +2234,8 @@ final class MockDataStore {
             if known.contains(entry.id) {
                 // Existing row: pick up a "delete for everyone" flip the counterpart just made — the
                 // merge otherwise only INSERTS, so without this the recipient never sees the tombstone.
-                if entry.deleted, let local = messages.first(where: { $0.remoteID == entry.id }), !local.deleted {
-                    local.deleted = true
+                if entry.deleted, let local = messages.first(where: { $0.remoteID == entry.id }), !local.tombstoned {
+                    local.tombstoned = true
                     local.text = ""
                     changed = true
                 }
@@ -2267,7 +2267,7 @@ final class MockDataStore {
                 // Anything I sent is implicitly read; anything received starts unread.
                 isRead: entry.senderID == me
             )
-            message.deleted = entry.deleted
+            message.tombstoned = entry.deleted
             context.insert(message)
             changed = true
         }

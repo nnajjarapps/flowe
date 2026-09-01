@@ -63,7 +63,7 @@ struct ConversationView: View {
                             ForEach(groupedByDay, id: \.day) { group in
                                 dateStamp(group.day)
                                 ForEach(group.messages) { message in
-                                    if message.deleted {
+                                    if message.tombstoned {
                                         deletedRow(mine: message.senderID == data.currentUserID)
                                             .id(message.persistentModelID)
                                             .contextMenu {

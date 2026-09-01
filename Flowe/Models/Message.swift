@@ -32,7 +32,15 @@ final class Message {
     /// "Deleted for everyone" tombstone — the row is KEPT but rendered as "You deleted a message" /
     /// "This message was deleted" on BOTH sides. Only the sender can set it, only within 24h of `sentAt`.
     /// A plain "delete for me" removes the row locally instead and never touches this flag.
-    var deleted: Bool = false
+    ///
+    /// **Named `tombstoned`, NOT `deleted`, and that is load-bearing.** `NSManagedObject` already has
+    /// `isDeleted`, whose Objective-C KVC key is exactly `deleted` — and SwiftData persists through KVC
+    /// by property name. A property called `deleted` therefore writes into CoreData's own deletion flag
+    /// instead of a stored attribute: the setter appears to work, `context.save()` succeeds without
+    /// throwing, and the value is false again the moment it is read back. Every other property on the
+    /// same object in the same save persisted normally, which is what a per-property name collision
+    /// looks like. Do not rename it back.
+    var tombstoned: Bool = false
 
     init(
         remoteID: String? = nil,
@@ -73,7 +81,7 @@ final class Message {
     /// Whether this user may still delete THIS message for everyone: it must be their own message, not
     /// already deleted, and within 24h of when it was sent.
     func canDeleteForEveryone(currentUserID: String?) -> Bool {
-        senderID == currentUserID && !deleted
+        senderID == currentUserID && !tombstoned
             && Date().timeIntervalSince(sentAt) < Self.deleteForEveryoneWindow
     }
 
