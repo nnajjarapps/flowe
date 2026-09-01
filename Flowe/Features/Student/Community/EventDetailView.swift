@@ -452,15 +452,33 @@ struct EventDetailView: View {
     private var whoIsGoing: some View {
         if let attendees = event.attendees {
             if canManage {
-                // The organizer's view. A full attendee roster (names + join times) would need a
-                // store accessor the data layer doesn't expose — only the count is persisted — so
-                // this surfaces the count and, crucially, the overflow, which is the one thing the
-                // organizer alone can see and the only person who can act on it.
+                // The organizer's view. They are entitled to the FULL roster — the backend returns
+                // every registration for an event you organize, with no community-visibility filter,
+                // because an instructor running a class needs to know who is actually coming. That is
+                // `acceptedGuests`; `communityAttendees` is the same list narrowed to opted-in peers,
+                // which is the STUDENT-facing rule and must not be applied here.
+                //
+                // (This previously showed only a count, on the grounds that the roster "would need a
+                // store accessor the data layer doesn't expose". That stopped being true once
+                // registrations moved to the backend — the rows are in the store now.)
+                let guests = data.acceptedGuests(for: event)
                 VStack(alignment: .leading, spacing: 8) {
                     SectionHeader(text: "ATTENDEES")
                     Text("^[\(attendees) person](inflect: true) registered")
                         .font(FloweFont.sans(13))
                         .foregroundStyle(Color.floweInk)
+                    // Names live-resolve: `studentName` on the registration is a write-time snapshot
+                    // that reads "Member" for anyone who joined before setting a name.
+                    ForEach(guests, id: \.studentID) { guest in
+                        HStack(spacing: 8) {
+                            AvatarView(id: "", photo: data.studentPhoto(forOwnerID: guest.studentID), size: 26)
+                            Text(data.displayIdentity(ownerID: guest.studentID,
+                                                      fallbackName: guest.studentName).name)
+                                .font(FloweFont.sans(13))
+                                .foregroundStyle(Color.floweInk)
+                            Spacer(minLength: 0)
+                        }
+                    }
                     if event.capacity > 0, attendees > event.capacity {
                         Text("^[\(attendees - event.capacity) spot](inflect: true) over capacity — the latest to join are released as their devices reconcile.")
                             .font(FloweFont.mono(9))
