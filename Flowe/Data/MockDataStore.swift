@@ -3226,9 +3226,23 @@ final class MockDataStore {
         let known = Set(posts.compactMap(\.remoteID))
         // Never re-insert a post the user deleted: CloudKit's delete may not have propagated to the
         // query index yet, so the fetch can still return the ghost — without this it reappears.
-        // The user's own deletions, PLUS anything moderation has taken down.
+        // The user's own deletions, PLUS anything moderation has taken down, PLUS posts their author
+        // has deleted.
         let tombstoned = Set(UserDefaults.standard.stringArray(forKey: deletedPostsKey) ?? [])
             .union(removedContentIDs)
+        // Remove any post ALREADY held that is now tombstoned. This loop is the half that was missing:
+        // the filter below only guards INSERTS, so a tombstone stopped a post being re-added but never
+        // removed one a reader already had — which is why a deleted post survived until the separate
+        // 60s absence-prune caught it. Same shape as the delete-for-everyone flip on messages: a merge
+        // that only inserts cannot express a state change.
+        if !removedContentIDs.isEmpty {
+            var removedAny = false
+            for post in posts where post.remoteID.map({ removedContentIDs.contains($0) }) == true {
+                context.delete(post)
+                removedAny = true
+            }
+            if removedAny { save() }
+        }
         var nextId = posts.map(\.legacyId).max() ?? 0
 
         for entry in remote where !known.contains(entry.id) && !tombstoned.contains(entry.id) {
