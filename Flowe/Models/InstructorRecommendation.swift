@@ -37,7 +37,9 @@ final class InstructorRecommendation {
     var relativeTime: String {
         let seconds = Date().timeIntervalSince(createdAt)
         switch seconds {
-        case ..<3600:    return "JUST NOW"
+        // Same ladder as `FeedPost`/`Review` — see the note there on the missing minutes bucket.
+        case ..<60:      return "JUST NOW"
+        case ..<3600:    return "\(Int(seconds / 60))M AGO"
         case ..<86_400:  return "\(Int(seconds / 3600))H AGO"
         case ..<604_800: return "\(Int(seconds / 86_400))D AGO"
         default:         return "\(Int(seconds / 604_800))W AGO"

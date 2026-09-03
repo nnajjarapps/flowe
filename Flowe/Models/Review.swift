@@ -54,7 +54,11 @@ final class Review {
     var relativeTime: String {
         let seconds = Date().timeIntervalSince(createdAt)
         switch seconds {
-        case ..<3600:    return "JUST NOW"
+        // The minutes bucket is NOT optional: without it everything under an hour reads "JUST NOW"
+        // and then jumps to "1H AGO", so a five-minute-old review claims to be brand new. Matches
+        // `FeedPost.relativeTime`, which had the ladder right all along.
+        case ..<60:      return "JUST NOW"
+        case ..<3600:    return "\(Int(seconds / 60))M AGO"
         case ..<86_400:  return "\(Int(seconds / 3600))H AGO"
         case ..<604_800: return "\(Int(seconds / 86_400))D AGO"
         default:
