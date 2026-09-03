@@ -227,16 +227,26 @@ struct FlowApp: App {
                     // Publish my end-to-end messaging key before syncing messages, so counterparts
                     // can encrypt to me and my own sends can be sealed.
                     await data.activateMessaging()
-                    // Client notes + block list now live on the backend, so they follow this Apple ID
-                    // across devices and no longer depend on the private-DB mirror (or on the user
-                    // having iCloud space). Before `syncMessages`, so a block is in force before any
-                    // message from that sender can land.
-                    await data.syncPrivateState()
                     // Language, coverage radius and Out-of-Studio hours follow the Apple ID too, so a
                     // second device inherits the user's setup instead of resetting to defaults.
                     await settings.restoreFromBackend()
                     await data.syncBookings(asInstructor: isInstructor)
                     await data.syncCoverage(asInstructor: isInstructor)
+                    // Client notes + block list now live on the backend, so they follow this Apple ID
+                    // across devices and no longer depend on the private-DB mirror (or on the user
+                    // having iCloud space).
+                    //
+                    // Ordering is load-bearing in BOTH directions:
+                    //  • AFTER `syncBookings`/`syncCoverage` — `booking_local` rows are matched by
+                    //    `bookings.first(where: { $0.remoteID == r.bookingID })`, and on a REINSTALL
+                    //    there are no bookings yet when this runs first, so every attendance/fee row
+                    //    was silently dropped. The instructor was then re-asked "Did they show?" for a
+                    //    session already judged — and answering would have overwritten the real record
+                    //    (and its fee) with a fresh, newer-stamped one. Restored only on the 2nd launch.
+                    //    Running after `syncCoverage` also means the coverRole it reconciles gets pushed.
+                    //  • BEFORE `syncMessages` — so a block is in force before any message from that
+                    //    sender can land.
+                    await data.syncPrivateState()
                     await data.syncMessages()
                     // On a fresh device (same Apple id) the instructor's own row was just created blank
                     // by `ensureInstructorProfile` — `Instructor` is LOCAL-ONLY (Reference .none config)

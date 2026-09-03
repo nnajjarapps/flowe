@@ -956,3 +956,57 @@ struct CreditRedeemToggle: View {
         .onChange(of: useCredit) { _, _ in Haptic.selection() }
     }
 }
+
+/// A horizontally-scrollable underline tab bar — the profile "sub-tab" control on both the
+/// instructor and student profiles.
+///
+/// Exists because `.pickerStyle(.segmented)` cannot carry the instructor profile's six tabs: a
+/// segmented control divides its width evenly and truncates, and Flowe ships in he/ar where the
+/// labels are a different length again. A scrolling strip degrades gracefully instead — overflow
+/// scrolls rather than clipping, and the selected tab is always legible.
+struct FloweTabStrip<Tab: Hashable>: View {
+    let tabs: [Tab]
+    /// The RAW (unlocalized) label; rendered through `Text(localizedTag:)` so the string catalog
+    /// still sees it, exactly as the segmented pickers did.
+    let label: (Tab) -> String
+    @Binding var selection: Tab
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 22) {
+                    ForEach(tabs, id: \.self) { tab in
+                        let isOn = tab == selection
+                        Button {
+                            selection = tab
+                            Haptic.selection()
+                        } label: {
+                            VStack(spacing: 6) {
+                                Text(localizedTag: label(tab))
+                                    .font(FloweFont.sans(14, isOn ? .medium : .regular))
+                                    .foregroundStyle(isOn ? Color.floweInk : Color.floweMuted)
+                                    .fixedSize()
+                                // Full-width underline on the selected tab; a clear bar of the same
+                                // height on the others so the row never reflows on selection.
+                                Rectangle()
+                                    .fill(isOn ? Color.flowePink : Color.clear)
+                                    .frame(height: 2)
+                                    .clipShape(Capsule())
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .id(tab)
+                        .accessibilityAddTraits(isOn ? [.isSelected] : [])
+                    }
+                }
+                .padding(.horizontal, 20)
+            }
+            // Keep the chosen tab on screen when selection changes from code (or when the strip
+            // opens scrolled past it).
+            .onChange(of: selection) { _, new in
+                withAnimation(FloweMotion.gentle) { proxy.scrollTo(new, anchor: .center) }
+            }
+        }
+        .accessibilityIdentifier("profile.tabstrip")
+    }
+}

@@ -419,6 +419,32 @@ final class FloweBackendClient {
         return (try? JSONDecoder().decode(Resp.self, from: data))?.rows ?? []
     }
 
+    /// A No-Show fee the student's OWN instructor recorded against the student's OWN booking — the
+    /// only cross-party read in the booking-local family. Fee columns only; the server's JOIN keeps
+    /// attendance, client notes and the cover ledger unreachable. `waived` and zero-amount rows are
+    /// filtered server-side, so anything returned here is a real, live request for money.
+    struct RemoteBookingFee: Decodable, Identifiable {
+        let bookingID: String
+        let instructorID: String
+        let date: String
+        let time: String
+        let type: String
+        /// "owed" or "collected" — never "waived".
+        let status: String
+        let amount: Int
+        let updatedAt: Double
+
+        var id: String { bookingID }
+        var isPaid: Bool { status == "collected" }
+    }
+
+    func fetchBookingFees() async -> [RemoteBookingFee] {
+        guard !isDebugInjected, hasSession else { return [] }
+        guard let data = try? await authorized("/booking-fees") else { return [] }
+        struct Resp: Decodable { let fees: [RemoteBookingFee] }
+        return (try? JSONDecoder().decode(Resp.self, from: data))?.fees ?? []
+    }
+
     func saveBookingLocal(bookingID: String, attendance: String, feeStatus: String, feeAmount: Int,
                           coverRole: String, coverStatus: String, coverAmount: Int, updatedAt: Date) async {
         guard !isDebugInjected, hasSession else { return }

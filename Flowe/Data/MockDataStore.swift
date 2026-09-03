@@ -1573,6 +1573,31 @@ final class MockDataStore {
             .sorted { ($0.sessionEnd(now: now) ?? .distantPast) > ($1.sessionEnd(now: now) ?? .distantPast) }
     }
 
+    /// Mirror ONE booking's local state to the backend immediately, instead of waiting for the next
+    /// launch's `syncPrivateState`.
+    ///
+    /// Launch-only push was survivable while this data was private to the instructor. It stopped being
+    /// survivable the moment the STUDENT could see it ([[StudentFeeVisibility]]): they pay by Bit, the
+    /// instructor marks it collected, and the student went on reading "Requested" until the instructor
+    /// happened to restart the app. Verified in dev — the row sat at `owed` server-side while the
+    /// iPad showed collected.
+    ///
+    /// Fire-and-forget: the launch sync still reconciles, so a failed call here self-heals and is not
+    /// worth blocking the UI for. Values are captured up front so nothing touches the model off-actor.
+    private func pushBookingLocal(_ booking: Booking) {
+        guard !isPreview, let id = booking.remoteID else { return }
+        let attendance = booking.attendanceRaw, feeStatus = booking.feeStatusRaw
+        let feeAmount = booking.feeAmount, coverRole = booking.coverRoleRaw
+        let coverStatus = booking.coverStatusRaw, coverAmount = booking.coverAmount
+        let stamp = booking.localStateUpdatedAt
+        Task {
+            await FloweBackendClient.shared.saveBookingLocal(
+                bookingID: id, attendance: attendance, feeStatus: feeStatus, feeAmount: feeAmount,
+                coverRole: coverRole, coverStatus: coverStatus, coverAmount: coverAmount,
+                updatedAt: stamp)
+        }
+    }
+
     /// Mark whether a client showed. A no-show flags the policy fee as owed (for off-app collection);
     /// marking attended clears any fee tentatively owed for that session.
     func markAttendance(_ booking: Booking, attended: Bool) {
@@ -1584,6 +1609,7 @@ final class MockDataStore {
             if fee > 0 { booking.feeAmount = fee; booking.feeStatus = .owed }
         }
         save()
+        pushBookingLocal(booking)
     }
 
     /// Resolve an owed fee once the instructor has collected or waived it off-app.
@@ -1591,6 +1617,8 @@ final class MockDataStore {
         guard booking.feeStatus == .owed, status == .collected || status == .waived else { return }
         booking.feeStatus = status
         save()
+        // The student is watching this one — see `pushBookingLocal`.
+        pushBookingLocal(booking)
     }
 
     /// Fees currently owed to the instructor, newest session first.
@@ -1876,30 +1904,48 @@ final class MockDataStore {
         // --- booking-local state (attendance / No-Show fee / cover ledger) ---
         // The instructor's private accounting. Last-write-wins on updatedAt, resolved server-side.
         let remoteLocal = await client.fetchBookingLocal()
+        let remoteByID = Dictionary(remoteLocal.map { ($0.bookingID, $0) }, uniquingKeysWith: { a, b in
+            a.updatedAt >= b.updatedAt ? a : b
+        })
         var localChanged = false
         for r in remoteLocal {
             guard let b = bookings.first(where: { $0.remoteID == r.bookingID }) else { continue }
+            // LWW, the half that was missing: apply the server's row ONLY when it is at least as new
+            // as this device's own edit. Previously this overwrote unconditionally, so a fee resolved
+            // locally was reverted by the stale server value on the very next launch.
+            guard r.updatedAt >= b.localStateUpdatedAtMillis else { continue }
             b.attendanceRaw = r.attendance.isEmpty ? b.attendanceRaw : r.attendance
             b.feeStatusRaw = r.feeStatus.isEmpty ? b.feeStatusRaw : r.feeStatus
             b.feeAmount = r.feeAmount
             b.coverRoleRaw = r.coverRole.isEmpty ? b.coverRoleRaw : r.coverRole
             b.coverStatusRaw = r.coverStatus.isEmpty ? b.coverStatusRaw : r.coverStatus
             b.coverAmount = r.coverAmount
+            // Adopt the server's timestamp, NOT `now` — this is the server's edit, not ours. Written
+            // to the stored property directly so the typed setters' stamp never fires here.
+            b.localStateUpdatedAt = Date(timeIntervalSince1970: r.updatedAt / 1000)
             localChanged = true
         }
         if localChanged { save() }
-        // Push anything the server has not got. Only rows carrying actual state — an untouched booking
-        // has nothing worth storing.
-        let knownLocal = Set(remoteLocal.map(\.bookingID))
+        // Push a row the server has never seen, OR one THIS DEVICE has edited since the server's copy.
+        // The old rule pushed only unknown bookings, which meant the first write for a booking synced
+        // and every correction after it never left the device.
+        var pushed = false
         for b in bookings {
-            guard let id = b.remoteID, !knownLocal.contains(id) else { continue }
+            guard let id = b.remoteID else { continue }
             let hasState = b.attendance != .unknown || b.feeStatus != .none || b.coverRole != .none
             guard hasState else { continue }
+            let remote = remoteByID[id]
+            guard remote == nil || b.localStateUpdatedAtMillis > remote!.updatedAt else { continue }
+            // A row that carries state but has never been stamped predates this timestamp (it was
+            // written before the field existed). Stamp it NOW so it pushes once and then compares
+            // normally, instead of re-pushing on every launch.
+            if b.localStateUpdatedAt == .distantPast { b.localStateUpdatedAt = .now; pushed = true }
             await client.saveBookingLocal(
                 bookingID: id, attendance: b.attendanceRaw, feeStatus: b.feeStatusRaw,
                 feeAmount: b.feeAmount, coverRole: b.coverRoleRaw, coverStatus: b.coverStatusRaw,
-                coverAmount: b.coverAmount, updatedAt: Date())
+                coverAmount: b.coverAmount, updatedAt: b.localStateUpdatedAt)
         }
+        if pushed { save() }
 
         // --- message read state (recipient-local) ---
         let readIDs = Set(await client.fetchReadMessageIDs())
@@ -3862,6 +3908,49 @@ final class MockDataStore {
             }
         }
         if changed { save() }
+    }
+
+    /// No-Show fees this student's instructors have recorded against them — what they are being asked
+    /// to settle by Bit or cash, and whether the instructor has marked it received.
+    ///
+    /// Read-only and server-derived: the fee lives in the INSTRUCTOR's `booking_local` row and they
+    /// remain its only author. This is visibility, not a second copy — marking it paid stays the
+    /// instructor's action, exactly as it is today.
+    private(set) var bookingFees: [FloweBackendClient.RemoteBookingFee] = []
+
+    /// Total still outstanding across every instructor.
+    var totalFeesOwed: Int { bookingFees.filter { !$0.isPaid }.reduce(0) { $0 + $1.amount } }
+
+    func syncBookingFees() async {
+        guard !isPreview, currentUserID != nil else { return }
+        bookingFees = await FloweBackendClient.shared.fetchBookingFees()
+    }
+
+    /// The signed-in user's OWN feed posts, newest first — the "my activity" surface on both
+    /// profiles. Excludes posts already queued for deletion (`pendingDelete`) so a post the owner
+    /// just deleted leaves their profile immediately, before the server round-trip lands.
+    ///
+    /// Deliberately NOT filtered through `isBlocked` the way the community feed is: these are your
+    /// own posts, and you cannot block yourself.
+    var myPosts: [FeedPost] {
+        guard let me = currentUserID else { return [] }
+        return posts
+            .filter { $0.ownerID == me && !$0.pendingDelete }
+            .sorted { $0.createdAt > $1.createdAt }
+    }
+
+    /// The events the signed-in user has JOINED (as distinct from `myEvents`, which is the ones they
+    /// ORGANIZE). This is the student side of the same profile section: a student never organizes,
+    /// so without this their Events tab would always be empty. Same ordering rule as `myEvents` —
+    /// upcoming first, soonest-first; then past, most-recent-first.
+    var myJoinedEvents: [CommunityEvent] {
+        let now = Date()
+        return events.filter { $0.joined && !$0.pendingDelete }.sorted {
+            let lUpcoming = $0.endsAt >= now
+            let rUpcoming = $1.endsAt >= now
+            if lUpcoming != rUpcoming { return lUpcoming }
+            return lUpcoming ? $0.startsAt < $1.startsAt : $0.startsAt > $1.startsAt
+        }
     }
 
     /// The signed-in organizer's own events. Upcoming first (soonest-first), then past
@@ -6090,6 +6179,7 @@ final class MockDataStore {
         guard booking.coverStatus == .owed, status == .collected || status == .waived else { return }
         booking.coverStatus = status
         save()
+        pushBookingLocal(booking)
     }
 
     // MARK: Picker + inbox accessors

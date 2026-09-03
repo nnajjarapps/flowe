@@ -112,13 +112,40 @@ final class Booking {
     /// policy edit doesn't silently rewrite history).
     var feeAmount: Int = 0
 
+    /// When THIS DEVICE last changed the booking-local state (attendance / No-Show fee / cover
+    /// ledger). The basis for last-write-wins against the backend.
+    ///
+    /// Without it the client could not tell whether a row differing from the server was a local edit
+    /// to PUSH or a stale value to OVERWRITE — and it did neither, so every change after the first
+    /// was silently reverted on the next launch. That is money data: a fee marked collected came
+    /// back as owed.
+    ///
+    /// Stamped by the TYPED setters below, never by the `*Raw` assignments — `syncPrivateState`'s
+    /// pull writes the raw fields directly, so applying the server's state does not count as a local
+    /// edit; it sets this to the server's own timestamp instead.
+    var localStateUpdatedAt: Date = Date.distantPast
+
+    /// Millisecond epoch — the unit the backend stores and compares in.
+    var localStateUpdatedAtMillis: Double { localStateUpdatedAt.timeIntervalSince1970 * 1000 }
+
+    // The typed accessors below stamp `localStateUpdatedAt` on a REAL change (the guard makes an
+    // idempotent re-set a no-op, so `materializeCover` re-affirming a role doesn't fake a newer
+    // edit and beat another device's genuine one).
     var attendance: Attendance {
         get { Attendance(rawValue: attendanceRaw) ?? .unknown }
-        set { attendanceRaw = newValue.rawValue }
+        set {
+            guard attendanceRaw != newValue.rawValue else { return }
+            attendanceRaw = newValue.rawValue
+            localStateUpdatedAt = .now
+        }
     }
     var feeStatus: FeeStatus {
         get { FeeStatus(rawValue: feeStatusRaw) ?? .none }
-        set { feeStatusRaw = newValue.rawValue }
+        set {
+            guard feeStatusRaw != newValue.rawValue else { return }
+            feeStatusRaw = newValue.rawValue
+            localStateUpdatedAt = .now
+        }
     }
 
     // MARK: Out of Studio (instructor-local — NEVER uploaded to the shared record, exactly like the
@@ -132,11 +159,19 @@ final class Booking {
 
     var coverRole: CoverRole {
         get { CoverRole(rawValue: coverRoleRaw) ?? .none }
-        set { coverRoleRaw = newValue.rawValue }
+        set {
+            guard coverRoleRaw != newValue.rawValue else { return }
+            coverRoleRaw = newValue.rawValue
+            localStateUpdatedAt = .now
+        }
     }
     var coverStatus: FeeStatus {
         get { FeeStatus(rawValue: coverStatusRaw) ?? .none }
-        set { coverStatusRaw = newValue.rawValue }
+        set {
+            guard coverStatusRaw != newValue.rawValue else { return }
+            coverStatusRaw = newValue.rawValue
+            localStateUpdatedAt = .now
+        }
     }
 
     init(

@@ -60,26 +60,25 @@ struct InstructorProfileView: View {
                 coverBand
                 header
 
-                Picker("", selection: $router.profileTab) {
-                    ForEach(Tab.allCases) { t in
-                        Text(localizedTag: t.rawValue).tag(t)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal, 20)
-                .padding(.top, 16)
-                .padding(.bottom, 20)
-                .onChange(of: router.profileTab) { _, _ in Haptic.selection() }
+                // Six tabs — a segmented picker truncates them, and worse under he/ar. The strip
+                // scrolls instead. Horizontal padding lives INSIDE the strip so it can bleed to the
+                // screen edge while its content still aligns with the rest of the column.
+                FloweTabStrip(tabs: Tab.allCases, label: \.rawValue, selection: $router.profileTab)
+                    .padding(.top, 16)
+                    .padding(.bottom, 20)
 
+                // Padding is per-tab, NOT on the Group: the posts tab is edge-to-edge because
+                // `PostRowView` already insets itself and bleeds its photos.
                 Group {
                     switch router.profileTab {
-                    case .overview:  overviewTab
-                    case .analytics: analyticsTab
-                    case .reviews:   reviewsTab
-                    case .earnings:  earningsTab
+                    case .overview:  overviewTab.padding(.horizontal, 20)
+                    case .posts:     ProfilePostsList()
+                    case .events:    ProfileEventsList(scope: .organizing).padding(.horizontal, 20)
+                    case .analytics: analyticsTab.padding(.horizontal, 20)
+                    case .reviews:   reviewsTab.padding(.horizontal, 20)
+                    case .earnings:  earningsTab.padding(.horizontal, 20)
                     }
                 }
-                .padding(.horizontal, 20)
                 .padding(.bottom, 32)
                 .animation(FloweMotion.gentle, value: router.profileTab)
             }
@@ -91,6 +90,9 @@ struct InstructorProfileView: View {
             // (delivered via the private mirror, or re-fetched from the public store) shows here.
             if let me { await data.syncLessonTypes(for: me) }
             await data.syncMyRecommendations()
+            // The activity section reads the community store, which nothing else on this screen
+            // populates — without this it reads empty until the Community tab has been opened.
+            await data.syncCommunity()
         }
         // Manual pull-to-refresh: pulls newly-posted reviews (no student→instructor push), lesson
         // types authored on another device, and peer recommendations. Mirrors the .task.
@@ -98,6 +100,9 @@ struct InstructorProfileView: View {
             await data.syncReviews(asInstructor: true)
             if let me { await data.syncLessonTypes(for: me) }
             await data.syncMyRecommendations()
+            // The activity section reads the community store, which nothing else on this screen
+            // populates — without this it reads empty until the Community tab has been opened.
+            await data.syncCommunity()
         }
         .sheet(isPresented: $showSettings) { InstructorSettingsView() }
         .sheet(isPresented: $showEditProfile) { EditProfileView() }

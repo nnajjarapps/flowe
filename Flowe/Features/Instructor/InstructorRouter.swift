@@ -6,6 +6,8 @@ import Observation
 final class InstructorRouter {
     enum ProfileTab: String, CaseIterable, Identifiable {
         case overview  = "Overview"
+        case posts     = "Posts"
+        case events    = "Events"
         case analytics = "Analytics"
         case reviews   = "Reviews"
         case earnings  = "Earnings"

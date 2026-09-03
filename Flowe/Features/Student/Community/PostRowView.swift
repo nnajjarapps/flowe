@@ -318,3 +318,92 @@ struct PostRowView: View {
         .accessibilityIdentifier("post.moderation")
     }
 }
+
+// MARK: - Profile activity tabs ("My posts" / "My events")
+
+/// Which events belong on this profile — the same tab serves both roles, and they mean different
+/// things by "my events".
+enum ProfileActivityScope {
+    /// Instructor: the events they ORGANIZE. Opening one enters management (edit / cancel / delete).
+    case organizing
+    /// Student: the events they have JOINED. Read-only — a student never manages an event.
+    case attending
+}
+
+/// The signed-in user's own posts, as a profile sub-tab. Used by both profiles.
+///
+/// Deliberately a LIST of the real feed rows, not a photo grid: Flowe posts are `tip` / `checkin` /
+/// `milestone` / `review` and carry an image only when `hasImage` is set, so a grid would be mostly
+/// blank tiles. Reusing `PostRowView` also means a post looks identical here and in the community
+/// feed, and every affordance already on that row (like, comment, delete, report) keeps working with
+/// no second implementation to keep in sync.
+///
+/// Lives in this file rather than its own because adding a file means hand-editing
+/// `project.pbxproj` — see [[flowe-xcodegen-not-installed]].
+struct ProfilePostsList: View {
+    @Environment(MockDataStore.self) private var data
+
+    var body: some View {
+        let posts = data.myPosts
+        if posts.isEmpty {
+            EmptyStateView(
+                icon: "square.text.square",
+                title: "Nothing posted yet",
+                message: "Share a tip, a check-in or a milestone and it will show up here."
+            )
+        } else {
+            // Edge-to-edge, exactly as the community feed renders it: `PostRowView` carries its
+            // OWN horizontal padding (16) and lets photos bleed, so an outer padding here would
+            // double-inset every row. The caller must NOT pad this tab. Dividers match the feed.
+            LazyVStack(spacing: 0) {
+                ForEach(Array(posts.enumerated()), id: \.element.id) { index, post in
+                    PostRowView(post: post)
+                    if index < posts.count - 1 {
+                        Divider().overlay(Color.floweBorder)
+                    }
+                }
+            }
+            .accessibilityIdentifier("profile.activity.posts")
+        }
+    }
+}
+
+/// The signed-in user's own events, as a profile sub-tab — hosted (instructor) or joined (student)
+/// depending on `scope`.
+struct ProfileEventsList: View {
+    let scope: ProfileActivityScope
+
+    @Environment(MockDataStore.self) private var data
+    @State private var selectedEvent: CommunityEvent?
+
+    private var events: [CommunityEvent] {
+        switch scope {
+        case .organizing: return data.myEvents
+        case .attending:  return data.myJoinedEvents
+        }
+    }
+
+    var body: some View {
+        Group {
+            if events.isEmpty {
+                EmptyStateView(
+                    icon: "calendar",
+                    title: scope == .organizing ? "No events yet" : "No events joined yet",
+                    message: scope == .organizing
+                        ? "Host a community event and it will appear here."
+                        : "Join a community event and it will appear here."
+                )
+            } else {
+                LazyVStack(spacing: 12) {
+                    ForEach(events) { event in
+                        EventCardView(event: event, style: .compact) { selectedEvent = event }
+                    }
+                }
+                .accessibilityIdentifier("profile.activity.events")
+            }
+        }
+        .sheet(item: $selectedEvent) { event in
+            EventDetailView(event: event, manageable: scope == .organizing)
+        }
+    }
+}

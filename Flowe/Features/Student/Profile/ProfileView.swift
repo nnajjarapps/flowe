@@ -5,6 +5,9 @@ import SwiftUI
 struct ProfileView: View {
     @Environment(AppSession.self) private var session
     @Environment(MockDataStore.self) private var data
+    // Currency formatting for the payments section — the amount must render in the user's own
+    // currency, not a hardcoded symbol.
+    @Environment(AppSettings.self) private var settings
 
     @State private var showSettings = false
     @State private var showNotifications = false
@@ -124,12 +127,77 @@ struct ProfileView: View {
     /// Soonest upcoming session (already sorted soonest-first by the store).
     private var nextSession: Booking? { data.upcomingBookings.first }
 
+    /// Profile sub-tabs. The student profile had none — everything was one scroll — but "my posts"
+    /// and "my events" are content surfaces, not sections of an about-me, so they get peer billing
+    /// with the practice summary. Mirrors the instructor profile's tabs.
+    private enum ProfileTab: String, CaseIterable, Identifiable {
+        case overview = "Overview", posts = "Posts", events = "Events"
+        var id: String { rawValue }
+    }
+
+    @State private var tab: ProfileTab = .overview
+
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
                 header
 
+                FloweTabStrip(tabs: ProfileTab.allCases, label: \.rawValue, selection: $tab)
+                    .padding(.top, 16)
+                    .padding(.bottom, 20)
+
+                // Padding is per-tab, NOT on the Group — see the instructor profile: the posts tab
+                // is edge-to-edge because `PostRowView` insets itself and bleeds its photos.
+                Group {
+                    switch tab {
+                    case .overview: overviewTab.padding(.horizontal, 20)
+                    case .posts:    ProfilePostsList()
+                    case .events:   ProfileEventsList(scope: .attending).padding(.horizontal, 20)
+                    }
+                }
+                .padding(.bottom, 8)
+                .animation(FloweMotion.gentle, value: tab)
+            }
+        }
+        .background(Color.flowWhite)
+        .sheet(isPresented: $showSettings) { SettingsView() }
+        .sheet(isPresented: $showNotifications) { NotificationSettingsView() }
+        .sheet(isPresented: $showEditProfile) { EditStudentProfileView() }
+        .sheet(isPresented: $showOpportunities) { StudentOpportunitiesView() }
+        .sheet(item: $legalDoc) { LegalDocumentView(resource: $0.resource, title: $0.title) }
+        .floweConfirm(
+            isPresented: $confirmLogout,
+            title: "Log out of Flowe?",
+            message: "Your profile, sessions and messages stay on your account — signing back in brings everything back.",
+            confirmTitle: "Log Out",
+            isDestructive: true
+        ) {
+            session.logout()
+        }
+        // Rebook destination — the instructor's full bookable profile, same as a booking card's
+        // "Book again" (BookingCard deliberately opens the profile, not the sheet, so the student
+        // picks the slot/time).
+        .fullScreenCover(item: $rebookTeacher) { teacher in
+            StudentInstructorProfileView(instructor: teacher) { rebookTeacher = nil }
+        }
+        .sheet(item: $selectedFriend) { PracticeFriendSheet(peer: $0) }
+        .task {
+            await data.syncFollows()
+            await data.syncBookingFees()
+            // Posts and events live in the community store, which only the Community tab pulled.
+            // Without this, "MY ACTIVITY" reads empty for anyone who opens Profile first.
+            await data.syncCommunity()
+        }
+    }
+
+    /// Everything the profile showed before sub-tabs existed: practice spine, progress, week
+    /// chart, saved, friends, opportunities, account.
+    private var overviewTab: some View {
                 VStack(alignment: .leading, spacing: 0) {
+                    // A fee an instructor is asking for outranks progress stats, so it sits at the
+                    // very top. Self-hiding: the overwhelmingly common case is nothing owed.
+                    feesSection
+
                     if data.myBookings.isEmpty {
                         SectionHeader(text: "YOUR PROGRESS")
                             .padding(.bottom, 12)
@@ -185,33 +253,64 @@ struct ProfileView: View {
                     accountList
                         .padding(.bottom, 24)
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 16)
+    }
+
+    // MARK: - Payments (No-Show Shield, student side)
+
+    /// What this student's instructors are asking them to settle, and what has been marked received.
+    ///
+    /// Flowe processes NO payment here: the instructor collects by Bit or cash and marks it collected
+    /// themselves. This section exists because that request was previously invisible in the app — it
+    /// happened entirely over WhatsApp, and "did she mark it paid?" had no answer. Read-only by
+    /// design; the instructor stays the only author of the fee.
+    @ViewBuilder private var feesSection: some View {
+        let fees = data.bookingFees
+        if !fees.isEmpty {
+            SectionHeader(text: "PAYMENTS")
+                .padding(.bottom, 10)
+            VStack(spacing: 8) {
+                ForEach(fees) { fee in
+                    HStack(spacing: 12) {
+                        Image(systemName: fee.isPaid ? "checkmark.circle.fill" : "exclamationmark.circle")
+                            .font(.system(size: 18))
+                            .foregroundStyle(fee.isPaid ? Color.floweMuted : Color.flowePink)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Group {
+                                if let name = data.instructor(ownerID: fee.instructorID)?.name,
+                                   !name.isEmpty {
+                                    Text(name)
+                                } else {
+                                    Text("Your instructor")
+                                }
+                            }
+                            .font(FloweFont.sans(14, .medium))
+                            .foregroundStyle(Color.floweInk)
+                            Text("\(fee.type) · \(fee.date)")
+                                .font(FloweFont.mono(10))
+                                .foregroundStyle(Color.floweMuted)
+                        }
+                        Spacer(minLength: 0)
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text(settings.money(fee.amount))
+                                .font(FloweFont.sans(15, .medium))
+                                .foregroundStyle(Color.floweInk)
+                            Text(fee.isPaid ? "Paid" : "Requested")
+                                .font(FloweFont.mono(10))
+                                .foregroundStyle(fee.isPaid ? Color.floweMuted : Color.flowePink)
+                        }
+                    }
+                    .padding(14)
+                    .frame(maxWidth: .infinity)
+                    .floweCard()
+                }
             }
+            .padding(.bottom, 8)
+            // Said once, under the list: Flowe is the record, not the payment rail.
+            Text("Pay your instructor directly — they'll mark it received here.")
+                .font(FloweFont.sans(12))
+                .foregroundStyle(Color.floweMuted)
+                .padding(.bottom, 20)
         }
-        .background(Color.flowWhite)
-        .sheet(isPresented: $showSettings) { SettingsView() }
-        .sheet(isPresented: $showNotifications) { NotificationSettingsView() }
-        .sheet(isPresented: $showEditProfile) { EditStudentProfileView() }
-        .sheet(isPresented: $showOpportunities) { StudentOpportunitiesView() }
-        .sheet(item: $legalDoc) { LegalDocumentView(resource: $0.resource, title: $0.title) }
-        .floweConfirm(
-            isPresented: $confirmLogout,
-            title: "Log out of Flowe?",
-            message: "Your profile, sessions and messages stay on your account — signing back in brings everything back.",
-            confirmTitle: "Log Out",
-            isDestructive: true
-        ) {
-            session.logout()
-        }
-        // Rebook destination — the instructor's full bookable profile, same as a booking card's
-        // "Book again" (BookingCard deliberately opens the profile, not the sheet, so the student
-        // picks the slot/time).
-        .fullScreenCover(item: $rebookTeacher) { teacher in
-            StudentInstructorProfileView(instructor: teacher) { rebookTeacher = nil }
-        }
-        .sheet(item: $selectedFriend) { PracticeFriendSheet(peer: $0) }
-        .task { await data.syncFollows() }
     }
 
     // MARK: - Practice friends (Flowe Community)
